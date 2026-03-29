@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(ls -lh /c/programmieren/se4x/*.pdf /c/programmieren/se4x/*.xls)",
+      "Bash(python3 -c \":*)",
+      "Bash(python -c \":*)",
+      "Bash(pip install:*)",
+      "Bash(find /c/programmieren/se4x/test -type f -name *.dart)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(dart analyze:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter test:*)",
+      "Bash(flutter devices:*)",
+      "Bash(flutter install:*)"
+    ]
+  }
+}
