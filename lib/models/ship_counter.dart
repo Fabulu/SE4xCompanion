@@ -74,6 +74,74 @@ class ShipCounter {
     );
   }
 
+  /// Returns true if this counter is built and its tech levels are behind
+  /// the given tech state (i.e. it can benefit from an upgrade).
+  bool needsUpgrade(TechState tech, {bool facilitiesMode = false}) {
+    if (!isBuilt) return false;
+    final def = kShipDefinitions[type];
+    final hull = def?.hullSize ?? 1;
+
+    int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
+    int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
+    final tacLevel =
+        tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode);
+    final moveLevel =
+        tech.getLevel(TechId.move, facilitiesMode: facilitiesMode);
+
+    if (type != ShipType.raider) {
+      if (hull < 3) {
+        attLevel = attLevel.clamp(0, hull);
+        defLevel = defLevel.clamp(0, hull);
+      }
+    }
+
+    return attack != attLevel ||
+        defense != defLevel ||
+        tactics != tacLevel ||
+        move != moveLevel;
+  }
+
+  /// Returns an upgraded copy with tech levels matching the given [TechState].
+  /// Returns null if already up to date.
+  ShipCounter? upgradeToTech(TechState tech, {bool facilitiesMode = false}) {
+    if (!isBuilt) return null;
+    final def = kShipDefinitions[type];
+    final hull = def?.hullSize ?? 1;
+
+    int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
+    int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
+    final tacLevel =
+        tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode);
+    final moveLevel =
+        tech.getLevel(TechId.move, facilitiesMode: facilitiesMode);
+
+    if (type != ShipType.raider) {
+      if (hull < 3) {
+        attLevel = attLevel.clamp(0, hull);
+        defLevel = defLevel.clamp(0, hull);
+      }
+    }
+
+    if (attack == attLevel &&
+        defense == defLevel &&
+        tactics == tacLevel &&
+        move == moveLevel) {
+      return null;
+    }
+
+    return copyWith(
+      attack: attLevel,
+      defense: defLevel,
+      tactics: tacLevel,
+      move: moveLevel,
+    );
+  }
+
+  /// Cost to upgrade this ship (1 CP per hull size point, rule 9.11.3).
+  int get upgradeCost {
+    return kShipDefinitions[type]?.hullSize ?? 1;
+  }
+
   ShipCounter copyWith({
     ShipType? type,
     int? number,

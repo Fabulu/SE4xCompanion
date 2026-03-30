@@ -157,6 +157,112 @@ void main() {
     });
   });
 
+  group('needsUpgrade', () {
+    test('returns true when counter is behind tech', () {
+      const counter = ShipCounter(
+        type: ShipType.bc, number: 1, isBuilt: true,
+        attack: 1, defense: 1, tactics: 0, move: 1,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 2, TechId.defense: 2, TechId.tactics: 1, TechId.move: 2,
+      });
+      expect(counter.needsUpgrade(tech), true);
+    });
+
+    test('returns false when counter matches tech', () {
+      const counter = ShipCounter(
+        type: ShipType.bc, number: 1, isBuilt: true,
+        attack: 2, defense: 2, tactics: 1, move: 2,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 2, TechId.defense: 2, TechId.tactics: 1, TechId.move: 2,
+      });
+      expect(counter.needsUpgrade(tech), false);
+    });
+  });
+
+  group('upgradeToTech', () {
+    test('returns upgraded counter with correct levels', () {
+      const counter = ShipCounter(
+        type: ShipType.bc, number: 1, isBuilt: true,
+        attack: 1, defense: 0, tactics: 0, move: 1,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 3, TechId.defense: 2, TechId.tactics: 2, TechId.move: 3,
+      });
+      final upgraded = counter.upgradeToTech(tech);
+      expect(upgraded, isNotNull);
+      expect(upgraded!.attack, 3);
+      expect(upgraded.defense, 2);
+      expect(upgraded.tactics, 2);
+      expect(upgraded.move, 3);
+      expect(upgraded.isBuilt, true);
+      expect(upgraded.type, ShipType.bc);
+      expect(upgraded.number, 1);
+    });
+
+    test('returns null when already up to date', () {
+      const counter = ShipCounter(
+        type: ShipType.bc, number: 1, isBuilt: true,
+        attack: 2, defense: 2, tactics: 1, move: 3,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 2, TechId.defense: 2, TechId.tactics: 1, TechId.move: 3,
+      });
+      expect(counter.upgradeToTech(tech), isNull);
+    });
+
+    test('respects hull size caps', () {
+      // DD is hull 1, so att/def should cap at 1
+      const counter = ShipCounter(
+        type: ShipType.dd, number: 1, isBuilt: true,
+        attack: 0, defense: 0, tactics: 0, move: 1,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 3, TechId.defense: 3, TechId.tactics: 2, TechId.move: 4,
+      });
+      final upgraded = counter.upgradeToTech(tech);
+      expect(upgraded, isNotNull);
+      expect(upgraded!.attack, 1);  // capped at hull size 1
+      expect(upgraded.defense, 1);  // capped at hull size 1
+      expect(upgraded.tactics, 2);  // not capped
+      expect(upgraded.move, 4);     // not capped
+    });
+
+    test('raiders exempt from hull cap in upgrade', () {
+      const counter = ShipCounter(
+        type: ShipType.raider, number: 1, isBuilt: true,
+        attack: 0, defense: 0, tactics: 0, move: 1,
+      );
+      const tech = TechState(levels: {
+        TechId.attack: 3, TechId.defense: 3, TechId.tactics: 2, TechId.move: 4,
+      });
+      final upgraded = counter.upgradeToTech(tech);
+      expect(upgraded, isNotNull);
+      expect(upgraded!.attack, 3);  // NOT capped despite hull 1
+      expect(upgraded.defense, 3);  // NOT capped despite hull 1
+    });
+  });
+
+  group('upgradeCost', () {
+    test('returns correct hull size', () {
+      const dd = ShipCounter(type: ShipType.dd, number: 1, isBuilt: true);
+      expect(dd.upgradeCost, 1);
+
+      const ca = ShipCounter(type: ShipType.ca, number: 1, isBuilt: true);
+      expect(ca.upgradeCost, 2);
+
+      const bc = ShipCounter(type: ShipType.bc, number: 1, isBuilt: true);
+      expect(bc.upgradeCost, 3);
+
+      const bb = ShipCounter(type: ShipType.bb, number: 1, isBuilt: true);
+      expect(bb.upgradeCost, 3);
+
+      const tn = ShipCounter(type: ShipType.tn, number: 1, isBuilt: true);
+      expect(tn.upgradeCost, 4);
+    });
+  });
+
   group('ShipCounter JSON round-trip', () {
     test('default counter serializes and deserializes', () {
       const c = ShipCounter(type: ShipType.dd, number: 1);

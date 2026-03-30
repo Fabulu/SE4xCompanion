@@ -6,6 +6,7 @@ import '../data/tech_costs.dart';
 import '../models/game_config.dart';
 import '../models/ship_counter.dart';
 import '../models/technology.dart';
+import '../widgets/combat_calculator_dialog.dart';
 import '../widgets/counter_row.dart';
 import '../widgets/section_header.dart';
 
@@ -20,6 +21,7 @@ class ShipTechPage extends StatelessWidget {
   final List<ShipCounter> shipCounters;
   final bool showExperience;
   final ValueChanged<List<ShipCounter>> onCountersChanged;
+  final ValueChanged<int>? onUpgradeCostIncurred;
 
   const ShipTechPage({
     super.key,
@@ -29,6 +31,7 @@ class ShipTechPage extends StatelessWidget {
     required this.shipCounters,
     required this.showExperience,
     required this.onCountersChanged,
+    this.onUpgradeCostIncurred,
   });
 
   /// Ordered ship types for display, matching the physical sheet layout.
@@ -151,6 +154,24 @@ class ShipTechPage extends StatelessWidget {
     onCountersChanged(updated);
   }
 
+  /// Upgrade a built counter to current tech levels.
+  void _upgradeCounter(ShipType type, int number) {
+    final idx = _indexOfCounter(type, number);
+    if (idx < 0) return;
+
+    final counter = shipCounters[idx];
+    final upgraded = counter.upgradeToTech(
+      techState,
+      facilitiesMode: config.useFacilitiesCosts,
+    );
+    if (upgraded == null) return;
+
+    final updated = List<ShipCounter>.from(shipCounters);
+    updated[idx] = upgraded;
+    onCountersChanged(updated);
+    onUpgradeCostIncurred?.call(counter.upgradeCost);
+  }
+
   /// Update a counter from a CounterUpdate payload.
   void _updateCounter(ShipType type, int number, CounterUpdate update) {
     final idx = _indexOfCounter(type, number);
@@ -207,7 +228,7 @@ class ShipTechPage extends StatelessWidget {
       children: [
         // Header bar
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest,
             border: Border(
@@ -217,22 +238,39 @@ class ShipTechPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'SHIP TECHNOLOGY SHEET - Turn $turnNumber',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                  letterSpacing: 0.5,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'SHIP TECHNOLOGY SHEET - Turn $turnNumber',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.calculate, size: 22),
+                    tooltip: 'Combat Calculator',
+                    onPressed: () => showCombatCalculatorDialog(context),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 'Current Empire Tech:  '
                 'Att[$attLevel]  Def[$defLevel]  '
                 'Tac[$tacLevel]  Mov[$movLevel]',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 14,
                   fontFamily: 'monospace',
                   fontFeatures: const [FontFeature.tabularFigures()],
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -244,7 +282,7 @@ class ShipTechPage extends StatelessWidget {
         // Scrollable body
         Expanded(
           child: _ShipTechList(
-            items: _buildItems(grouped),
+            items: _buildItems(context, grouped),
           ),
         ),
       ],
@@ -252,7 +290,7 @@ class ShipTechPage extends StatelessWidget {
   }
 
   /// Build the flat list of widgets: section headers + counter rows.
-  List<Widget> _buildItems(Map<ShipType, List<CounterTemplate>> grouped) {
+  List<Widget> _buildItems(BuildContext context, Map<ShipType, List<CounterTemplate>> grouped) {
     final items = <Widget>[];
 
     for (final shipType in _displayOrder) {
@@ -285,6 +323,13 @@ class ShipTechPage extends StatelessWidget {
           );
         }).toList();
 
+        final canUpgrade = isBuilt &&
+            counter != null &&
+            counter.needsUpgrade(
+              techState,
+              facilitiesMode: config.useFacilitiesCosts,
+            );
+
         items.add(CounterRow(
           key: ValueKey('${template.type.name}_${template.counterNumber}'),
           label: template.label,
@@ -311,11 +356,60 @@ class ShipTechPage extends StatelessWidget {
                     update,
                   )
               : null,
+          upgradeCost: canUpgrade ? counter.upgradeCost : null,
+          onUpgrade: canUpgrade
+              ? () => _upgradeCounter(
+                    template.type,
+                    template.counterNumber,
+                  )
+              : null,
+          onDestroy: isBuilt
+              ? () => _destroyCounter(
+                    context,
+                    template.type,
+                    template.counterNumber,
+                  )
+              : null,
         ));
       }
     }
 
     return items;
+  }
+
+  void _destroyCounter(BuildContext context, ShipType type, int number) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Destroy Ship?'),
+        content: const Text(
+          'Mark this counter as destroyed/scrapped. '
+          'It will return to unbuilt state and can be rebuilt later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Destroy'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true) return;
+      final updated = shipCounters.map((c) {
+        if (c.type == type && c.number == number) {
+          return ShipCounter(type: c.type, number: c.number);
+        }
+        return c;
+      }).toList();
+      onCountersChanged(updated);
+    });
   }
 }
 
@@ -329,7 +423,7 @@ class _ShipTechList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: items.length,
       itemBuilder: (_, index) => items[index],
     );

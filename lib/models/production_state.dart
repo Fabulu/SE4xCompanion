@@ -7,6 +7,42 @@ import 'ship_counter.dart';
 import 'technology.dart';
 import 'world.dart';
 
+/// A single ship purchase entry for the current turn.
+class ShipPurchase {
+  final ShipType type;
+  final int quantity;
+
+  const ShipPurchase({required this.type, this.quantity = 1});
+
+  int get cost {
+    final def = kShipDefinitions[type];
+    if (def == null) return 0;
+    return def.buildCost * quantity;
+  }
+
+  ShipPurchase copyWith({ShipType? type, int? quantity}) => ShipPurchase(
+        type: type ?? this.type,
+        quantity: quantity ?? this.quantity,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'type': type.name,
+        'quantity': quantity,
+      };
+
+  factory ShipPurchase.fromJson(Map<String, dynamic> json) => ShipPurchase(
+        type: _shipTypeFromName(json['type'] as String),
+        quantity: json['quantity'] as int? ?? 1,
+      );
+
+  static ShipType _shipTypeFromName(String name) {
+    for (final t in ShipType.values) {
+      if (t.name == name) return t;
+    }
+    return ShipType.dd;
+  }
+}
+
 class ProductionState {
   // --- CP ledger (user-editable) ---
   final int cpCarryOver;
@@ -28,10 +64,17 @@ class ProductionState {
   final int tpCarryOver;
   final int tpSpending;
 
+  // --- Ship purchases ---
+  final List<ShipPurchase> shipPurchases;
+
   // --- Empire state ---
   final List<WorldState> worlds;
   final TechState techState;
   final Map<TechId, int> pendingTechPurchases;
+
+  // --- Unpredictable Research (rule 33.0) ---
+  final Map<String, int> accumulatedResearch; // key: "techId_targetLevel" -> accumulated roll total
+  final int researchGrantsCp; // CP spent on grants THIS turn
 
   const ProductionState({
     this.cpCarryOver = 0,
@@ -46,10 +89,31 @@ class ProductionState {
     this.techSpendingRp = 0,
     this.tpCarryOver = 0,
     this.tpSpending = 0,
+    this.shipPurchases = const [],
     this.worlds = const [],
     this.techState = const TechState(),
     this.pendingTechPurchases = const {},
+    this.accumulatedResearch = const {},
+    this.researchGrantsCp = 0,
   });
+
+  // ---------------------------------------------------------------------------
+  // Unpredictable Research helpers
+  // ---------------------------------------------------------------------------
+
+  /// Key for accumulated research tracking.
+  static String researchKey(TechId id, int targetLevel) =>
+      '${id.name}_$targetLevel';
+
+  /// Get accumulated total toward a tech level.
+  int getAccumulated(TechId id, int targetLevel) =>
+      accumulatedResearch[researchKey(id, targetLevel)] ?? 0;
+
+  /// Get the target cost for a tech level.
+  int? getResearchTarget(TechId id, int targetLevel, bool facilitiesMode) {
+    final table = facilitiesMode ? kFacilitiesTechCosts : kBaseTechCosts;
+    return table[id]?.levelCosts[targetLevel];
+  }
 
   // ---------------------------------------------------------------------------
   // Colony income calculations
@@ -100,13 +164,13 @@ class ProductionState {
         .fold(0, (sum, w) => sum + w.facilityResourceOutput(FacilityType.temporal));
   }
 
-  /// Total mineral income across worlds.
+  /// Total mineral income across worlds (non-blocked).
   int mineralCp() =>
-      worlds.fold(0, (sum, w) => sum + w.mineralIncome);
+      worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.mineralIncome);
 
-  /// Total pipeline income across worlds.
+  /// Total pipeline income across worlds (non-blocked).
   int pipelineCp() =>
-      worlds.fold(0, (sum, w) => sum + w.pipelineIncome);
+      worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.pipelineIncome);
 
   // ---------------------------------------------------------------------------
   // Maintenance
@@ -121,7 +185,8 @@ class ProductionState {
       if (def == null || def.maintenanceExempt) continue;
       total += def.hullSize;
     }
-    return total + maintenanceIncrease - maintenanceDecrease;
+    final result = total + maintenanceIncrease - maintenanceDecrease;
+    return result < 0 ? 0 : result;
   }
 
   // ---------------------------------------------------------------------------
@@ -161,6 +226,7 @@ class ProductionState {
   /// Cost of pending tech purchases in CP (base mode only).
   int techSpendingCpDerived(GameConfig config) {
     if (config.enableFacilities) return 0;
+    if (config.enableUnpredictableResearch) return 0;
     int total = 0;
     final fm = config.useFacilitiesCosts;
     for (final entry in pendingTechPurchases.entries) {
@@ -176,11 +242,25 @@ class ProductionState {
     return total;
   }
 
+  /// Total cost of ship purchases this turn.
+  int shipPurchaseCost() {
+    return shipPurchases.fold(0, (sum, p) => sum + p.cost);
+  }
+
+  /// Effective ship spending: derived from purchases if any, otherwise manual.
+  int effectiveShipSpending() {
+    if (shipPurchases.isNotEmpty) return shipPurchaseCost();
+    return shipSpendingCp;
+  }
+
   /// Remaining CP after all spending.
   int remainingCp(GameConfig config, List<ShipCounter> shipCounters) {
+    // techSpendingCpDerived returns 0 when unpredictable research is on,
+    // so researchGrantsCp replaces it seamlessly.
     return subtotalCp(config, shipCounters) -
         techSpendingCpDerived(config) -
-        shipSpendingCp -
+        researchGrantsCp -
+        effectiveShipSpending() -
         upgradesCp;
   }
 
@@ -209,6 +289,7 @@ class ProductionState {
   /// Cost of pending tech purchases in RP (facilities mode only).
   int techSpendingRpDerived(GameConfig config) {
     if (!config.enableFacilities) return 0;
+    if (config.enableUnpredictableResearch) return 0;
     int total = 0;
     for (final entry in pendingTechPurchases.entries) {
       final costEntry = kFacilitiesTechCosts[entry.key];
@@ -223,6 +304,10 @@ class ProductionState {
   }
 
   int remainingRp(GameConfig config) {
+    if (config.enableUnpredictableResearch) {
+      // Unpredictable research uses CP grants, not RP for tech.
+      return totalRp(config);
+    }
     return totalRp(config) - techSpendingRpDerived(config);
   }
 
@@ -261,20 +346,29 @@ class ProductionState {
             ? remainingTp(config)
             : 0;
 
-    // 2. Apply pending tech purchases
+    // 2. Apply pending tech purchases and clean up accumulated research
     TechState newTech = techState;
+    final newAccumulated = Map<String, int>.from(accumulatedResearch);
     for (final entry in pendingTechPurchases.entries) {
       newTech = newTech.setLevel(entry.key, entry.value);
+      // Remove accumulated research entries for levels that were acquired
+      final baseLevel = techState.getLevel(
+        entry.key,
+        facilitiesMode: config.useFacilitiesCosts,
+      );
+      for (int lvl = baseLevel + 1; lvl <= entry.value; lvl++) {
+        newAccumulated.remove(researchKey(entry.key, lvl));
+      }
     }
 
     // 3. Grow colonies, recover homeworld, reset mineral/pipeline
     final newWorlds = worlds.map((w) {
       int newGrowth = w.growthMarkerLevel;
       int newHwValue = w.homeworldValue;
-      if (!w.isHomeworld && newGrowth < 3) {
+      if (!w.isHomeworld && newGrowth < 3 && !w.isBlocked) {
         newGrowth++;
       }
-      if (w.isHomeworld && w.homeworldValue < 30) {
+      if (w.isHomeworld && w.homeworldValue < 30 && !w.isBlocked) {
         newHwValue = (w.homeworldValue + 5).clamp(0, 30);
       }
       return w.copyWith(
@@ -298,9 +392,12 @@ class ProductionState {
       lpPlacedOnLc: 0,
       techSpendingRp: 0,
       tpSpending: 0,
+      shipPurchases: const [],
       worlds: newWorlds,
       techState: newTech,
       pendingTechPurchases: const {},
+      accumulatedResearch: newAccumulated,
+      researchGrantsCp: 0,
     );
   }
 
@@ -321,9 +418,12 @@ class ProductionState {
     int? techSpendingRp,
     int? tpCarryOver,
     int? tpSpending,
+    List<ShipPurchase>? shipPurchases,
     List<WorldState>? worlds,
     TechState? techState,
     Map<TechId, int>? pendingTechPurchases,
+    Map<String, int>? accumulatedResearch,
+    int? researchGrantsCp,
   }) =>
       ProductionState(
         cpCarryOver: cpCarryOver ?? this.cpCarryOver,
@@ -340,10 +440,14 @@ class ProductionState {
         techSpendingRp: techSpendingRp ?? this.techSpendingRp,
         tpCarryOver: tpCarryOver ?? this.tpCarryOver,
         tpSpending: tpSpending ?? this.tpSpending,
+        shipPurchases: shipPurchases ?? this.shipPurchases,
         worlds: worlds ?? this.worlds,
         techState: techState ?? this.techState,
         pendingTechPurchases:
             pendingTechPurchases ?? this.pendingTechPurchases,
+        accumulatedResearch:
+            accumulatedResearch ?? this.accumulatedResearch,
+        researchGrantsCp: researchGrantsCp ?? this.researchGrantsCp,
       );
 
   Map<String, dynamic> toJson() => {
@@ -359,10 +463,13 @@ class ProductionState {
         'techSpendingRp': techSpendingRp,
         'tpCarryOver': tpCarryOver,
         'tpSpending': tpSpending,
+        'shipPurchases': shipPurchases.map((p) => p.toJson()).toList(),
         'worlds': worlds.map((w) => w.toJson()).toList(),
         'techState': techState.toJson(),
         'pendingTechPurchases':
             pendingTechPurchases.map((k, v) => MapEntry(k.name, v)),
+        'accumulatedResearch': accumulatedResearch,
+        'researchGrantsCp': researchGrantsCp,
       };
 
   factory ProductionState.fromJson(Map<String, dynamic> json) {
@@ -372,6 +479,13 @@ class ProductionState {
     for (final e in rawPending.entries) {
       final id = _techIdFromName(e.key);
       if (id != null) pending[id] = e.value as int;
+    }
+
+    final rawAccumulated =
+        json['accumulatedResearch'] as Map<String, dynamic>? ?? {};
+    final accumulated = <String, int>{};
+    for (final e in rawAccumulated.entries) {
+      accumulated[e.key] = e.value as int;
     }
 
     return ProductionState(
@@ -387,6 +501,11 @@ class ProductionState {
       techSpendingRp: json['techSpendingRp'] as int? ?? 0,
       tpCarryOver: json['tpCarryOver'] as int? ?? 0,
       tpSpending: json['tpSpending'] as int? ?? 0,
+      shipPurchases: (json['shipPurchases'] as List?)
+              ?.map(
+                  (p) => ShipPurchase.fromJson(p as Map<String, dynamic>))
+              .toList() ??
+          const [],
       worlds: (json['worlds'] as List?)
               ?.map(
                   (w) => WorldState.fromJson(w as Map<String, dynamic>))
@@ -396,6 +515,8 @@ class ProductionState {
           ? TechState.fromJson(json['techState'] as Map<String, dynamic>)
           : const TechState(),
       pendingTechPurchases: pending,
+      accumulatedResearch: accumulated,
+      researchGrantsCp: json['researchGrantsCp'] as int? ?? 0,
     );
   }
 

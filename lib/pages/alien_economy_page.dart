@@ -147,12 +147,12 @@ class _AlienEconomyBodyState extends State<_AlienEconomyBody>
                   tabs: [
                     for (int i = 0; i < widget.alienPlayers.length; i++)
                       Tab(
-                        height: 36,
+                        height: 44,
                         child: Text(
                           widget.alienPlayers[i].name.isEmpty
                               ? 'Alien ${i + 1}'
                               : widget.alienPlayers[i].name,
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(fontSize: 14),
                         ),
                       ),
                   ],
@@ -161,18 +161,18 @@ class _AlienEconomyBodyState extends State<_AlienEconomyBody>
               if (widget.alienPlayers.length < 3)
                 IconButton(
                   onPressed: _addAlien,
-                  icon: const Icon(Icons.add, size: 18),
+                  icon: const Icon(Icons.add, size: 24),
                   tooltip: 'Add Alien',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 ),
               if (widget.alienPlayers.length > 1)
                 IconButton(
                   onPressed: () => _removeAlien(_tabController.index),
-                  icon: const Icon(Icons.remove, size: 18),
+                  icon: const Icon(Icons.remove, size: 24),
                   tooltip: 'Remove Current Alien',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 ),
             ],
           ),
@@ -278,7 +278,7 @@ class _AlienPlayerView extends StatelessWidget {
     final maxVisible = (player.currentTurn + 2).clamp(10, 20);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
         // Header: name + color
         _buildNameColorRow(context),
@@ -306,11 +306,11 @@ class _AlienPlayerView extends StatelessWidget {
         for (int i = 0; i < player.fleets.length; i++) _buildFleetRow(context, i),
         if (player.fleets.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No fleets yet.',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 14,
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
@@ -338,38 +338,38 @@ class _AlienPlayerView extends StatelessWidget {
   Widget _buildNameColorRow(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          Text('Name:', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface)),
-          const SizedBox(width: 4),
+          Text('Name:', style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurface)),
+          const SizedBox(width: 8),
           SizedBox(
-            width: 120,
-            child: TextField(
-              controller: TextEditingController(text: player.name),
-              style: const TextStyle(fontSize: 12),
+            width: 140,
+            child: TextFormField(
+              initialValue: player.name,
+              style: const TextStyle(fontSize: 15),
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 border: OutlineInputBorder(),
               ),
-              onSubmitted: (v) => onChanged(player.copyWith(name: v)),
+              onFieldSubmitted: (v) => onChanged(player.copyWith(name: v)),
             ),
           ),
           const SizedBox(width: 16),
-          Text('Color:', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface)),
-          const SizedBox(width: 4),
+          Text('Color:', style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurface)),
+          const SizedBox(width: 8),
           SizedBox(
-            width: 100,
-            child: TextField(
-              controller: TextEditingController(text: player.color),
-              style: const TextStyle(fontSize: 12),
+            width: 120,
+            child: TextFormField(
+              initialValue: player.color,
+              style: const TextStyle(fontSize: 15),
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 border: OutlineInputBorder(),
               ),
-              onSubmitted: (v) => onChanged(player.copyWith(color: v)),
+              onFieldSubmitted: (v) => onChanged(player.copyWith(color: v)),
             ),
           ),
         ],
@@ -469,11 +469,11 @@ class _AlienPlayerView extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(left: 40, bottom: 2),
+      padding: const EdgeInsets.only(left: 44, bottom: 4),
       child: Text(
         parts.join('  '),
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 13,
           fontFamily: 'monospace',
           color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
         ),
@@ -485,13 +485,13 @@ class _AlienPlayerView extends StatelessWidget {
 
   Widget _buildFleetHeader(BuildContext context) {
     final style = TextStyle(
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: FontWeight.bold,
       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
     );
     return Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -500,16 +500,16 @@ class _AlienPlayerView extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(width: 28, child: Text('#', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 4),
-          SizedBox(width: 48, child: Text('CP', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 4),
+          SizedBox(width: 32, child: Text('#', style: style, textAlign: TextAlign.center)),
+          const SizedBox(width: 8),
+          SizedBox(width: 52, child: Text('CP', style: style, textAlign: TextAlign.center)),
+          const SizedBox(width: 8),
           SizedBox(width: 52, child: Text('Raider?', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           Expanded(child: Text('Composition', style: style)),
-          const SizedBox(width: 4),
-          SizedBox(width: 48, child: Text('Turn', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 28), // delete button space
+          const SizedBox(width: 8),
+          SizedBox(width: 52, child: Text('Turn', style: style, textAlign: TextAlign.center)),
+          const SizedBox(width: 40), // delete button space
         ],
       ),
     );
@@ -520,13 +520,13 @@ class _AlienPlayerView extends StatelessWidget {
     final theme = Theme.of(context);
     final monoStyle = TextStyle(
       fontFamily: 'monospace',
-      fontSize: 11,
+      fontSize: 14,
       color: theme.colorScheme.onSurface,
     );
 
     return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -537,78 +537,76 @@ class _AlienPlayerView extends StatelessWidget {
         children: [
           // Fleet number
           SizedBox(
-            width: 28,
+            width: 32,
             child: Text(
               fleet.fleetNumber.toString(),
               style: monoStyle.copyWith(fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           // CP
           SizedBox(
-            width: 48,
-            child: TextField(
-              controller: TextEditingController(text: fleet.cp == 0 ? '' : fleet.cp.toString()),
+            width: 52,
+            child: TextFormField(
+              initialValue: fleet.cp == 0 ? '' : fleet.cp.toString(),
               style: monoStyle,
               textAlign: TextAlign.center,
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 border: InputBorder.none,
                 hintText: '0',
               ),
               keyboardType: TextInputType.number,
-              onSubmitted: (v) {
+              onFieldSubmitted: (v) {
                 final cp = int.tryParse(v) ?? 0;
                 _updateFleet(index, fleet.copyWith(cp: cp));
               },
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           // Raider checkbox
           SizedBox(
             width: 52,
             child: Checkbox(
               value: fleet.isRaider,
               onChanged: (v) => _updateFleet(index, fleet.copyWith(isRaider: v ?? false)),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.padded,
+              visualDensity: VisualDensity.standard,
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           // Composition
           Expanded(
-            child: TextField(
-              controller: TextEditingController(text: fleet.composition),
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
+            child: TextFormField(
+              initialValue: fleet.composition,
+              style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                 border: InputBorder.none,
                 hintText: 'e.g. 2xDD, 1xCA',
               ),
-              onSubmitted: (v) => _updateFleet(index, fleet.copyWith(composition: v)),
+              onFieldSubmitted: (v) => _updateFleet(index, fleet.copyWith(composition: v)),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           // Launch turn
           SizedBox(
-            width: 48,
-            child: TextField(
-              controller: TextEditingController(
-                text: fleet.launchTurn?.toString() ?? '',
-              ),
+            width: 52,
+            child: TextFormField(
+              initialValue: fleet.launchTurn?.toString() ?? '',
               style: monoStyle,
               textAlign: TextAlign.center,
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 border: InputBorder.none,
                 hintText: '-',
               ),
               keyboardType: TextInputType.number,
-              onSubmitted: (v) {
+              onFieldSubmitted: (v) {
                 final lt = int.tryParse(v);
                 _updateFleet(
                   index,
@@ -621,7 +619,7 @@ class _AlienPlayerView extends StatelessWidget {
           ),
           // Delete button
           SizedBox(
-            width: 28,
+            width: 40,
             child: IconButton(
               onPressed: () {
                 final fleets = List<AlienFleetEntry>.from(player.fleets)..removeAt(index);
@@ -632,10 +630,10 @@ class _AlienPlayerView extends StatelessWidget {
                 ];
                 onChanged(player.copyWith(fleets: renumbered));
               },
-              icon: Icon(Icons.close, size: 14, color: theme.colorScheme.error),
+              icon: Icon(Icons.close, size: 20, color: theme.colorScheme.error),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              splashRadius: 14,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              splashRadius: 20,
               tooltip: 'Remove fleet',
             ),
           ),
@@ -656,11 +654,11 @@ class _AlienPlayerView extends StatelessWidget {
     final theme = Theme.of(context);
     if (player.techsPurchased.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Text(
           'No techs purchased yet.',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: 14,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
           ),
         ),
@@ -668,23 +666,23 @@ class _AlienPlayerView extends StatelessWidget {
     }
 
     return Wrap(
-      spacing: 6,
-      runSpacing: 4,
+      spacing: 8,
+      runSpacing: 6,
       children: [
         for (int i = 0; i < player.techsPurchased.length; i++)
           Chip(
             label: Text(
               player.techsPurchased[i],
-              style: const TextStyle(fontSize: 11),
+              style: const TextStyle(fontSize: 14),
             ),
-            deleteIcon: const Icon(Icons.close, size: 14),
+            deleteIcon: const Icon(Icons.close, size: 18),
             onDeleted: () {
               final techs = List<String>.from(player.techsPurchased)..removeAt(i);
               onChanged(player.copyWith(techsPurchased: techs));
             },
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           ),
       ],
     );
@@ -737,25 +735,25 @@ class _AlienPlayerView extends StatelessWidget {
   Widget _buildReferenceTable(BuildContext context) {
     final theme = Theme.of(context);
     final headerStyle = TextStyle(
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
     );
     final cellStyle = TextStyle(
-      fontSize: 10,
+      fontSize: 13,
       fontFamily: 'monospace',
       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
     );
 
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(36),
-        1: FixedColumnWidth(32),
-        2: FixedColumnWidth(44),
-        3: FixedColumnWidth(44),
-        4: FixedColumnWidth(44),
-        5: FixedColumnWidth(44),
-        6: FixedColumnWidth(44),
+        0: FixedColumnWidth(42),
+        1: FixedColumnWidth(38),
+        2: FixedColumnWidth(50),
+        3: FixedColumnWidth(50),
+        4: FixedColumnWidth(50),
+        5: FixedColumnWidth(50),
+        6: FixedColumnWidth(50),
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
@@ -798,7 +796,7 @@ class _AlienPlayerView extends StatelessWidget {
 
   Widget _refCell(String text, TextStyle style) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
       child: Text(text, style: style, textAlign: TextAlign.center),
     );
   }
@@ -807,14 +805,14 @@ class _AlienPlayerView extends StatelessWidget {
 
   Widget _miniButton(BuildContext context, String label, VoidCallback onPressed) {
     return SizedBox(
-      height: 24,
+      height: 40,
       child: TextButton(
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: const TextStyle(fontSize: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          minimumSize: const Size(48, 40),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          textStyle: const TextStyle(fontSize: 14),
         ),
         child: Text('+ $label'),
       ),

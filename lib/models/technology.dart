@@ -37,6 +37,16 @@ class TechState {
     return table[id]?.maxLevel ?? 0;
   }
 
+  /// Returns a new [TechState] with pending tech purchases merged in.
+  /// Pending levels override applied levels, so ships built in the same
+  /// Economic Phase as a tech purchase get the new tech (rule 9.11).
+  TechState withPending(Map<TechId, int> pending) {
+    if (pending.isEmpty) return this;
+    final merged = Map<TechId, int>.from(levels);
+    merged.addAll(pending);
+    return TechState(levels: merged);
+  }
+
   TechState copyWith({Map<TechId, int>? levels}) =>
       TechState(levels: levels ?? this.levels);
 

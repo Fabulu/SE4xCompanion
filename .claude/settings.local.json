@@ -13,7 +13,14 @@
       "Bash(flutter build:*)",
       "Bash(flutter test:*)",
       "Bash(flutter devices:*)",
-      "Bash(flutter install:*)"
+      "Bash(flutter install:*)",
+      "Bash(flutter clean:*)",
+      "Bash(flutter pub:*)",
+      "Bash(python parse_rules.py)",
+      "Bash(sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)",
+      "Bash(dart --version)",
+      "Bash(dart run:*)",
+      "Bash(python:*)"
     ]
   }
 }

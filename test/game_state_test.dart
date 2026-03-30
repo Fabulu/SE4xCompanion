@@ -8,6 +8,7 @@ import 'package:se4x/models/game_state.dart';
 import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
+import 'package:se4x/models/turn_summary.dart';
 import 'package:se4x/models/world.dart';
 
 void main() {
@@ -194,6 +195,74 @@ void main() {
     });
   });
 
+  group('GameState with turnSummaries', () {
+    test('GameState with turnSummaries round-trips correctly', () {
+      final gs = GameState(
+        turnNumber: 4,
+        turnSummaries: [
+          TurnSummary(
+            turnNumber: 1,
+            completedAt: DateTime.utc(2025, 1, 1),
+            techsGained: ['Attack-1'],
+            shipsBuilt: ['DD x2'],
+            coloniesGrown: 1,
+            cpLostToCap: 5,
+            rpLostToCap: 0,
+            cpCarryOver: 25,
+            rpCarryOver: 10,
+            maintenancePaid: 3,
+          ),
+          TurnSummary(
+            turnNumber: 2,
+            completedAt: DateTime.utc(2025, 2, 1),
+            techsGained: ['Defense-1', 'Move-2'],
+            shipsBuilt: ['CA x1'],
+            coloniesGrown: 2,
+            cpLostToCap: 0,
+            rpLostToCap: 8,
+            cpCarryOver: 30,
+            rpCarryOver: 20,
+            maintenancePaid: 5,
+          ),
+        ],
+      );
+
+      final json = gs.toJson();
+      final restored = GameState.fromJson(json);
+
+      expect(restored.turnNumber, 4);
+      expect(restored.turnSummaries.length, 2);
+      expect(restored.turnSummaries[0].turnNumber, 1);
+      expect(restored.turnSummaries[0].completedAt, DateTime.utc(2025, 1, 1));
+      expect(restored.turnSummaries[0].techsGained, ['Attack-1']);
+      expect(restored.turnSummaries[0].shipsBuilt, ['DD x2']);
+      expect(restored.turnSummaries[0].coloniesGrown, 1);
+      expect(restored.turnSummaries[0].cpLostToCap, 5);
+      expect(restored.turnSummaries[0].cpCarryOver, 25);
+      expect(restored.turnSummaries[0].maintenancePaid, 3);
+      expect(restored.turnSummaries[1].turnNumber, 2);
+      expect(restored.turnSummaries[1].techsGained, ['Defense-1', 'Move-2']);
+      expect(restored.turnSummaries[1].rpLostToCap, 8);
+    });
+
+    test('GameState with empty turnSummaries round-trips correctly', () {
+      const gs = GameState(turnNumber: 1, turnSummaries: []);
+
+      final json = gs.toJson();
+      final restored = GameState.fromJson(json);
+
+      expect(restored.turnSummaries, isEmpty);
+    });
+
+    test('GameState without turnSummaries key defaults to empty list', () {
+      final json = <String, dynamic>{
+        'turnNumber': 3,
+      };
+      final restored = GameState.fromJson(json);
+      expect(restored.turnSummaries, isEmpty);
+    });
+  });
+
   group('GameConfig JSON round-trip', () {
     test('full config round-trips', () {
       const config = GameConfig(
@@ -232,6 +301,19 @@ void main() {
       expect(restored.enableFacilities, false);
       expect(restored.enableLogistics, false);
       expect(restored.enableTemporal, false);
+    });
+
+    test('GameConfig with enableUnpredictableResearch round-trips correctly', () {
+      const config = GameConfig(
+        enableUnpredictableResearch: true,
+        enableFacilities: true,
+      );
+      final json = config.toJson();
+      final restored = GameConfig.fromJson(json);
+
+      expect(restored.enableUnpredictableResearch, true);
+      expect(restored.enableFacilities, true);
+      expect(restored.enableLogistics, false);
     });
   });
 }

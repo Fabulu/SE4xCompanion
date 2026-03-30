@@ -12,6 +12,7 @@ class TechRow extends StatelessWidget {
   final bool canAfford;
   final VoidCallback? onBuy;
   final VoidCallback? onUndo;
+  final VoidCallback? onInfoTap;
 
   const TechRow({
     super.key,
@@ -24,6 +25,7 @@ class TechRow extends StatelessWidget {
     this.canAfford = true,
     this.onBuy,
     this.onUndo,
+    this.onInfoTap,
   });
 
   @override
@@ -35,7 +37,7 @@ class TechRow extends StatelessWidget {
     final monoStyle = TextStyle(
       fontFeatures: const [FontFeature.tabularFigures()],
       fontFamily: 'monospace',
-      fontSize: 12,
+      fontSize: 15,
       color: theme.colorScheme.onSurface,
     );
 
@@ -44,24 +46,47 @@ class TechRow extends StatelessWidget {
     );
 
     return SizedBox(
-      height: 30,
+      height: 48,
       child: Row(
         children: [
           // Tech name
           SizedBox(
-            width: 80,
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurface,
-              ),
-              overflow: TextOverflow.ellipsis,
+            width: 96,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (onInfoTap != null)
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 18,
+                      icon: Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
+                      onPressed: onInfoTap,
+                    ),
+                  ),
+              ],
             ),
           ),
           // Current level
           Text('[$currentLevel]', style: monoStyle),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           // Arrow and next level + cost
           if (isMaxed)
             Text(' MAX', style: dimStyle)
@@ -71,7 +96,7 @@ class TechRow extends StatelessWidget {
               style: monoStyle,
             ),
             if (nextCost != null) ...[
-              const SizedBox(width: 2),
+              const SizedBox(width: 4),
               Text(
                 '(${nextCost}CP)',
                 style: dimStyle,
@@ -82,11 +107,11 @@ class TechRow extends StatelessWidget {
           // Pending buys indicator
           if (pendingBuys > 0)
             Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(right: 6),
               child: Text(
                 '+$pendingBuys',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
@@ -186,19 +211,19 @@ class _LevelCircle extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 18,
-        height: 18,
+        width: 30,
+        height: 30,
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: fillColor,
-          border: Border.all(color: color, width: 1),
+          border: Border.all(color: color, width: 1.5),
         ),
         alignment: Alignment.center,
         child: Text(
           displayText,
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 14,
             fontFamily: 'monospace',
             fontWeight: FontWeight.bold,
             color: textColor,
@@ -220,14 +245,14 @@ class _CompactTextButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      height: 24,
+      height: 40,
       child: TextButton(
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: const TextStyle(fontSize: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          minimumSize: const Size(48, 40),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          textStyle: const TextStyle(fontSize: 15),
           foregroundColor: theme.colorScheme.primary,
           disabledForegroundColor: theme.disabledColor,
         ),

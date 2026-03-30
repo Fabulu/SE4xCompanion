@@ -19,7 +19,8 @@ class SectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      height: 32,
+      height: 44,
+      padding: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: theme.dividerColor, width: 1),
@@ -31,7 +32,7 @@ class SectionHeader extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.onSurface,
             ),
@@ -39,11 +40,11 @@ class SectionHeader extends StatelessWidget {
           if (subtitle != null) ...[
             const SizedBox(width: 8),
             Padding(
-              padding: const EdgeInsets.only(bottom: 1),
+              padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 subtitle!,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 14,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
@@ -52,7 +53,7 @@ class SectionHeader extends StatelessWidget {
           const Spacer(),
           if (trailing != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.only(bottom: 4),
               child: trailing!,
             ),
         ],

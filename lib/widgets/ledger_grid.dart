@@ -15,6 +15,13 @@ class LedgerRow {
   final int? max;
   final int step;
 
+  /// Optional widget placed after the value (e.g. bid reveal button).
+  final Widget? trailing;
+
+  /// Optional builder that replaces the default value display.
+  /// Receives the display value and the default value TextStyle.
+  final Widget Function(int displayValue, TextStyle valueStyle)? trailingBuilder;
+
   const LedgerRow({
     required this.label,
     this.value,
@@ -26,6 +33,8 @@ class LedgerRow {
     this.min,
     this.max,
     this.step = 1,
+    this.trailing,
+    this.trailingBuilder,
   });
 }
 
@@ -51,12 +60,12 @@ class LedgerGrid extends StatelessWidget {
       children: [
         // Title
         Padding(
-          padding: const EdgeInsets.only(bottom: 2, top: 4),
+          padding: const EdgeInsets.only(bottom: 4, top: 8),
           child: Text(
             title,
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.bold,
-              fontSize: 13,
+              fontSize: 18,
             ),
           ),
         ),
@@ -73,7 +82,7 @@ class LedgerGrid extends StatelessWidget {
     final displayValue = row.value ?? row.computedValue ?? 0;
 
     final labelStyle = TextStyle(
-      fontSize: 12,
+      fontSize: 15,
       fontWeight: (row.isTotal || row.isSubtotal)
           ? FontWeight.bold
           : FontWeight.normal,
@@ -83,7 +92,7 @@ class LedgerGrid extends StatelessWidget {
     final valueStyle = TextStyle(
       fontFeatures: const [FontFeature.tabularFigures()],
       fontFamily: 'monospace',
-      fontSize: 13,
+      fontSize: 16,
       fontWeight: row.isTotal ? FontWeight.bold : FontWeight.normal,
       color: isComputed
           ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
@@ -106,14 +115,17 @@ class LedgerGrid extends StatelessWidget {
             color: theme.dividerColor.withValues(alpha: 0.5),
           ),
         SizedBox(
-          height: row.isEditable ? 36 : 26,
+          height: row.isEditable ? 48 : 44,
           child: Row(
             children: [
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(row.label, style: labelStyle),
               ),
-              if (row.isEditable && row.onChanged != null)
+              // Use trailingBuilder if provided (replaces default value)
+              if (row.trailingBuilder != null)
+                row.trailingBuilder!(displayValue, valueStyle)
+              else if (row.isEditable && row.onChanged != null)
                 NumberInput(
                   value: displayValue,
                   onChanged: row.onChanged!,
@@ -123,13 +135,15 @@ class LedgerGrid extends StatelessWidget {
                 )
               else
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 12),
                   child: Text(
                     displayValue.toString(),
                     style: valueStyle,
                     textAlign: TextAlign.right,
                   ),
                 ),
+              // Trailing widget (e.g. bid reveal button)
+              if (row.trailing != null) row.trailing!,
             ],
           ),
         ),

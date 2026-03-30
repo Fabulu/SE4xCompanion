@@ -44,6 +44,7 @@ class GameConfig {
   final bool enableAdvancedConstruction;
   final bool enableReplicators;
   final bool enableShipExperience;
+  final bool enableUnpredictableResearch;
 
   const GameConfig({
     this.ownership = const ExpansionOwnership(),
@@ -53,6 +54,7 @@ class GameConfig {
     this.enableAdvancedConstruction = false,
     this.enableReplicators = false,
     this.enableShipExperience = false,
+    this.enableUnpredictableResearch = false,
   });
 
   /// Whether to use the facilities cost table instead of the base cost table.
@@ -66,6 +68,7 @@ class GameConfig {
     bool? enableAdvancedConstruction,
     bool? enableReplicators,
     bool? enableShipExperience,
+    bool? enableUnpredictableResearch,
   }) =>
       GameConfig(
         ownership: ownership ?? this.ownership,
@@ -77,6 +80,8 @@ class GameConfig {
         enableReplicators: enableReplicators ?? this.enableReplicators,
         enableShipExperience:
             enableShipExperience ?? this.enableShipExperience,
+        enableUnpredictableResearch:
+            enableUnpredictableResearch ?? this.enableUnpredictableResearch,
       );
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +92,7 @@ class GameConfig {
         'enableAdvancedConstruction': enableAdvancedConstruction,
         'enableReplicators': enableReplicators,
         'enableShipExperience': enableShipExperience,
+        'enableUnpredictableResearch': enableUnpredictableResearch,
       };
 
   factory GameConfig.fromJson(Map<String, dynamic> json) => GameConfig(
@@ -99,5 +105,7 @@ class GameConfig {
             json['enableAdvancedConstruction'] as bool? ?? false,
         enableReplicators: json['enableReplicators'] as bool? ?? false,
         enableShipExperience: json['enableShipExperience'] as bool? ?? false,
+        enableUnpredictableResearch:
+            json['enableUnpredictableResearch'] as bool? ?? false,
       );
 }

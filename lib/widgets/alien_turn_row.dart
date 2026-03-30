@@ -62,12 +62,13 @@ class AlienTurnRow extends StatelessWidget {
     final monoStyle = TextStyle(
       fontFeatures: const [FontFeature.tabularFigures()],
       fontFamily: 'monospace',
-      fontSize: 11,
+      fontSize: 14,
       color: textColor,
     );
-    final labelStyle = TextStyle(fontSize: 11, color: textColor);
+    final labelStyle = TextStyle(fontSize: 14, color: textColor);
 
     // Tally results by category
+    int econCount = 0;
     int fleetCount = 0;
     int techCount = 0;
     int defCount = 0;
@@ -76,6 +77,8 @@ class AlienTurnRow extends StatelessWidget {
     if (results != null) {
       for (final r in results!) {
         switch (r.outcome) {
+          case 'Econ':
+            econCount++;
           case 'Fleet':
             fleetCount++;
           case 'Tech':
@@ -89,13 +92,13 @@ class AlienTurnRow extends StatelessWidget {
 
     return Container(
       color: bgColor,
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           // Turn number
           SizedBox(
-            width: 32,
+            width: 36,
             child: Text(
               turnNumber.toString(),
               style: monoStyle.copyWith(fontWeight: FontWeight.bold),
@@ -114,16 +117,22 @@ class AlienTurnRow extends StatelessWidget {
             ),
           ),
           _colSep(theme),
-          // Extra econ
+          // Extra econ + rolled econ count
           SizedBox(
-            width: 32,
-            child: isPast || isCurrent
-                ? _InlineNumberEdit(
-                    value: extraEcon,
-                    onChanged: onExtraEconChanged,
+            width: 36,
+            child: isPast
+                ? Text(
+                    '${econCount + extraEcon}E',
                     style: monoStyle,
+                    textAlign: TextAlign.center,
                   )
-                : Text('-', style: monoStyle, textAlign: TextAlign.center),
+                : isCurrent
+                    ? _InlineNumberEdit(
+                        value: extraEcon,
+                        onChanged: onExtraEconChanged,
+                        style: monoStyle,
+                      )
+                    : Text('-', style: monoStyle, textAlign: TextAlign.center),
           ),
           _colSep(theme),
           // Fleet notes
@@ -173,17 +182,17 @@ class AlienTurnRow extends StatelessWidget {
           _colSep(theme),
           // Roll button
           SizedBox(
-            width: 36,
+            width: 44,
             child: isCurrent && results == null && onRoll != null
                 ? IconButton(
                     onPressed: onRoll,
                     icon: const Text(
                       '\u{1F3B2}',
-                      style: TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 20),
                     ),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    splashRadius: 16,
+                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                    splashRadius: 22,
                     tooltip: 'Roll',
                   )
                 : const SizedBox.shrink(),
@@ -216,8 +225,8 @@ class AlienTurnRow extends StatelessWidget {
   Widget _colSep(ThemeData theme) {
     return Container(
       width: 1,
-      height: 20,
-      margin: const EdgeInsets.symmetric(horizontal: 2),
+      height: 28,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       color: theme.dividerColor.withValues(alpha: 0.3),
     );
   }
@@ -231,14 +240,14 @@ class AlienTurnHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = TextStyle(
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
     );
 
     return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: theme.dividerColor, width: 1),
@@ -246,18 +255,18 @@ class AlienTurnHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(width: 32, child: Text('Turn', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 5),
+          SizedBox(width: 36, child: Text('Turn', style: style, textAlign: TextAlign.center)),
+          const SizedBox(width: 9),
           SizedBox(width: 56, child: Text('Rolls', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 5),
-          SizedBox(width: 32, child: Text('Ext', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 5),
+          const SizedBox(width: 9),
+          SizedBox(width: 36, child: Text('Ext', style: style, textAlign: TextAlign.center)),
+          const SizedBox(width: 9),
           Expanded(flex: 2, child: Text('Fleet', style: style)),
-          const SizedBox(width: 5),
+          const SizedBox(width: 9),
           Expanded(flex: 2, child: Text('Tech', style: style)),
-          const SizedBox(width: 5),
+          const SizedBox(width: 9),
           Expanded(flex: 2, child: Text('Def', style: style)),
-          const SizedBox(width: 41), // space for roll button column
+          const SizedBox(width: 52), // space for roll button column
         ],
       ),
     );

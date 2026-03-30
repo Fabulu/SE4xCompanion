@@ -104,7 +104,7 @@ class _NumberInputState extends State<NumberInput> {
     final monoStyle = TextStyle(
       fontFeatures: const [FontFeature.tabularFigures()],
       fontFamily: 'monospace',
-      fontSize: 13,
+      fontSize: 16,
       color: theme.colorScheme.onSurface,
     );
 
@@ -112,16 +112,16 @@ class _NumberInputState extends State<NumberInput> {
     final canIncrement = widget.max == null || widget.value + widget.step <= widget.max!;
 
     return SizedBox(
-      height: 36,
+      height: 44,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.label != null) ...[
             Text(
               widget.label!,
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 14),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
           ],
           _MiniButton(
             icon: Icons.remove,
@@ -130,12 +130,12 @@ class _NumberInputState extends State<NumberInput> {
           GestureDetector(
             onTap: _editing ? null : _startEdit,
             child: Container(
-              constraints: const BoxConstraints(minWidth: 40),
+              constraints: const BoxConstraints(minWidth: 48),
               alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: _editing
                   ? SizedBox(
-                      width: 48,
+                      width: 56,
                       child: EditableText(
                         controller: _controller,
                         focusNode: _focusNode,
@@ -177,18 +177,18 @@ class _MiniButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      width: 28,
-      height: 28,
+      width: 40,
+      height: 40,
       child: IconButton(
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
-        iconSize: 16,
+        iconSize: 24,
         icon: Icon(icon),
         color: onPressed != null
             ? theme.colorScheme.onSurface
             : theme.disabledColor,
         onPressed: onPressed,
-        splashRadius: 14,
+        splashRadius: 20,
       ),
     );
   }

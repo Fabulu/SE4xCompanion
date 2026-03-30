@@ -4,6 +4,7 @@ import 'alien_economy.dart';
 import 'game_config.dart';
 import 'production_state.dart';
 import 'ship_counter.dart';
+import 'turn_summary.dart';
 
 class GameState {
   final GameConfig config;
@@ -11,6 +12,7 @@ class GameState {
   final ProductionState production;
   final List<ShipCounter> shipCounters;
   final List<AlienPlayer> alienPlayers;
+  final List<TurnSummary> turnSummaries;
 
   const GameState({
     this.config = const GameConfig(),
@@ -18,6 +20,7 @@ class GameState {
     this.production = const ProductionState(),
     this.shipCounters = const [],
     this.alienPlayers = const [],
+    this.turnSummaries = const [],
   });
 
   GameState copyWith({
@@ -26,6 +29,7 @@ class GameState {
     ProductionState? production,
     List<ShipCounter>? shipCounters,
     List<AlienPlayer>? alienPlayers,
+    List<TurnSummary>? turnSummaries,
   }) =>
       GameState(
         config: config ?? this.config,
@@ -33,6 +37,7 @@ class GameState {
         production: production ?? this.production,
         shipCounters: shipCounters ?? this.shipCounters,
         alienPlayers: alienPlayers ?? this.alienPlayers,
+        turnSummaries: turnSummaries ?? this.turnSummaries,
       );
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +46,7 @@ class GameState {
         'production': production.toJson(),
         'shipCounters': shipCounters.map((c) => c.toJson()).toList(),
         'alienPlayers': alienPlayers.map((a) => a.toJson()).toList(),
+        'turnSummaries': turnSummaries.map((s) => s.toJson()).toList(),
       };
 
   factory GameState.fromJson(Map<String, dynamic> json) => GameState(
@@ -60,6 +66,11 @@ class GameState {
         alienPlayers: (json['alienPlayers'] as List?)
                 ?.map((a) =>
                     AlienPlayer.fromJson(a as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        turnSummaries: (json['turnSummaries'] as List?)
+                ?.map((s) =>
+                    TurnSummary.fromJson(s as Map<String, dynamic>))
                 .toList() ??
             const [],
       );

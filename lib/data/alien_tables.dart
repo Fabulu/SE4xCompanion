@@ -9,7 +9,6 @@ class AlienEconTurnDef {
   final int turn;
   final int econRolls;
   final int extraEcon;
-  final int extraDefense;
   final String fleetLaunchRange; // dice range like "1-10" or "-" for none
   final String econRange;        // e.g. "1-2" or "-"
   final String fleetRange;       // e.g. "2-3" or "-"
@@ -20,7 +19,6 @@ class AlienEconTurnDef {
     required this.turn,
     required this.econRolls,
     this.extraEcon = 0,
-    this.extraDefense = 0,
     this.fleetLaunchRange = '-',
     this.econRange = '-',
     this.fleetRange = '-',
@@ -53,9 +51,9 @@ class AlienEconTurnDef {
 }
 
 const List<AlienEconTurnDef> kAlienEconSchedule = [
-  AlienEconTurnDef(turn: 1, econRolls: 1, extraEcon: 0, extraDefense: 0,
+  AlienEconTurnDef(turn: 1, econRolls: 1, extraEcon: 0,
       fleetLaunchRange: '-', econRange: '1-2', fleetRange: '-', techRange: '3-10', defRange: '-'),
-  AlienEconTurnDef(turn: 2, econRolls: 1, extraEcon: 0, extraDefense: 0,
+  AlienEconTurnDef(turn: 2, econRolls: 1, extraEcon: 0,
       fleetLaunchRange: '1-10', econRange: '1', fleetRange: '2-3', techRange: '4-10', defRange: '-'),
   AlienEconTurnDef(turn: 3, econRolls: 2, extraEcon: 0,
       fleetLaunchRange: '1-10', econRange: '1', fleetRange: '2-4', techRange: '5-8', defRange: '9-10'),

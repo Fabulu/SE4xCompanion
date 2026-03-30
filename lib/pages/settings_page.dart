@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/game_config.dart';
 import '../models/game_state.dart';
+import '../models/turn_summary.dart';
 
 class SettingsPage extends StatelessWidget {
   final GameConfig config;
@@ -17,6 +20,10 @@ class SettingsPage extends StatelessWidget {
   final ValueChanged<String> onDeleteGame;
   final VoidCallback onDuplicateGame;
   final VoidCallback onResetGame;
+  final VoidCallback onSetupStartingFleet;
+  final List<TurnSummary> turnSummaries;
+  final GameState gameState;
+  final ValueChanged<GameState>? onImportGame;
 
   const SettingsPage({
     super.key,
@@ -25,6 +32,8 @@ class SettingsPage extends StatelessWidget {
     required this.turnNumber,
     required this.savedGames,
     required this.activeGameId,
+    this.turnSummaries = const [],
+    required this.gameState,
     required this.onConfigChanged,
     required this.onGameNameChanged,
     required this.onNewGame,
@@ -33,6 +42,8 @@ class SettingsPage extends StatelessWidget {
     required this.onDeleteGame,
     required this.onDuplicateGame,
     required this.onResetGame,
+    required this.onSetupStartingFleet,
+    this.onImportGame,
   });
 
   @override
@@ -44,43 +55,68 @@ class SettingsPage extends StatelessWidget {
       children: [
         // ── Game Setup ──
         _SectionTitle(title: 'GAME SETUP'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         _GameNameTile(
           gameName: gameName,
           onChanged: onGameNameChanged,
         ),
         ListTile(
-          title: const Text('Turn', style: TextStyle(fontSize: 13)),
+          title: const Text('Turn', style: TextStyle(fontSize: 16)),
           trailing: Text(
             '$turnNumber',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 16,
               fontFeatures: const [FontFeature.tabularFigures()],
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onSetupStartingFleet,
+              icon: const Icon(Icons.rocket_launch, size: 20),
+              label: const Text('Setup Starting Fleet', style: TextStyle(fontSize: 15)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 48),
+              ),
+            ),
+          ),
+        ),
         const Divider(height: 24),
+
+        // ── Turn Log ──
+        if (turnSummaries.isNotEmpty) ...[
+          _SectionTitle(title: 'TURN LOG'),
+          const SizedBox(height: 8),
+          for (final summary in turnSummaries)
+            _TurnSummaryTile(summary: summary),
+          const Divider(height: 24),
+        ],
 
         // ── Expansions Owned ──
         _SectionTitle(title: 'EXPANSIONS OWNED'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Close Encounters', style: TextStyle(fontSize: 13)),
+          title: const Text('Close Encounters', style: TextStyle(fontSize: 16)),
           value: config.ownership.closeEncounters,
           onChanged: (v) => onConfigChanged(config.copyWith(
             ownership: config.ownership.copyWith(closeEncounters: v),
           )),
         ),
         SwitchListTile(
-          title: const Text('Replicators', style: TextStyle(fontSize: 13)),
+          title: const Text('Replicators', style: TextStyle(fontSize: 16)),
           value: config.ownership.replicators,
           onChanged: (v) => onConfigChanged(config.copyWith(
             ownership: config.ownership.copyWith(replicators: v),
           )),
         ),
         SwitchListTile(
-          title: const Text('All Good Things', style: TextStyle(fontSize: 13)),
+          title: const Text('All Good Things', style: TextStyle(fontSize: 16)),
           value: config.ownership.allGoodThings,
           onChanged: (v) => onConfigChanged(config.copyWith(
             ownership: config.ownership.copyWith(allGoodThings: v),
@@ -90,7 +126,7 @@ class SettingsPage extends StatelessWidget {
 
         // ── Optional Rules ──
         _SectionTitle(title: 'OPTIONAL RULES'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         _RuleToggle(
           title: 'Enable Facilities',
           value: config.enableFacilities,
@@ -134,11 +170,18 @@ class SettingsPage extends StatelessWidget {
           onChanged: (v) =>
               onConfigChanged(config.copyWith(enableShipExperience: v)),
         ),
+        _RuleToggle(
+          title: 'Unpredictable Research',
+          value: config.enableUnpredictableResearch,
+          enabled: true,
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableUnpredictableResearch: v)),
+        ),
         const Divider(height: 24),
 
         // ── Game Library ──
         _SectionTitle(title: 'GAME LIBRARY'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         for (final game in savedGames)
           _SavedGameTile(
             game: game,
@@ -152,21 +195,45 @@ class SettingsPage extends StatelessWidget {
           children: [
             OutlinedButton.icon(
               onPressed: onNewGame,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('New Game', style: TextStyle(fontSize: 12)),
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('New Game', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 48),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             OutlinedButton.icon(
               onPressed: onDuplicateGame,
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Duplicate', style: TextStyle(fontSize: 12)),
+              icon: const Icon(Icons.copy, size: 20),
+              label: const Text('Duplicate', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 48),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _exportGame(context),
+              icon: const Icon(Icons.upload, size: 20),
+              label: const Text('Export', style: TextStyle(fontSize: 15)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 48),
+              ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: () => _importGame(context),
+              icon: const Icon(Icons.download, size: 20),
+              label: const Text('Import', style: TextStyle(fontSize: 15)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 48),
               ),
             ),
           ],
@@ -185,12 +252,50 @@ class SettingsPage extends StatelessWidget {
               side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.5)),
               padding: const EdgeInsets.symmetric(vertical: 10),
             ),
-            child: const Text('Reset Current Game', style: TextStyle(fontSize: 13)),
+            child: const Text('Reset Current Game', style: TextStyle(fontSize: 16)),
           ),
         ),
         const SizedBox(height: 32),
       ],
     );
+  }
+
+  // ── Import / Export ──
+
+  void _exportGame(BuildContext context) {
+    final json = jsonEncode(gameState.toJson());
+    Clipboard.setData(ClipboardData(text: json));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Game copied to clipboard')),
+    );
+  }
+
+  Future<void> _importGame(BuildContext context) async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (data == null || data.text == null || data.text!.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Clipboard is empty')),
+          );
+        }
+        return;
+      }
+      final parsed = jsonDecode(data.text!) as Map<String, dynamic>;
+      final imported = GameState.fromJson(parsed);
+      onImportGame?.call(imported);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Game imported successfully')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   // ── Config helpers ──
@@ -313,14 +418,14 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
       child: Text(
         title,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 16,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.0,
-          color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       ),
     );
@@ -363,17 +468,17 @@ class _GameNameTileState extends State<_GameNameTile> {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title: const Text('Game Name', style: TextStyle(fontSize: 13)),
+      title: const Text('Game Name', style: TextStyle(fontSize: 16)),
       trailing: SizedBox(
-        width: 160,
+        width: 180,
         child: TextField(
           controller: _controller,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 16),
           textAlign: TextAlign.end,
           decoration: const InputDecoration(
             border: InputBorder.none,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           ),
           onSubmitted: (v) {
             if (v.trim().isNotEmpty) {
@@ -405,12 +510,12 @@ class _RuleToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SwitchListTile(
-      title: Text(title, style: const TextStyle(fontSize: 13)),
+      title: Text(title, style: const TextStyle(fontSize: 16)),
       subtitle: (!enabled && disabledReason != null)
           ? Text(
               disabledReason!,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 13,
                 color: theme.colorScheme.error.withValues(alpha: 0.7),
               ),
             )
@@ -442,7 +547,7 @@ class _SavedGameTile extends StatelessWidget {
     final updatedStr = _formatDate(game.updatedAt);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         border: Border.all(
           color: isActive
@@ -450,24 +555,24 @@ class _SavedGameTile extends StatelessWidget {
               : theme.dividerColor,
           width: isActive ? 1.5 : 0.5,
         ),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
         color: isActive
             ? theme.colorScheme.primary.withValues(alpha: 0.05)
             : Colors.transparent,
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
               if (isActive)
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 10),
                   child: Icon(
                     Icons.play_arrow,
-                    size: 14,
+                    size: 20,
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -478,16 +583,16 @@ class _SavedGameTile extends StatelessWidget {
                     Text(
                       game.name,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 16,
                         fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                         color: theme.colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       'Turn ${game.state.turnNumber}  |  $updatedStr',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 13,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
@@ -496,18 +601,18 @@ class _SavedGameTile extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onRename,
-                icon: const Icon(Icons.edit, size: 14),
+                icon: const Icon(Icons.edit, size: 20),
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                splashRadius: 14,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                splashRadius: 20,
                 tooltip: 'Rename',
               ),
               IconButton(
                 onPressed: onDelete,
-                icon: Icon(Icons.delete_outline, size: 14, color: theme.colorScheme.error),
+                icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                splashRadius: 14,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                splashRadius: 20,
                 tooltip: 'Delete',
               ),
             ],
@@ -525,5 +630,59 @@ class _SavedGameTile extends StatelessWidget {
     if (diff.inDays < 1) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+}
+
+class _TurnSummaryTile extends StatelessWidget {
+  final TurnSummary summary;
+
+  const _TurnSummaryTile({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dimStyle = TextStyle(
+      fontSize: 14,
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+    );
+
+    final details = <Widget>[];
+
+    if (summary.techsGained.isNotEmpty) {
+      details.add(Text('Techs: ${summary.techsGained.join(", ")}', style: dimStyle));
+    }
+    if (summary.shipsBuilt.isNotEmpty) {
+      details.add(Text('Ships: ${summary.shipsBuilt.join(", ")}', style: dimStyle));
+    }
+    if (summary.coloniesGrown > 0) {
+      details.add(Text('Colonies grown: ${summary.coloniesGrown}', style: dimStyle));
+    }
+    details.add(Text('Maintenance: ${summary.maintenancePaid}', style: dimStyle));
+    details.add(Text('CP carry-over: ${summary.cpCarryOver}', style: dimStyle));
+    if (summary.cpLostToCap > 0) {
+      details.add(Text('CP lost to cap: ${summary.cpLostToCap}',
+          style: dimStyle.copyWith(color: Colors.amber)));
+    }
+    if (summary.rpCarryOver > 0 || summary.rpLostToCap > 0) {
+      details.add(Text('RP carry-over: ${summary.rpCarryOver}', style: dimStyle));
+      if (summary.rpLostToCap > 0) {
+        details.add(Text('RP lost to cap: ${summary.rpLostToCap}',
+            style: dimStyle.copyWith(color: Colors.amber)));
+      }
+    }
+
+    return ExpansionTile(
+      title: Text('Turn ${summary.turnNumber}',
+          style: const TextStyle(fontSize: 16)),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: details,
+          ),
+        ),
+      ],
+    );
   }
 }

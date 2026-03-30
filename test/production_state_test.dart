@@ -601,6 +601,176 @@ void main() {
     });
   });
 
+  group('Unpredictable Research', () {
+    const unpredictableConfig = GameConfig(enableUnpredictableResearch: true);
+
+    test('accumulatedResearch persists across prepareForNextTurn', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        accumulatedResearch: {'attack_1': 10, 'defense_2': 5},
+      );
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.accumulatedResearch['attack_1'], 10);
+      expect(next.accumulatedResearch['defense_2'], 5);
+    });
+
+    test('accumulatedResearch entries for acquired techs are cleared at turn end', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        accumulatedResearch: {'attack_1': 20, 'attack_2': 15, 'defense_1': 10},
+        pendingTechPurchases: {TechId.attack: 2}, // acquiring attack levels 1 and 2
+      );
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      // attack_1 and attack_2 should be removed since attack was purchased to level 2
+      expect(next.accumulatedResearch.containsKey('attack_1'), false);
+      expect(next.accumulatedResearch.containsKey('attack_2'), false);
+      // defense_1 should remain (not acquired)
+      expect(next.accumulatedResearch['defense_1'], 10);
+    });
+
+    test('researchGrantsCp resets to 0 at turn end', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        researchGrantsCp: 15,
+      );
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.researchGrantsCp, 0);
+    });
+
+    test('remainingCp subtracts researchGrantsCp', () {
+      final ps = ProductionState(
+        worlds: [hw()], // 30 CP
+        researchGrantsCp: 10,
+      );
+      // remaining = 30 - 0 (techSpending) - 10 (grants) - 0 (ships) - 0 (upgrades) = 20
+      expect(ps.remainingCp(baseConfig, []), 20);
+    });
+
+    test('techSpendingCpDerived returns 0 when unpredictable research enabled', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        pendingTechPurchases: {TechId.attack: 2}, // would normally cost 50
+      );
+      expect(ps.techSpendingCpDerived(unpredictableConfig), 0);
+    });
+
+    test('JSON round-trip includes accumulatedResearch and researchGrantsCp', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        accumulatedResearch: {'attack_1': 12, 'move_3': 25},
+        researchGrantsCp: 8,
+      );
+      final json = ps.toJson();
+      final restored = ProductionState.fromJson(json);
+      expect(restored.accumulatedResearch['attack_1'], 12);
+      expect(restored.accumulatedResearch['move_3'], 25);
+      expect(restored.researchGrantsCp, 8);
+    });
+  });
+
+  group('CP carry-over warning', () {
+    test('remaining > 30 loses the excess to cap', () {
+      // Scenario: lots of income, little spending => remaining > 30
+      final ps = ProductionState(
+        cpCarryOver: 0,
+        worlds: [hw(), colony(3), colony(3)], // 30+5+5 = 40
+      );
+      final remaining = ps.remainingCp(baseConfig, []);
+      expect(remaining, 40);
+      // After prepareForNextTurn, carry-over is capped at 30
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.cpCarryOver, 30);
+      // Lost amount = remaining - 30
+      final lostAmount = remaining - 30;
+      expect(lostAmount, 10);
+    });
+
+    test('remaining exactly 30 loses nothing', () {
+      final ps = ProductionState(
+        cpCarryOver: 0,
+        worlds: [hw()], // 30
+      );
+      final remaining = ps.remainingCp(baseConfig, []);
+      expect(remaining, 30);
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.cpCarryOver, 30);
+    });
+
+    test('remaining under 30 carries over fully', () {
+      final ps = ProductionState(
+        cpCarryOver: 0,
+        shipSpendingCp: 10,
+        worlds: [hw()], // 30 - 10 = 20
+      );
+      final remaining = ps.remainingCp(baseConfig, []);
+      expect(remaining, 20);
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.cpCarryOver, 20);
+    });
+  });
+
+  group('Maintenance forecast from ship purchases', () {
+    test('sum hull sizes of non-exempt ship purchases', () {
+      // Buying 2 DDs (hull 1 each) and 1 CA (hull 2) = total hull 4
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.dd, quantity: 2),
+          const ShipPurchase(type: ShipType.ca, quantity: 1),
+        ],
+      );
+      // Calculate expected maintenance increase from purchases
+      int forecastMaint = 0;
+      for (final p in ps.shipPurchases) {
+        final def = kShipDefinitions[p.type];
+        if (def != null && !def.maintenanceExempt) {
+          forecastMaint += def.hullSize * p.quantity;
+        }
+      }
+      // DD hull=1 * 2 + CA hull=2 * 1 = 4
+      expect(forecastMaint, 4);
+    });
+
+    test('exempt ship purchases do not contribute to maintenance forecast', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.colonyShip, quantity: 2),
+          const ShipPurchase(type: ShipType.mine, quantity: 3),
+          const ShipPurchase(type: ShipType.miner, quantity: 1),
+        ],
+      );
+      int forecastMaint = 0;
+      for (final p in ps.shipPurchases) {
+        final def = kShipDefinitions[p.type];
+        if (def != null && !def.maintenanceExempt) {
+          forecastMaint += def.hullSize * p.quantity;
+        }
+      }
+      expect(forecastMaint, 0);
+    });
+
+    test('mixed exempt and non-exempt ship purchases', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.bc, quantity: 1), // hull 3, non-exempt
+          const ShipPurchase(type: ShipType.base, quantity: 1), // exempt
+          const ShipPurchase(type: ShipType.dd, quantity: 3), // hull 1 * 3, non-exempt
+        ],
+      );
+      int forecastMaint = 0;
+      for (final p in ps.shipPurchases) {
+        final def = kShipDefinitions[p.type];
+        if (def != null && !def.maintenanceExempt) {
+          forecastMaint += def.hullSize * p.quantity;
+        }
+      }
+      // BC 3 + DD 1*3 = 6
+      expect(forecastMaint, 6);
+    });
+  });
+
   group('Edge cases', () {
     test('empty worlds list gives 0 for all income', () {
       const ps = ProductionState();

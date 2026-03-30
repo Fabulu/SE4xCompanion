@@ -133,4 +133,106 @@ void main() {
       expect(restored.levels.length, 1);
     });
   });
+
+  group('Tech cost progression lookup', () {
+    test('Attack base: levels 1-3 with costs 20, 30, 40', () {
+      final entry = kBaseTechCosts[TechId.attack]!;
+      expect(entry.startLevel, 0);
+      expect(entry.levelCosts[1], 20);
+      expect(entry.levelCosts[2], 30);
+      expect(entry.levelCosts[3], 40);
+      expect(entry.maxLevel, 3);
+    });
+
+    test('ShipSize base: starts at 1, levels 2-6', () {
+      final entry = kBaseTechCosts[TechId.shipSize]!;
+      expect(entry.startLevel, 1);
+      expect(entry.levelCosts[2], 10);
+      expect(entry.levelCosts[3], 15);
+      expect(entry.levelCosts[4], 20);
+      expect(entry.levelCosts[5], 25);
+      expect(entry.levelCosts[6], 30);
+      expect(entry.maxLevel, 6);
+    });
+
+    test('Move base: starts at 1, levels 2-6', () {
+      final entry = kBaseTechCosts[TechId.move]!;
+      expect(entry.startLevel, 1);
+      expect(entry.levelCosts[2], 20);
+      expect(entry.levelCosts[3], 30);
+      expect(entry.levelCosts[4], 40);
+      expect(entry.levelCosts[5], 50);
+      expect(entry.levelCosts[6], 60);
+      expect(entry.maxLevel, 6);
+    });
+
+    test('Tactics base: levels 1-3 with costs 15, 20, 30', () {
+      final entry = kBaseTechCosts[TechId.tactics]!;
+      expect(entry.startLevel, 0);
+      expect(entry.levelCosts[1], 15);
+      expect(entry.levelCosts[2], 20);
+      expect(entry.levelCosts[3], 30);
+      expect(entry.maxLevel, 3);
+    });
+
+    test('Terraforming base: single level costing 25', () {
+      final entry = kBaseTechCosts[TechId.terraforming]!;
+      expect(entry.startLevel, 0);
+      expect(entry.levelCosts[1], 25);
+      expect(entry.maxLevel, 1);
+    });
+
+    test('Attack facilities: levels 1-4 with costs 20, 30, 25, 10', () {
+      final entry = kFacilitiesTechCosts[TechId.attack]!;
+      expect(entry.startLevel, 0);
+      expect(entry.levelCosts[1], 20);
+      expect(entry.levelCosts[2], 30);
+      expect(entry.levelCosts[3], 25);
+      expect(entry.levelCosts[4], 10);
+      expect(entry.maxLevel, 4);
+    });
+
+    test('ShipSize facilities: starts at 1, levels 2-7', () {
+      final entry = kFacilitiesTechCosts[TechId.shipSize]!;
+      expect(entry.startLevel, 1);
+      expect(entry.levelCosts[7], 30);
+      expect(entry.maxLevel, 7);
+    });
+
+    test('costForNext returns null past max level', () {
+      final entry = kBaseTechCosts[TechId.attack]!;
+      expect(entry.costForNext(3), isNull); // max is 3
+    });
+
+    test('costForNext returns correct cost for each step', () {
+      final entry = kBaseTechCosts[TechId.attack]!;
+      expect(entry.costForNext(0), 20); // 0->1
+      expect(entry.costForNext(1), 30); // 1->2
+      expect(entry.costForNext(2), 40); // 2->3
+    });
+  });
+
+  group('TechState withPending', () {
+    test('merges pending levels correctly', () {
+      const tech = TechState(levels: {TechId.attack: 1, TechId.defense: 0});
+      final merged = tech.withPending({TechId.tactics: 2, TechId.move: 3});
+      expect(merged.levels[TechId.attack], 1);
+      expect(merged.levels[TechId.defense], 0);
+      expect(merged.levels[TechId.tactics], 2);
+      expect(merged.levels[TechId.move], 3);
+    });
+
+    test('with empty map returns same instance', () {
+      const tech = TechState(levels: {TechId.attack: 1});
+      final result = tech.withPending({});
+      expect(identical(result, tech), true);
+    });
+
+    test('overrides existing levels', () {
+      const tech = TechState(levels: {TechId.attack: 1, TechId.defense: 1});
+      final merged = tech.withPending({TechId.attack: 3});
+      expect(merged.levels[TechId.attack], 3);
+      expect(merged.levels[TechId.defense], 1);
+    });
+  });
 }
