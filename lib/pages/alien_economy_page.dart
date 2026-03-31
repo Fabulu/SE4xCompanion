@@ -4,7 +4,52 @@ import '../data/alien_tables.dart';
 import '../models/alien_economy.dart';
 import '../services/dice_service.dart';
 import '../widgets/alien_turn_row.dart';
+import '../widgets/animated_dice.dart';
 import '../widgets/section_header.dart';
+
+// ── Standard solitaire alien tech list ──
+const List<String> kAlienTechOptions = [
+  'Attack 1',
+  'Attack 2',
+  'Attack 3',
+  'Defense 1',
+  'Defense 2',
+  'Tactics 1',
+  'Move 2',
+  'Move 3',
+  'Cloaking 1',
+  'Scanners 1',
+  'Fighters 1',
+  'Point Defense 1',
+  'Mines 1',
+  'Mine Sweep 1',
+  'Ground 2',
+  'Security 1',
+];
+
+// ── Ship types for fleet composition picker ──
+class _ShipType {
+  final String abbreviation;
+  final String name;
+  final int cpCost;
+
+  const _ShipType(this.abbreviation, this.name, this.cpCost);
+}
+
+const List<_ShipType> _kShipTypes = [
+  _ShipType('SC', 'Scout', 6),
+  _ShipType('DD', 'Destroyer', 9),
+  _ShipType('CA', 'Cruiser', 12),
+  _ShipType('BC', 'Battlecruiser', 15),
+  _ShipType('BB', 'Battleship', 20),
+  _ShipType('DN', 'Dreadnought', 24),
+  _ShipType('Raider', 'Raider', 12),
+  _ShipType('Fighter', 'Fighter', 5),
+  _ShipType('CV', 'Carrier', 12),
+  _ShipType('Transport', 'Transport', 12),
+  _ShipType('Mine', 'Mine', 5),
+  _ShipType('SW', 'Minesweeper', 5),
+];
 
 /// Full-page alien economy tracker for 1-3 solitaire alien opponents.
 ///
@@ -202,7 +247,7 @@ class _AlienEconomyBodyState extends State<_AlienEconomyBody>
 //  Per-alien view: turn table, fleet log, tech list, reference
 // ═══════════════════════════════════════════════════════════════════
 
-class _AlienPlayerView extends StatelessWidget {
+class _AlienPlayerView extends StatefulWidget {
   final AlienPlayer player;
   final int playerIndex;
   final DiceService dice;
@@ -214,6 +259,16 @@ class _AlienPlayerView extends StatelessWidget {
     required this.dice,
     required this.onChanged,
   });
+
+  @override
+  State<_AlienPlayerView> createState() => _AlienPlayerViewState();
+}
+
+class _AlienPlayerViewState extends State<_AlienPlayerView>
+    with TickerProviderStateMixin {
+  AlienPlayer get player => widget.player;
+  DiceService get dice => widget.dice;
+  ValueChanged<AlienPlayer> get onChanged => widget.onChanged;
 
   // ── Turn record helpers ──
 
@@ -235,12 +290,155 @@ class _AlienPlayerView extends StatelessWidget {
     return list;
   }
 
-  // ── Roll logic ──
+  // ── Roll logic with animated dice (Sub-task C) ──
 
-  void _rollForTurn(int turn) {
+  Future<void> _rollForTurn(int turn) async {
     final def = getAlienEconDef(turn);
     final dieValues = dice.rollMultiple(def.econRolls);
+    final launchRoll = dice.rollD10();
 
+    // Show animated dice dialog
+    if (!mounted) return;
+    await _showAnimatedRollDialog(
+      context: context,
+      econDieValues: dieValues,
+      launchDieValue: launchRoll,
+      def: def,
+      turn: turn,
+    );
+  }
+
+  Future<void> _showAnimatedRollDialog({
+    required BuildContext context,
+    required List<int> econDieValues,
+    required int launchDieValue,
+    required AlienEconTurnDef def,
+    required int turn,
+  }) async {
+    final diceController = AnimatedDiceController();
+    final launchDiceController = AnimatedDiceController();
+    bool resolved = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        // Kick off the economy dice animation
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await diceController.roll(econDieValues, this);
+
+          // After econ dice land, roll the fleet launch die if applicable
+          if (def.fleetLaunchRange != '-') {
+            await Future.delayed(const Duration(milliseconds: 300));
+            await launchDiceController.roll([launchDieValue], this);
+          }
+        });
+
+        return AlertDialog(
+          title: Text('Turn $turn Economy Roll',
+              style: const TextStyle(fontSize: 16)),
+          content: SizedBox(
+            width: 320,
+            child: ListenableBuilder(
+              listenable: Listenable.merge([diceController, launchDiceController]),
+              builder: (context, _) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Economy Rolls:',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    AnimatedDiceDisplay(controller: diceController),
+                    if (diceController.showTotal) ...[
+                      const SizedBox(height: 8),
+                      _buildOutcomeSummary(econDieValues, def),
+                    ],
+                    if (def.fleetLaunchRange != '-') ...[
+                      const SizedBox(height: 16),
+                      const Text('Fleet Launch Roll:',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      AnimatedDiceDisplay(controller: launchDiceController),
+                      if (launchDiceController.showTotal) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          def.fleetLaunches(launchDieValue)
+                              ? 'Fleet LAUNCHES! (need ${def.fleetLaunchRange})'
+                              : 'No launch (need ${def.fleetLaunchRange})',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: def.fleetLaunches(launchDieValue)
+                                ? Colors.green
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            ListenableBuilder(
+              listenable: Listenable.merge([diceController, launchDiceController]),
+              builder: (context, _) {
+                final econDone = !diceController.isRolling &&
+                    diceController.dice.isNotEmpty;
+                final launchDone = def.fleetLaunchRange == '-' ||
+                    (!launchDiceController.isRolling &&
+                        launchDiceController.dice.isNotEmpty);
+                final allDone = econDone && launchDone;
+
+                return TextButton(
+                  onPressed: allDone
+                      ? () {
+                          if (!resolved) {
+                            resolved = true;
+                            _applyRollResults(
+                                turn, def, econDieValues, launchDieValue);
+                          }
+                          diceController.disposeControllers();
+                          launchDiceController.disposeControllers();
+                          Navigator.of(ctx).pop();
+                        }
+                      : null,
+                  child: const Text('Apply'),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOutcomeSummary(List<int> dieValues, AlienEconTurnDef def) {
+    final parts = <String>[];
+    for (final d in dieValues) {
+      final outcome = def.resolveRoll(d);
+      if (outcome != null) {
+        final label = switch (outcome) {
+          AlienEconOutcomeType.econ => 'Econ',
+          AlienEconOutcomeType.fleet => 'Fleet',
+          AlienEconOutcomeType.tech => 'Tech',
+          AlienEconOutcomeType.def => 'Def',
+        };
+        parts.add('$d\u2192$label');
+      }
+    }
+    return Text(
+      parts.join('  '),
+      style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+    );
+  }
+
+  void _applyRollResults(
+      int turn, AlienEconTurnDef def, List<int> dieValues, int launchRoll) {
     final rolls = <AlienEconRoll>[];
     for (final d in dieValues) {
       final outcome = def.resolveRoll(d);
@@ -249,8 +447,6 @@ class _AlienPlayerView extends StatelessWidget {
       }
     }
 
-    // Fleet launch roll (separate)
-    final launchRoll = dice.rollD10();
     final launched = def.fleetLaunches(launchRoll);
 
     final existing = _recordFor(turn);
@@ -262,7 +458,6 @@ class _AlienPlayerView extends StatelessWidget {
       notes: existing?.notes ?? '',
     );
 
-    // Advance current turn
     final newTurn = turn < 20 ? turn + 1 : turn;
     onChanged(player.copyWith(
       currentTurn: newTurn,
@@ -577,18 +772,23 @@ class _AlienPlayerView extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Composition
+          // Composition (Sub-task B: button that opens picker)
           Expanded(
-            child: TextFormField(
-              initialValue: fleet.composition,
-              style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                border: InputBorder.none,
-                hintText: 'e.g. 2xDD, 1xCA',
+            child: InkWell(
+              onTap: () => _showFleetCompositionPicker(context, index),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Text(
+                  fleet.composition.isEmpty ? 'Tap to set...' : fleet.composition,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: fleet.composition.isEmpty
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
+                        : theme.colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              onFieldSubmitted: (v) => _updateFleet(index, fleet.copyWith(composition: v)),
             ),
           ),
           const SizedBox(width: 8),
@@ -648,6 +848,64 @@ class _AlienPlayerView extends StatelessWidget {
     onChanged(player.copyWith(fleets: fleets));
   }
 
+  // ── Fleet Composition Picker (Sub-task B) ──
+
+  void _showFleetCompositionPicker(BuildContext context, int fleetIndex) {
+    final fleet = player.fleets[fleetIndex];
+    // Parse existing composition into quantities
+    final quantities = _parseComposition(fleet.composition);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => _FleetCompositionDialog(
+        initialQuantities: quantities,
+        onApply: (newQuantities) {
+          final compositionStr = _formatComposition(newQuantities);
+          _updateFleet(fleetIndex, fleet.copyWith(composition: compositionStr));
+        },
+      ),
+    );
+  }
+
+  /// Parse a composition string like "2xDD, 1xCA, 3xSC" into a map.
+  static Map<String, int> _parseComposition(String composition) {
+    final result = <String, int>{};
+    if (composition.isEmpty) return result;
+
+    final parts = composition.split(RegExp(r'[,;]\s*'));
+    for (final part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+
+      // Try to match patterns like "2xDD", "1 x CA", "3 DD", "DD"
+      final match = RegExp(r'^(\d+)\s*[xX]?\s*(.+)$').firstMatch(trimmed);
+      if (match != null) {
+        final qty = int.tryParse(match.group(1)!) ?? 1;
+        final type = match.group(2)!.trim();
+        // Find matching ship type abbreviation (case-insensitive)
+        for (final st in _kShipTypes) {
+          if (st.abbreviation.toLowerCase() == type.toLowerCase()) {
+            result[st.abbreviation] = (result[st.abbreviation] ?? 0) + qty;
+            break;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Format a quantities map into a composition string.
+  static String _formatComposition(Map<String, int> quantities) {
+    final parts = <String>[];
+    for (final st in _kShipTypes) {
+      final qty = quantities[st.abbreviation] ?? 0;
+      if (qty > 0) {
+        parts.add('${qty}x${st.abbreviation}');
+      }
+    }
+    return parts.join(', ');
+  }
+
   // ── Tech list ──
 
   Widget _buildTechList(BuildContext context) {
@@ -688,42 +946,64 @@ class _AlienPlayerView extends StatelessWidget {
     );
   }
 
+  // ── Sub-task A: Selectable tech list dialog ──
+
   void _showAddTechDialog(BuildContext context) {
-    final controller = TextEditingController();
+    final purchased = Set<String>.from(player.techsPurchased);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add Tech', style: TextStyle(fontSize: 16)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Attack 1, Mines, Defense 1',
-            isDense: true,
+        title: const Text('Add Alien Tech', style: TextStyle(fontSize: 16)),
+        content: SizedBox(
+          width: 300,
+          height: 400,
+          child: ListView.builder(
+            itemCount: kAlienTechOptions.length,
+            itemBuilder: (context, index) {
+              final tech = kAlienTechOptions[index];
+              final alreadyPurchased = purchased.contains(tech);
+
+              return ListTile(
+                dense: true,
+                enabled: !alreadyPurchased,
+                title: Text(
+                  tech,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: alreadyPurchased
+                        ? Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.3)
+                        : null,
+                  ),
+                ),
+                trailing: alreadyPurchased
+                    ? Icon(
+                        Icons.check,
+                        size: 18,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.3),
+                      )
+                    : null,
+                onTap: alreadyPurchased
+                    ? null
+                    : () {
+                        final techs = [...player.techsPurchased, tech];
+                        onChanged(player.copyWith(techsPurchased: techs));
+                        Navigator.of(ctx).pop();
+                      },
+              );
+            },
           ),
-          onSubmitted: (v) {
-            if (v.trim().isNotEmpty) {
-              final techs = [...player.techsPurchased, v.trim()];
-              onChanged(player.copyWith(techsPurchased: techs));
-            }
-            Navigator.of(ctx).pop();
-          },
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final v = controller.text.trim();
-              if (v.isNotEmpty) {
-                final techs = [...player.techsPurchased, v];
-                onChanged(player.copyWith(techsPurchased: techs));
-              }
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Add'),
           ),
         ],
       ),
@@ -816,6 +1096,186 @@ class _AlienPlayerView extends StatelessWidget {
         ),
         child: Text('+ $label'),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Fleet Composition Picker Dialog (Sub-task B)
+// ═══════════════════════════════════════════════════════════════════
+
+class _FleetCompositionDialog extends StatefulWidget {
+  final Map<String, int> initialQuantities;
+  final ValueChanged<Map<String, int>> onApply;
+
+  const _FleetCompositionDialog({
+    required this.initialQuantities,
+    required this.onApply,
+  });
+
+  @override
+  State<_FleetCompositionDialog> createState() =>
+      _FleetCompositionDialogState();
+}
+
+class _FleetCompositionDialogState extends State<_FleetCompositionDialog> {
+  late Map<String, int> _quantities;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantities = Map<String, int>.from(widget.initialQuantities);
+  }
+
+  int get _totalCp {
+    int total = 0;
+    for (final st in _kShipTypes) {
+      total += ((_quantities[st.abbreviation] ?? 0) * st.cpCost);
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: const Text('Fleet Composition', style: TextStyle(fontSize: 16)),
+      content: SizedBox(
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Total CP header
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Total CP: $_totalCp',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Ship type list
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _kShipTypes.length,
+                itemBuilder: (context, index) {
+                  final st = _kShipTypes[index];
+                  final qty = _quantities[st.abbreviation] ?? 0;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        // Ship name and abbreviation
+                        SizedBox(
+                          width: 130,
+                          child: Text(
+                            '${st.name} (${st.abbreviation})',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        // CP cost
+                        SizedBox(
+                          width: 48,
+                          child: Text(
+                            '${st.cpCost}CP',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontFamily: 'monospace',
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ),
+                        // - button
+                        SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: IconButton(
+                            onPressed: qty > 0
+                                ? () {
+                                    setState(() {
+                                      _quantities[st.abbreviation] = qty - 1;
+                                    });
+                                  }
+                                : null,
+                            icon: const Icon(Icons.remove, size: 18),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                          ),
+                        ),
+                        // Quantity
+                        SizedBox(
+                          width: 32,
+                          child: Text(
+                            qty.toString(),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                              color: qty > 0
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.3),
+                            ),
+                          ),
+                        ),
+                        // + button
+                        SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _quantities[st.abbreviation] = qty + 1;
+                              });
+                            },
+                            icon: const Icon(Icons.add, size: 18),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            widget.onApply(_quantities);
+            Navigator.of(context).pop();
+          },
+          child: const Text('Apply'),
+        ),
+      ],
     );
   }
 }

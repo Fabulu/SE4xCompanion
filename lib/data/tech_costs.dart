@@ -156,3 +156,36 @@ List<TechId> visibleTechs({
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Tech descriptions for the detail dialog
+// ---------------------------------------------------------------------------
+
+const Map<TechId, String> kTechDescriptions = {
+  TechId.shipSize: 'Determines the largest hull size your shipyards can build. Also caps the maximum Attack and Defense tech a ship can carry. Level 2 unlocks Cruisers and Bases. Level 3 unlocks BC/BB/DN. Level 4+ unlocks Titans.',
+  TechId.attack: 'Adds to Attack Strength in combat. Capped by ship Hull Size (e.g., a Destroyer can only mount Attack 1).',
+  TechId.defense: 'Adds to Defense Strength, subtracting from enemy Attack Strength. Capped by Hull Size like Attack.',
+  TechId.tactics: 'Determines firing order within the same Weapon Class. Higher Tactics fires first.',
+  TechId.move: 'Hexes per turn across three movement phases. Lvl 1: 1/1/1. Lvl 2: 1/1/2. Lvl 3: 1/2/2. Lvl 4: 2/2/2. Lvl 5: 2/2/3. Lvl 6: 2/3/3. Lvl 7: 3/3/3.',
+  TechId.shipYard: 'Hull capacity each Shipyard builds per turn. Lvl 1: 1 hull pt. Lvl 2: 2 hull pts. Lvl 3: 3 hull pts.',
+  TechId.terraforming: 'Allows colonization of Barren Planets.',
+  TechId.exploration: 'Cruisers/Flagships can peek at an adjacent face-down System marker during Movement without entering. Explore 2 hexes/turn. Lvl 2 enables Reaction Movement.',
+  TechId.fighters: 'Unlocks Carriers and Fighter Squadrons. Higher levels improve Fighter Attack/Defense. Fighters 2+ get +1 Defense vs Point Defense.',
+  TechId.pointDefense: 'Scouts fire as A-Class with enhanced Attack vs Fighters only. Normal E-Class vs everything else.',
+  TechId.cloaking: 'Unlocks Raiders. When Cloaking > enemy Scanners, Raiders can move through enemy hexes and avoid combat.',
+  TechId.scanners: 'Destroyers detect cloaked Raiders. If Scanners >= enemy Cloaking, Raiders are decloaked.',
+  TechId.mines: 'Unlocks Mines. Auto-detonate at battle start, each destroying one enemy ship (owner chooses target). No maintenance.',
+  TechId.mineSweep: 'Unlocks Minesweepers. Each removes mines before detonation: Lvl 1 = 1 mine, Lvl 2 = 2, Lvl 3 = 3.',
+  TechId.ground: 'Start at Lvl 1 (Transports + Infantry). Lvl 2: Space Marines, Heavy Infantry. Lvl 3: Grav Armor, Drop Ships.',
+  TechId.boarding: 'Unlocks Boarding Ships. One hit captures a ship. Cannot mount Attack tech. F-Class.',
+  TechId.securityForces: 'All ships get +1 Hull Size vs boarding (automatic, no refit). Lvl 2 gives +2.',
+  TechId.missileBoats: 'Unlocks Missile Boats. Launch A-Class missiles that resolve E-Class for 2 damage. Can mount Attack 3 despite hull.',
+  TechId.fastBcAbility: 'Battlecruisers/Flagships move one extra hex on turn 1. Lvl 2 extends to DDX, BV, RaiderX.',
+  TechId.militaryAcad: 'With Ship Experience: Lvl 1 = new ships start Skilled. Lvl 2 = easier promotion rolls.',
+  TechId.supplyRange: 'How far from a Colony before out-of-supply. OoS ships get -3 Att, -3 Def, move 1 hex, risk elimination.',
+  TechId.advancedCon: 'Lvl 1: DDX, Adv Bases, Tractor Beams, Shield Projectors, Attack 4. Lvl 2: Starbases, BV, Fighter 4. Lvl 3: RaiderX, SCX, Adv Flagship.',
+  TechId.antiReplicator: 'Enhanced bombardment vs Replicator colonies on equipped Transports.',
+  TechId.jammers: 'Blocks enemy Reaction Movement. Adjacent enemies cannot reinforce battles against your fleet.',
+  TechId.tractorBeamBb: 'Battleship special ability (requires AC 1). See Unique Ship Table #3.',
+  TechId.shieldProjDn: 'Dreadnought special ability (requires AC 1). Projects shields to protect adjacent friendlies.',
+};

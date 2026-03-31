@@ -57,6 +57,14 @@ void showTechDetailDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (kTechDescriptions.containsKey(techId))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  kTechDescriptions[techId]!,
+                  style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                ),
+              ),
             // Start level row
             Row(
               children: [

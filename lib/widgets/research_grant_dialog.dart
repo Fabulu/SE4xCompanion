@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../data/tech_costs.dart';
 import '../services/dice_service.dart';
+import 'animated_dice.dart';
 
 /// Result of a research grant funding session.
 class ResearchGrantResult {
@@ -116,8 +117,7 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
   bool _reassigning = false;
 
   // Animation state for dice
-  List<_DieAnimState> _dieAnims = [];
-  bool _showTotal = false;
+  final AnimatedDiceController _diceController = AnimatedDiceController();
   bool _showBreakthrough = false;
 
   // Breakthrough animation
@@ -140,11 +140,7 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
     }
     _manualController.dispose();
     _manualFocus.dispose();
-    for (final a in _dieAnims) {
-      a.controller.dispose();
-      a.landController?.dispose();
-      a.tumbleTimer?.cancel();
-    }
+    _diceController.disposeControllers();
     super.dispose();
   }
 
@@ -190,12 +186,7 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
             if (_phase == _DialogPhase.rolling ||
                 _phase == _DialogPhase.rolled) ...[
               const SizedBox(height: 8),
-              _buildDiceArea(theme),
-            ],
-
-            if (_showTotal && _diceRolls.length > 1) ...[
-              const SizedBox(height: 12),
-              _buildTotalDisplay(theme),
+              AnimatedDiceDisplay(controller: _diceController),
             ],
 
             if (_showBreakthrough) ...[
@@ -336,125 +327,6 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
   // Dice area - the main show
   // ==========================================================================
 
-  Widget _buildDiceArea(ThemeData theme) {
-    return SizedBox(
-      height: 80,
-      child: Center(
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (int i = 0; i < _dieAnims.length; i++)
-              _buildAnimatedDie(i, theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedDie(int index, ThemeData theme) {
-    final anim = _dieAnims[index];
-
-    return AnimatedBuilder(
-      animation: anim.controller,
-      builder: (context, child) {
-        final t = anim.controller.value;
-        final isLanded = anim.landed;
-        final displayValue = isLanded ? anim.finalValue : anim.tumbleValue;
-
-        // During tumble: rapid spin + scale bounce
-        // On land: elastic overshoot settle
-        double scale;
-        double rotation;
-        if (!isLanded) {
-          // Tumbling: pulsing scale, spinning
-          scale = 0.8 + 0.2 * sin(t * pi * 4);
-          rotation = t * pi * 6;
-        } else {
-          // Landing: elastic overshoot
-          scale = anim.landScale?.value ?? 1.0;
-          rotation = anim.landRotation?.value ?? 0.0;
-        }
-
-        final isHigh = isLanded && displayValue >= 7;
-        final bgColor = isLanded
-            ? (isHigh
-                ? theme.colorScheme.primary
-                : theme.colorScheme.primaryContainer)
-            : theme.colorScheme.surfaceContainerHighest;
-        final textColor = isLanded
-            ? (isHigh
-                ? theme.colorScheme.onPrimary
-                : theme.colorScheme.onPrimaryContainer)
-            : theme.colorScheme.onSurface.withValues(alpha: 0.5);
-        final borderColor = isLanded
-            ? (isHigh
-                ? theme.colorScheme.primary
-                : theme.colorScheme.primary.withValues(alpha: 0.5))
-            : theme.colorScheme.onSurface.withValues(alpha: 0.2);
-
-        return Transform.scale(
-          scale: scale,
-          child: Transform.rotate(
-            angle: rotation,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: borderColor, width: 2),
-                boxShadow: isLanded && isHigh
-                    ? [
-                        BoxShadow(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '$displayValue',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
-                  color: textColor,
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTotalDisplay(ThemeData theme) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.elasticOut,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: value,
-          child: child,
-        );
-      },
-      child: Text(
-        '= $_totalRolled',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.w900,
-          fontFamily: 'monospace',
-          color: theme.colorScheme.onSurface,
-        ),
-      ),
-    );
-  }
 
   // ==========================================================================
   // Breakthrough!
@@ -864,7 +736,6 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
       _displayRolled = entered;
       _breakthrough = newTotal >= widget.targetCost;
       _phase = _DialogPhase.rolled;
-      _showTotal = true;
     });
 
     if (_breakthrough) {
@@ -878,103 +749,22 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
     _diceRolls = widget.diceService.rollMultiple(_grantCount);
     _totalRolled = _diceRolls.fold(0, (sum, r) => sum + r);
 
-    // Create animation controllers for each die
-    for (final a in _dieAnims) {
-      a.controller.dispose();
-    }
-
-    _dieAnims = List.generate(_grantCount, (i) {
-      final controller = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 800),
-      );
-      return _DieAnimState(
-        controller: controller,
-        finalValue: _diceRolls[i],
-        tumbleValue: _random.nextInt(10) + 1,
-      );
-    });
-
     setState(() {
       _phase = _DialogPhase.rolling;
       _displayRolled = 0;
     });
 
-    // Staggered launch: each die starts tumbling with a delay
-    for (int i = 0; i < _dieAnims.length; i++) {
-      if (i > 0) {
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-      if (!mounted) return;
+    // Delegate dice animation to the shared controller
+    await _diceController.roll(_diceRolls, this);
 
-      final anim = _dieAnims[i];
-
-      // Start the tumble: rapidly cycle random numbers
-      anim.tumbleTimer = Timer.periodic(
-        const Duration(milliseconds: 50),
-        (_) {
-          if (!mounted) return;
-          setState(() {
-            anim.tumbleValue = _random.nextInt(10) + 1;
-          });
-        },
-      );
-
-      // Start the animation controller (drives scale/rotation)
-      anim.controller.forward();
-    }
-
-    // Let them all tumble for a beat
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    // Land dice one by one with staggered timing
-    for (int i = 0; i < _dieAnims.length; i++) {
-      if (i > 0) {
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-      if (!mounted) return;
-
-      final anim = _dieAnims[i];
-      anim.tumbleTimer?.cancel();
-
-      // Create landing animations
-      anim.landController = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 400),
-      );
-      anim.landScale = TweenSequence<double>([
-        TweenSequenceItem(tween: Tween(begin: 1.2, end: 0.9), weight: 1),
-        TweenSequenceItem(tween: Tween(begin: 0.9, end: 1.05), weight: 1),
-        TweenSequenceItem(tween: Tween(begin: 1.05, end: 1.0), weight: 1),
-      ]).animate(CurvedAnimation(
-        parent: anim.landController!,
-        curve: Curves.easeOut,
-      ));
-      anim.landRotation = Tween<double>(
-        begin: ((_random.nextDouble() - 0.5) * 0.3),
-        end: 0.0,
-      ).animate(CurvedAnimation(
-        parent: anim.landController!,
-        curve: Curves.elasticOut,
-      ));
-
-      setState(() {
-        anim.landed = true;
-        _displayRolled += anim.finalValue;
-      });
-
-      anim.landController!.forward();
-    }
-
-    // Pause, then show total
-    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
+    // Update display total to match the actual roll
     final newTotal = widget.currentAccumulated + _totalRolled;
     final bt = newTotal >= widget.targetCost;
 
     setState(() {
-      _showTotal = true;
+      _displayRolled = _totalRolled;
       _phase = _DialogPhase.rolled;
       _breakthrough = bt;
     });
@@ -989,28 +779,6 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
       _startBreakthroughAnimation();
     }
   }
-}
-
-// =============================================================================
-// Die animation state
-// =============================================================================
-
-class _DieAnimState {
-  final AnimationController controller;
-  final int finalValue;
-  int tumbleValue;
-  bool landed = false;
-  Timer? tumbleTimer;
-
-  AnimationController? landController;
-  Animation<double>? landScale;
-  Animation<double>? landRotation;
-
-  _DieAnimState({
-    required this.controller,
-    required this.finalValue,
-    required this.tumbleValue,
-  });
 }
 
 // =============================================================================

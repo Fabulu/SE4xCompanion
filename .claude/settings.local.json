@@ -20,7 +20,20 @@
       "Bash(sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)",
       "Bash(dart --version)",
       "Bash(dart run:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(where adb:*)",
+      "Read(//c/programmieren/se4x/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
+      "Read(//c/programmieren/se4x/$HOME/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Read(//c/Users/**)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" -s 38291FDJH0002Q push build/app/outputs/flutter-apk/app-release.apk /sdcard/Download/SE4X-Companion.apk 2>&1)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" -s 38291FDJH0002Q push \"C:/programmieren/se4x/build/app/outputs/flutter-apk/app-release.apk\" \"//sdcard/Download/SE4X-Companion.apk\" 2>&1)",
+      "Bash(sort -t. -k1,1n -k2,2n -k3,3n)",
+      "Bash(grep -oP \"id: ''''\\\\K[^'''']*\" lib/data/rules_data.dart)",
+      "Bash(grep -oP \"id: ''''\\\\K[^'''']*\" lib/data/rules_data_missing.dart)",
+      "Bash(grep -o \"id: ''''[^'''']*''''\" lib/data/rules_data.dart)",
+      "Bash(grep -o \"id: ''''[^'''']*''''\" lib/data/rules_data_missing.dart)",
+      "Bash(grep -oP \"id: ''''[^'''']+''''\" lib/data/rules_data.dart lib/data/rules_data_missing.dart)"
     ]
   }
 }

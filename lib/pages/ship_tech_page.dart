@@ -9,6 +9,7 @@ import '../models/technology.dart';
 import '../widgets/combat_calculator_dialog.dart';
 import '../widgets/counter_row.dart';
 import '../widgets/section_header.dart';
+import '../widgets/ship_info_dialog.dart';
 
 /// The Ship Technology Sheet page.
 ///
@@ -305,6 +306,19 @@ class ShipTechPage extends StatelessWidget {
       items.add(SectionHeader(
         title: abbr,
         subtitle: name,
+        trailing: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.info_outline, size: 18),
+            tooltip: 'Ship info',
+            onPressed: () => showShipInfoDialog(ctx, shipType),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(
+              minWidth: 28,
+              minHeight: 28,
+            ),
+          ),
+        ),
       ));
 
       // Counter rows
