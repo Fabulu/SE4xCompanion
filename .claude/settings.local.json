@@ -33,7 +33,13 @@
       "Bash(grep -oP \"id: ''''\\\\K[^'''']*\" lib/data/rules_data_missing.dart)",
       "Bash(grep -o \"id: ''''[^'''']*''''\" lib/data/rules_data.dart)",
       "Bash(grep -o \"id: ''''[^'''']*''''\" lib/data/rules_data_missing.dart)",
-      "Bash(grep -oP \"id: ''''[^'''']+''''\" lib/data/rules_data.dart lib/data/rules_data_missing.dart)"
+      "Bash(grep -oP \"id: ''''[^'''']+''''\" lib/data/rules_data.dart lib/data/rules_data_missing.dart)",
+      "Bash(grep:*)",
+      "Bash(grep -A1 \"id: ''''1.0''''\" C:/programmieren/se4x/lib/data/rules_sections_1_9.dart)",
+      "Bash(for id:*)",
+      "Bash(do grep:*)",
+      "Bash(done)",
+      "Bash(grep -rn \"''25.8''\" lib/data/rules_sections_*.dart)"
     ]
   }
 }

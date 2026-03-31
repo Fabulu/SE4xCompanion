@@ -11,6 +11,7 @@ import '../widgets/ledger_grid.dart';
 import '../widgets/number_input.dart';
 import '../widgets/research_grant_dialog.dart';
 import '../widgets/section_header.dart';
+import '../widgets/ship_info_dialog.dart';
 import '../widgets/tech_detail_dialog.dart';
 import '../widgets/tech_tracker.dart';
 
@@ -985,6 +986,14 @@ class _ProductionPageState extends State<ProductionPage>
               ),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            visualDensity: VisualDensity.compact,
+            onPressed: () => showShipInfoDialog(context, type),
+          ),
+          const SizedBox(width: 4),
           SizedBox(
             width: 32,
             child: Text(
@@ -1111,6 +1120,20 @@ class _ProductionPageState extends State<ProductionPage>
                         fontSize: 15, color: theme.colorScheme.onSurface),
                     overflow: TextOverflow.ellipsis),
               ),
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => showTechDetailDialog(
+                  context,
+                  techId: id,
+                  techName: name,
+                  facilitiesMode: config.useFacilitiesCosts,
+                  currentLevel: effectiveLevel,
+                ),
+              ),
+              const SizedBox(width: 4),
               Text('[$effectiveLevel]', style: monoStyle),
               const SizedBox(width: 6),
               Text(' MAX', style: dimStyle),
@@ -1143,6 +1166,20 @@ class _ProductionPageState extends State<ProductionPage>
                       fontSize: 15, color: theme.colorScheme.onSurface),
                   overflow: TextOverflow.ellipsis),
             ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => showTechDetailDialog(
+                context,
+                techId: id,
+                techName: name,
+                facilitiesMode: config.useFacilitiesCosts,
+                currentLevel: effectiveLevel,
+              ),
+            ),
+            const SizedBox(width: 4),
             // Current level -> target
             Text('[$effectiveLevel]', style: monoStyle),
             const SizedBox(width: 4),
@@ -1310,6 +1347,14 @@ class _ProductionPageState extends State<ProductionPage>
                 ),
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => showShipInfoDialog(context, purchase.type),
+            ),
+            const SizedBox(width: 4),
             // Quantity controls
             SizedBox(
               width: 44,
@@ -1469,38 +1514,49 @@ class _ProductionPageState extends State<ProductionPage>
                 ),
               ),
             for (final entry in buyableShips)
-              SimpleDialogOption(
-                onPressed: () => Navigator.of(ctx).pop(entry.key),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        entry.value.abbreviation,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop(entry.key),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        child: Text(
+                          entry.value.abbreviation,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        entry.value.name,
-                        style: const TextStyle(fontSize: 15),
+                      Expanded(
+                        child: Text(
+                          entry.value.name,
+                          style: const TextStyle(fontSize: 15),
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${entry.value.buildCost}CP',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.6),
+                      Text(
+                        '${entry.value.buildCost}CP',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.6),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () =>
+                            showShipInfoDialog(ctx, entry.key),
+                      ),
+                    ],
+                  ),
                 ),
               ),
           ],
