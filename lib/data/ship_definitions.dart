@@ -41,6 +41,7 @@ class ShipDefinition {
   final String description;
   final String? prerequisite;
   final String? ruleSection;
+  final int? alternateBuildCost;
 
   const ShipDefinition({
     required this.type,
@@ -55,7 +56,14 @@ class ShipDefinition {
     this.description = '',
     this.prerequisite,
     this.ruleSection,
+    this.alternateBuildCost,
   });
+
+  /// Returns the effective build cost, using alternate cost when applicable.
+  int effectiveBuildCost(bool isAlternateEmpire) =>
+      (isAlternateEmpire && alternateBuildCost != null)
+          ? alternateBuildCost!
+          : buildCost;
 
   Map<String, dynamic> toJson() => {
         'type': type.name,
@@ -82,6 +90,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     hullSize: 1, buildCost: 6, maxCounters: 6, weaponClass: 'C',
     description: 'Basic warship. C-class, cheap. Attack/Defense capped at 1 by hull size.',
     ruleSection: '8.0',
+    alternateBuildCost: 10,
   ),
   ShipType.ca: ShipDefinition(
     type: ShipType.ca, abbreviation: 'CA', name: 'Cruiser',
@@ -89,6 +98,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Mid-range warship. B-class. Can mount Exploration tech.',
     prerequisite: 'Ship Size 2',
     ruleSection: '8.0',
+    alternateBuildCost: 12,
   ),
   ShipType.bc: ShipDefinition(
     type: ShipType.bc, abbreviation: 'BC', name: 'Battlecruiser',
@@ -96,6 +106,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Heavy warship. B-class. Can mount Fast BC tech.',
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
+    alternateBuildCost: 15,
   ),
   ShipType.bb: ShipDefinition(
     type: ShipType.bb, abbreviation: 'BB', name: 'Battleship',
@@ -103,6 +114,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Capital ship. A-class, fires first. Can mount Tractor Beam (AC 1).',
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
+    alternateBuildCost: 25,
   ),
   ShipType.dn: ShipDefinition(
     type: ShipType.dn, abbreviation: 'DN', name: 'Dreadnought',
@@ -110,6 +122,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Strongest standard ship. A-class. Can mount Shield Projector (AC 1).',
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
+    alternateBuildCost: 25,
   ),
   ShipType.tn: ShipDefinition(
     type: ShipType.tn, abbreviation: 'TN', name: 'Titan',
@@ -130,6 +143,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     hullSize: 1, buildCost: 6, maxCounters: 7, weaponClass: 'E',
     description: 'Patrol ship. E-class normally, A-class vs Fighters with Point Defense.',
     ruleSection: '8.0',
+    alternateBuildCost: 5,
   ),
   ShipType.raider: ShipDefinition(
     type: ShipType.raider, abbreviation: 'R', name: 'Raider',
@@ -137,6 +151,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Cloaking ship. C-class. Can pass through enemy hexes when cloaked.',
     prerequisite: 'Cloaking 1',
     ruleSection: '16.1',
+    alternateBuildCost: 14,
   ),
   ShipType.fighter: ShipDefinition(
     type: ShipType.fighter, abbreviation: 'F', name: 'Fighter',
@@ -172,6 +187,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Dual counter: Boarding Ship (F-class boarding attacks) or Missile Boat (A-class missiles, 2 damage).',
     prerequisite: 'Boarding 1 or Missile Boats 1',
     ruleSection: '19.0',
+    alternateBuildCost: 9,
   ),
   ShipType.transport: ShipDefinition(
     type: ShipType.transport, abbreviation: 'T', name: 'Transport',

@@ -40,6 +40,7 @@ class _HomePageState extends State<HomePage>
   final _rulesKey = GlobalKey<RulesReferencePageState>();
 
   final List<GameState> _undoHistory = [];
+  final List<String> _undoDescriptions = [];
   static const int _maxUndoHistory = 20;
   bool _lastActionWasEndTurn = false;
 
@@ -123,6 +124,7 @@ class _HomePageState extends State<HomePage>
       _activeGameId = id;
       _isLoading = false;
       _undoHistory.clear();
+      _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
     });
     _save();
@@ -170,11 +172,13 @@ class _HomePageState extends State<HomePage>
     });
   }
 
-  void _updateGameState(GameState newState) {
+  void _updateGameState(GameState newState, [String? description]) {
     setState(() {
       _undoHistory.add(_gameState);
+      _undoDescriptions.add(description ?? 'Change');
       if (_undoHistory.length > _maxUndoHistory) {
         _undoHistory.removeAt(0);
+        _undoDescriptions.removeAt(0);
       }
       _lastActionWasEndTurn = false;
       _gameState = newState;
@@ -187,11 +191,11 @@ class _HomePageState extends State<HomePage>
   // ---------------------------------------------------------------------------
 
   void _onProductionChanged(ProductionState production) {
-    _updateGameState(_gameState.copyWith(production: production));
+    _updateGameState(_gameState.copyWith(production: production), 'Production');
   }
 
   void _onCountersChanged(List<ShipCounter> counters) {
-    _updateGameState(_gameState.copyWith(shipCounters: counters));
+    _updateGameState(_gameState.copyWith(shipCounters: counters), 'Ship Tech');
   }
 
   void _onUpgradeCost(int cost) {
@@ -201,7 +205,8 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
-    _updateGameState(_gameState.copyWith(alienPlayers: aliens));
+    _updateGameState(
+        _gameState.copyWith(alienPlayers: aliens), 'Alien Economy');
   }
 
   void _onEndTurn() {
@@ -256,11 +261,14 @@ class _HomePageState extends State<HomePage>
     );
 
     final nextProduction = prod.prepareForNextTurn(config, counters);
-    _updateGameState(_gameState.copyWith(
-      turnNumber: _gameState.turnNumber + 1,
-      production: nextProduction,
-      turnSummaries: [..._gameState.turnSummaries, summary],
-    ));
+    _updateGameState(
+      _gameState.copyWith(
+        turnNumber: _gameState.turnNumber + 1,
+        production: nextProduction,
+        turnSummaries: [..._gameState.turnSummaries, summary],
+      ),
+      'End Turn ${_gameState.turnNumber}',
+    );
     _lastActionWasEndTurn = true;
   }
 
@@ -327,15 +335,23 @@ class _HomePageState extends State<HomePage>
     if (_undoHistory.isEmpty) return;
     setState(() {
       _gameState = _undoHistory.removeLast();
+      _undoDescriptions.removeLast();
       _lastActionWasEndTurn = false;
     });
     _save();
   }
 
+  void _navigateToRule(String sectionId) {
+    setState(() => _currentTabIndex = 4);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rulesKey.currentState?.jumpToSection(sectionId);
+    });
+  }
+
   void _onConfigChanged(GameConfig config) {
     // When config changes, keep existing production data but let computations
     // re-derive based on the new config. No data is lost.
-    _updateGameState(_gameState.copyWith(config: config));
+    _updateGameState(_gameState.copyWith(config: config), 'Settings');
   }
 
   void _onGameNameChanged(String name) {
@@ -360,6 +376,7 @@ class _HomePageState extends State<HomePage>
       _gameName = target.name;
       _appState = _appState.copyWith(activeGameId: target.id);
       _undoHistory.clear();
+      _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
     });
     _save();
@@ -427,6 +444,7 @@ class _HomePageState extends State<HomePage>
       _activeGameId = id;
       _gameName = saved.name;
       _undoHistory.clear();
+      _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
     });
     _save();
@@ -444,6 +462,7 @@ class _HomePageState extends State<HomePage>
     );
     setState(() {
       _undoHistory.clear();
+      _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
       _gameState = defaultState;
     });
@@ -465,6 +484,7 @@ class _HomePageState extends State<HomePage>
       _gameState = importedState;
       _gameName = 'Imported Game';
       _undoHistory.clear();
+      _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
     });
     _save();
@@ -492,7 +512,9 @@ class _HomePageState extends State<HomePage>
           if (_undoHistory.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.undo),
-              tooltip: 'Undo',
+              tooltip: _undoDescriptions.isNotEmpty
+                  ? 'Undo: ${_undoDescriptions.last}'
+                  : 'Undo',
               onPressed: _undo,
             ),
         ],
@@ -565,6 +587,7 @@ class _HomePageState extends State<HomePage>
           shipCounters: _gameState.shipCounters,
           onProductionChanged: _onProductionChanged,
           onEndTurn: _onEndTurn,
+          onRuleTap: _navigateToRule,
         );
       case 1:
         return ShipTechPage(
@@ -577,6 +600,7 @@ class _HomePageState extends State<HomePage>
           showExperience: _gameState.config.enableShipExperience,
           onCountersChanged: _onCountersChanged,
           onUpgradeCostIncurred: _onUpgradeCost,
+          onRuleTap: _navigateToRule,
         );
       case 2:
         return AlienEconomyPage(

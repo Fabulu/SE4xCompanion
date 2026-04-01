@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../data/ship_definitions.dart';
 
 /// Shows an informational dialog for a given ship type.
-Future<void> showShipInfoDialog(BuildContext context, ShipType type) {
+Future<void> showShipInfoDialog(
+  BuildContext context,
+  ShipType type, {
+  void Function(String sectionId)? onRuleTap,
+}) {
   final def = kShipDefinitions[type]!;
 
   return showDialog<void>(
@@ -58,12 +62,22 @@ Future<void> showShipInfoDialog(BuildContext context, ShipType type) {
 
               if (def.ruleSection != null) ...[
                 const SizedBox(height: 8),
-                Text(
-                  'See rule ${def.ruleSection}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                GestureDetector(
+                  onTap: onRuleTap != null
+                      ? () {
+                          // Pop all dialogs (ship info + any parent dialog like Add Ship)
+                          Navigator.of(ctx, rootNavigator: true).popUntil((route) => route.isFirst);
+                          onRuleTap(def.ruleSection!);
+                        }
+                      : null,
+                  child: Text(
+                    'See rule ${def.ruleSection}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.primary,
+                      decoration:
+                          onRuleTap != null ? TextDecoration.underline : null,
+                    ),
                   ),
                 ),
               ],

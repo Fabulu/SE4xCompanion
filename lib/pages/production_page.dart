@@ -65,6 +65,8 @@ bool canBuildShip(
 
   final shipSize = effectiveLevel(TechId.shipSize);
 
+  final isAlt = config.enableAlternateEmpire;
+
   switch (type) {
     // Flagships: free, unique, only 1 ever
     case ShipType.flag:
@@ -85,20 +87,23 @@ bool canBuildShip(
     case ShipType.dn:
       return shipSize >= def.hullSize;
 
-    // Titans: require Ship Size >= 4
+    // Titans: require Ship Size >= 4; blocked for alternate empire
     case ShipType.tn:
+      if (isAlt) return false;
       return shipSize >= 4;
 
     // Fighters: require Fighters tech >= 1
     case ShipType.fighter:
       return effectiveLevel(TechId.fighters) >= 1;
 
-    // Carriers: require Fighters tech >= 1
+    // Carriers: require Fighters tech >= 1; blocked for alternate empire
     case ShipType.cv:
+      if (isAlt) return false;
       return effectiveLevel(TechId.fighters) >= 1;
 
-    // Battle Carriers: require Advanced Construction >= 2 AND Fighters >= 1
+    // Battle Carriers: require Advanced Construction >= 2 AND Fighters >= 1; blocked for alternate empire
     case ShipType.bv:
+      if (isAlt) return false;
       return effectiveLevel(TechId.fighters) >= 1 &&
           effectiveLevel(TechId.advancedCon) >= 2;
 
@@ -111,6 +116,7 @@ bool canBuildShip(
       return effectiveLevel(TechId.mineSweep) >= 1;
 
     // Boarding Ships / Missile Boats: require Boarding >= 1 OR Missile Boats >= 1
+    // Alternate empire: also allow with just Missile Boats tech
     case ShipType.bdMb:
       return effectiveLevel(TechId.boarding) >= 1 ||
           effectiveLevel(TechId.missileBoats) >= 1;
@@ -155,6 +161,7 @@ class ProductionPage extends StatefulWidget {
   final List<ShipCounter> shipCounters;
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
+  final void Function(String sectionId)? onRuleTap;
 
   const ProductionPage({
     super.key,
@@ -164,6 +171,7 @@ class ProductionPage extends StatefulWidget {
     required this.shipCounters,
     required this.onProductionChanged,
     required this.onEndTurn,
+    this.onRuleTap,
   });
 
   @override
@@ -330,7 +338,12 @@ class _ProductionPageState extends State<ProductionPage>
   int _maxLevel(TechId id) {
     final table =
         config.useFacilitiesCosts ? kFacilitiesTechCosts : kBaseTechCosts;
-    return table[id]?.maxLevel ?? 0;
+    var max = table[id]?.maxLevel ?? 0;
+    // Alternate empire: cap Fast BC at level 1 (no Fast 2)
+    if (id == TechId.fastBcAbility && config.enableAlternateEmpire && max > 1) {
+      max = 1;
+    }
+    return max;
   }
 
   /// Can afford the next tech level? Only one buy per tech per turn.
@@ -482,6 +495,9 @@ class _ProductionPageState extends State<ProductionPage>
         _buildTurnHeader(theme),
         const SizedBox(height: 8),
 
+        // Carry-over warnings
+        _buildCarryOverWarning(),
+
         // Ledger sections
         if (config.enableFacilities) ...[
           if (config.enableLogistics) ...[
@@ -565,6 +581,75 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   // ===========================================================================
+  // Carry-over warning banner
+  // ===========================================================================
+
+  Widget _buildCarryOverWarning() {
+    final remainingCp = production.remainingCp(config, shipCounters);
+    final remainingRp =
+        config.enableFacilities ? production.remainingRp(config) : 0;
+    final cpExcess = remainingCp - 30;
+    final rpExcess = remainingRp - 30;
+
+    final warnings = <Widget>[];
+
+    if (cpExcess > 0) {
+      warnings.add(
+        Container(
+          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$cpExcess CP will be lost at End Turn (carry-over cap is 30)',
+                  style: const TextStyle(fontSize: 14, color: Colors.amber),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (config.enableFacilities && rpExcess > 0) {
+      warnings.add(
+        Container(
+          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$rpExcess RP will be lost at End Turn (carry-over cap is 30)',
+                  style: const TextStyle(fontSize: 14, color: Colors.amber),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (warnings.isEmpty) return const SizedBox.shrink();
+    return Column(children: warnings);
+  }
+
+  // ===========================================================================
   // Base-mode CP ledger
   // ===========================================================================
 
@@ -576,7 +661,8 @@ class _ProductionPageState extends State<ProductionPage>
     final totalCp = production.totalCp(config);
     final subtotal = production.subtotalCp(config, shipCounters);
     final techSpending = production.techSpendingCpDerived(config);
-    final shipSpending = production.effectiveShipSpending();
+    final shipSpending = production.effectiveShipSpending(
+        isAlternateEmpire: config.enableAlternateEmpire);
     final remaining = production.remainingCp(config, shipCounters);
     final unpredictable = config.enableUnpredictableResearch;
 
@@ -708,7 +794,8 @@ class _ProductionPageState extends State<ProductionPage>
     final totalCp = production.totalCp(config);
     final penaltyLp = production.penaltyLp(config, shipCounters);
     final subtotal = production.subtotalCp(config, shipCounters);
-    final shipSpending = production.effectiveShipSpending();
+    final shipSpending = production.effectiveShipSpending(
+        isAlternateEmpire: config.enableAlternateEmpire);
     final remaining = production.remainingCp(config, shipCounters);
     final unpredictable = config.enableUnpredictableResearch;
 
@@ -991,7 +1078,7 @@ class _ProductionPageState extends State<ProductionPage>
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             visualDensity: VisualDensity.compact,
-            onPressed: () => showShipInfoDialog(context, type),
+            onPressed: () => showShipInfoDialog(context, type, onRuleTap: widget.onRuleTap),
           ),
           const SizedBox(width: 4),
           SizedBox(
@@ -1260,7 +1347,8 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildShipPurchaseSection(BuildContext context) {
     final theme = Theme.of(context);
     final purchases = production.shipPurchases;
-    final totalCost = production.shipPurchaseCost();
+    final totalCost = production.shipPurchaseCost(
+        isAlternateEmpire: config.enableAlternateEmpire);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1322,7 +1410,7 @@ class _ProductionPageState extends State<ProductionPage>
     final def = kShipDefinitions[purchase.type];
     final name = def?.name ?? purchase.type.name;
     final abbr = def?.abbreviation ?? '';
-    final unitCost = def?.buildCost ?? 0;
+    final unitCost = def?.effectiveBuildCost(config.enableAlternateEmpire) ?? 0;
 
     // Task 3B: bounce animation on the last added row
     final shouldBounce = _lastBouncedIndex == index;
@@ -1352,7 +1440,7 @@ class _ProductionPageState extends State<ProductionPage>
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               visualDensity: VisualDensity.compact,
-              onPressed: () => showShipInfoDialog(context, purchase.type),
+              onPressed: () => showShipInfoDialog(context, purchase.type, onRuleTap: widget.onRuleTap),
             ),
             const SizedBox(width: 4),
             // Quantity controls
@@ -1479,24 +1567,26 @@ class _ProductionPageState extends State<ProductionPage>
     final def = kShipDefinitions[type];
     if (def == null) return false;
     final remaining = production.remainingCp(config, shipCounters);
-    return remaining >= def.buildCost;
+    return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire);
   }
 
   void _showAddShipDialog(BuildContext context) {
     // Task 2: Filter to ships the player has tech to build AND can afford
     final remaining = production.remainingCp(config, shipCounters);
 
+    final isAlt = config.enableAlternateEmpire;
     final buyableShips = kShipDefinitions.entries
-        .where((e) => e.value.buildCost > 0)
+        .where((e) => e.value.effectiveBuildCost(isAlt) > 0)
         .where((e) => canBuildShip(
               e.key,
               _effectiveLevel,
               config,
               production.shipPurchases,
             ))
-        .where((e) => e.value.buildCost <= remaining)
+        .where((e) => e.value.effectiveBuildCost(isAlt) <= remaining)
         .toList()
-      ..sort((a, b) => a.value.buildCost.compareTo(b.value.buildCost));
+      ..sort((a, b) => a.value.effectiveBuildCost(isAlt)
+          .compareTo(b.value.effectiveBuildCost(isAlt)));
 
     showDialog<ShipType>(
       context: context,
@@ -1539,7 +1629,7 @@ class _ProductionPageState extends State<ProductionPage>
                         ),
                       ),
                       Text(
-                        '${entry.value.buildCost}CP',
+                        '${entry.value.effectiveBuildCost(isAlt)}CP',
                         style: TextStyle(
                           fontSize: 14,
                           color: theme.colorScheme.onSurface
@@ -1553,7 +1643,7 @@ class _ProductionPageState extends State<ProductionPage>
                         constraints: const BoxConstraints(),
                         visualDensity: VisualDensity.compact,
                         onPressed: () =>
-                            showShipInfoDialog(ctx, entry.key),
+                            showShipInfoDialog(ctx, entry.key, onRuleTap: widget.onRuleTap),
                       ),
                     ],
                   ),

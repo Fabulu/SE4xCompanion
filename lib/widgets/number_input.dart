@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-/// Compact number input with +/- buttons and inline text editing.
+/// Compact number input with +/- buttons and a non-editable text display.
 /// Designed for ledger values. About 36px tall.
+/// Long-press on +/- for auto-repeat (hold to increment/decrement continuously).
 class NumberInput extends StatefulWidget {
   final int value;
   final ValueChanged<int> onChanged;
@@ -26,38 +27,12 @@ class NumberInput extends StatefulWidget {
 }
 
 class _NumberInputState extends State<NumberInput> {
-  bool _editing = false;
-  late TextEditingController _controller;
-  late FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value.toString());
-    _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChanged);
-  }
-
-  @override
-  void didUpdateWidget(NumberInput oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_editing && oldWidget.value != widget.value) {
-      _controller.text = widget.value.toString();
-    }
-  }
+  Timer? _repeatTimer;
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChanged);
-    _focusNode.dispose();
-    _controller.dispose();
+    _repeatTimer?.cancel();
     super.dispose();
-  }
-
-  void _onFocusChanged() {
-    if (!_focusNode.hasFocus && _editing) {
-      _commitEdit();
-    }
   }
 
   int _clamp(int v) {
@@ -74,28 +49,17 @@ class _NumberInputState extends State<NumberInput> {
     widget.onChanged(_clamp(widget.value - widget.step));
   }
 
-  void _startEdit() {
-    setState(() {
-      _editing = true;
-      _controller.text = widget.value.toString();
-      _controller.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: _controller.text.length,
-      );
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
+  void _startRepeat(VoidCallback action) {
+    action();
+    _repeatTimer?.cancel();
+    _repeatTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      action();
     });
   }
 
-  void _commitEdit() {
-    final parsed = int.tryParse(_controller.text);
-    setState(() => _editing = false);
-    if (parsed != null) {
-      widget.onChanged(_clamp(parsed));
-    } else {
-      _controller.text = widget.value.toString();
-    }
+  void _stopRepeat() {
+    _repeatTimer?.cancel();
+    _repeatTimer = null;
   }
 
   @override
@@ -123,43 +87,27 @@ class _NumberInputState extends State<NumberInput> {
             ),
             const SizedBox(width: 6),
           ],
-          _MiniButton(
+          _RepeatButton(
             icon: Icons.remove,
             onPressed: canDecrement ? _decrement : null,
+            onLongPressStart: canDecrement ? () => _startRepeat(_decrement) : null,
+            onLongPressEnd: _stopRepeat,
           ),
-          GestureDetector(
-            onTap: _editing ? null : _startEdit,
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 48),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _editing
-                  ? SizedBox(
-                      width: 56,
-                      child: EditableText(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        style: monoStyle,
-                        textAlign: TextAlign.center,
-                        cursorColor: theme.colorScheme.primary,
-                        backgroundCursorColor: Colors.grey,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
-                        ],
-                        onSubmitted: (_) => _commitEdit(),
-                      ),
-                    )
-                  : Text(
-                      widget.value.toString(),
-                      style: monoStyle,
-                      textAlign: TextAlign.center,
-                    ),
+          Container(
+            constraints: const BoxConstraints(minWidth: 48),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              widget.value.toString(),
+              style: monoStyle,
+              textAlign: TextAlign.center,
             ),
           ),
-          _MiniButton(
+          _RepeatButton(
             icon: Icons.add,
             onPressed: canIncrement ? _increment : null,
+            onLongPressStart: canIncrement ? () => _startRepeat(_increment) : null,
+            onLongPressEnd: _stopRepeat,
           ),
         ],
       ),
@@ -167,28 +115,39 @@ class _NumberInputState extends State<NumberInput> {
   }
 }
 
-class _MiniButton extends StatelessWidget {
+class _RepeatButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPressStart;
+  final VoidCallback? onLongPressEnd;
 
-  const _MiniButton({required this.icon, this.onPressed});
+  const _RepeatButton({
+    required this.icon,
+    this.onPressed,
+    this.onLongPressStart,
+    this.onLongPressEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-        iconSize: 24,
-        icon: Icon(icon),
-        color: onPressed != null
-            ? theme.colorScheme.onSurface
-            : theme.disabledColor,
-        onPressed: onPressed,
-        splashRadius: 20,
+    return GestureDetector(
+      onLongPressStart: onLongPressStart != null ? (_) => onLongPressStart!() : null,
+      onLongPressEnd: onLongPressEnd != null ? (_) => onLongPressEnd!() : null,
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          iconSize: 24,
+          icon: Icon(icon),
+          color: onPressed != null
+              ? theme.colorScheme.onSurface
+              : theme.disabledColor,
+          onPressed: onPressed,
+          splashRadius: 20,
+        ),
       ),
     );
   }

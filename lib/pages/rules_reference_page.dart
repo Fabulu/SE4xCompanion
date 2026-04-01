@@ -64,33 +64,69 @@ class RulesReferencePageState extends State<RulesReferencePage> {
   // ---------------------------------------------------------------------------
 
   void jumpToSection(String sectionId) {
-    // Clear search
     _searchController.clear();
     _searchQuery = '';
     _searchResults = [];
-
-    // Switch to full view
     _viewMode = _ViewMode.full;
-
-    // Expand parent chain
     _expandParentChain(sectionId);
-
-    // Expand the section itself so its body is visible
     _expandedSections.add(sectionId);
-
     setState(() {});
+    // Retry scrolling over multiple frames to handle layout settling
+    _scrollRetryCount = 0;
+    _pendingScrollTarget = sectionId;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryScroll());
+  }
 
-    // Scroll after the frame renders
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToSection(sectionId);
-    });
+  String? _pendingScrollTarget;
+  int _scrollRetryCount = 0;
+  static const int _maxScrollRetries = 10;
+
+  void _tryScroll() {
+    if (!mounted || _pendingScrollTarget == null) return;
+    final sectionId = _pendingScrollTarget!;
+    final key = _sectionKeys[sectionId];
+    final ctx = key?.currentContext;
+    final renderBox = ctx?.findRenderObject() as RenderBox?;
+
+    if (renderBox == null || !renderBox.hasSize) {
+      // Widget not ready yet, retry next frame
+      _scrollRetryCount++;
+      if (_scrollRetryCount < _maxScrollRetries) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _tryScroll());
+      }
+      return;
+    }
+
+    // Calculate absolute scroll position using the render tree
+    final scrollPosition = _scrollController.position;
+    final scrollableRenderObject = scrollPosition.context.storageContext
+        .findRenderObject() as RenderBox?;
+
+    if (scrollableRenderObject == null) return;
+
+    // Get the target's position relative to the scroll viewport
+    final targetPosition = renderBox.localToGlobal(
+      Offset.zero,
+      ancestor: scrollableRenderObject,
+    );
+
+    // The target's absolute scroll offset
+    final targetScroll = scrollPosition.pixels + targetPosition.dy;
+    final maxScroll = scrollPosition.maxScrollExtent;
+    final destination = targetScroll.clamp(0.0, maxScroll);
+
+    _scrollController.animateTo(
+      destination,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    _pendingScrollTarget = null;
   }
 
   void _expandParentChain(String sectionId) {
     final rule = kRulesById[sectionId];
     if (rule == null) return;
 
-    // Walk up the parent chain and expand each ancestor
     String? currentId = rule.parentId;
     while (currentId != null) {
       _expandedSections.add(currentId);
@@ -99,17 +135,6 @@ class RulesReferencePageState extends State<RulesReferencePage> {
     }
   }
 
-  void _scrollToSection(String sectionId) {
-    final key = _sectionKeys[sectionId];
-    if (key?.currentContext != null) {
-      Scrollable.ensureVisible(
-        key!.currentContext!,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        alignment: 0.1,
-      );
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Search
@@ -228,6 +253,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
             controller: _scrollController,
             child: ListView(
               controller: _scrollController,
+              cacheExtent: double.infinity,
               padding: const EdgeInsets.only(bottom: 80),
               children: _buildContent(),
             ),
@@ -238,14 +264,12 @@ class RulesReferencePageState extends State<RulesReferencePage> {
   }
 
   List<Widget> _buildContent() {
-    switch (_viewMode) {
-      case _ViewMode.search:
-        return _buildSearchResults();
-      case _ViewMode.phase:
-        return _buildPhaseView();
-      case _ViewMode.full:
-        return _buildFullView();
-    }
+    final result = switch (_viewMode) {
+      _ViewMode.search => _buildSearchResults(),
+      _ViewMode.phase => _buildPhaseView(),
+      _ViewMode.full => _buildFullView(),
+    };
+    return result;
   }
 
   // ---------------------------------------------------------------------------

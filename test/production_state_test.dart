@@ -228,10 +228,24 @@ void main() {
       expect(ps.facilityCp(baseConfig), 0);
     });
 
-    test('IC on colony does not add facility bonus (only homeworld)', () {
+    test('IC on colony adds 5 CP facility bonus (rule 36.3)', () {
       final ps = ProductionState(
           worlds: [colony(2, facility: FacilityType.industrial)]);
+      expect(ps.facilityCp(facilitiesConfig), 5);
+    });
+
+    test('IC on blocked colony produces 0 CP (rule 7.1.2)', () {
+      final ps = ProductionState(
+          worlds: [colony(2, facility: FacilityType.industrial, blocked: true)]);
       expect(ps.facilityCp(facilitiesConfig), 0);
+    });
+
+    test('blocked colonies still grow (rule 7.1.2)', () {
+      final ps = ProductionState(
+          worlds: [hw(), colony(1, blocked: true)]);
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      // Blocked colony at growth 1 should grow to growth 2
+      expect(next.worlds[1].growthMarkerLevel, 2);
     });
   });
 

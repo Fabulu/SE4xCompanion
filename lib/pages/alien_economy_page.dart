@@ -5,6 +5,7 @@ import '../models/alien_economy.dart';
 import '../services/dice_service.dart';
 import '../widgets/alien_turn_row.dart';
 import '../widgets/animated_dice.dart';
+import '../widgets/number_input.dart';
 import '../widgets/section_header.dart';
 
 // ── Standard solitaire alien tech list ──
@@ -26,6 +27,16 @@ const List<String> kAlienTechOptions = [
   'Ground 2',
   'Security 1',
 ];
+
+// ── Color options for alien player color picker ──
+const Map<String, Color> _kColorOptions = {
+  'Red': Color(0xFFF44336),
+  'Green': Color(0xFF4CAF50),
+  'Blue': Color(0xFF2196F3),
+  'Yellow': Color(0xFFFFEB3B),
+  'Purple': Color(0xFF9C27B0),
+  'Orange': Color(0xFFFF9800),
+};
 
 // ── Ship types for fleet composition picker ──
 class _ShipType {
@@ -555,16 +566,35 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
           Text('Color:', style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurface)),
           const SizedBox(width: 8),
           SizedBox(
-            width: 120,
-            child: TextFormField(
-              initialValue: player.color,
-              style: const TextStyle(fontSize: 15),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                border: OutlineInputBorder(),
-              ),
-              onFieldSubmitted: (v) => onChanged(player.copyWith(color: v)),
+            width: 150,
+            child: DropdownButton<String>(
+              value: _kColorOptions.containsKey(player.color) ? player.color : _kColorOptions.keys.first,
+              isDense: true,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              items: [
+                for (final entry in _kColorOptions.entries)
+                  DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: entry.value,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(entry.key, style: const TextStyle(fontSize: 15)),
+                      ],
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) onChanged(player.copyWith(color: v));
+              },
             ),
           ),
         ],
@@ -742,22 +772,11 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
           const SizedBox(width: 8),
           // CP
           SizedBox(
-            width: 52,
-            child: TextFormField(
-              initialValue: fleet.cp == 0 ? '' : fleet.cp.toString(),
-              style: monoStyle,
-              textAlign: TextAlign.center,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                border: InputBorder.none,
-                hintText: '0',
-              ),
-              keyboardType: TextInputType.number,
-              onFieldSubmitted: (v) {
-                final cp = int.tryParse(v) ?? 0;
-                _updateFleet(index, fleet.copyWith(cp: cp));
-              },
+            width: 100,
+            child: NumberInput(
+              value: fleet.cp,
+              min: 0,
+              onChanged: (v) => _updateFleet(index, fleet.copyWith(cp: v)),
             ),
           ),
           const SizedBox(width: 8),
@@ -794,24 +813,30 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
           const SizedBox(width: 8),
           // Launch turn
           SizedBox(
-            width: 52,
-            child: TextFormField(
-              initialValue: fleet.launchTurn?.toString() ?? '',
+            width: 64,
+            child: DropdownButton<int?>(
+              value: fleet.launchTurn,
+              isDense: true,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
               style: monoStyle,
-              textAlign: TextAlign.center,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                border: InputBorder.none,
-                hintText: '-',
-              ),
-              keyboardType: TextInputType.number,
-              onFieldSubmitted: (v) {
-                final lt = int.tryParse(v);
+              hint: Text('-', style: monoStyle),
+              items: [
+                DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('-', style: monoStyle),
+                ),
+                for (int t = 1; t <= 20; t++)
+                  DropdownMenuItem<int?>(
+                    value: t,
+                    child: Text(t.toString(), style: monoStyle),
+                  ),
+              ],
+              onChanged: (v) {
                 _updateFleet(
                   index,
-                  lt != null
-                      ? fleet.copyWith(launchTurn: lt)
+                  v != null
+                      ? fleet.copyWith(launchTurn: v)
                       : fleet.copyWith(clearLaunchTurn: true),
                 );
               },

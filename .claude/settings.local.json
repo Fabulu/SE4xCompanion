@@ -39,7 +39,13 @@
       "Bash(for id:*)",
       "Bash(do grep:*)",
       "Bash(done)",
-      "Bash(grep -rn \"''25.8''\" lib/data/rules_sections_*.dart)"
+      "Bash(grep -rn \"''25.8''\" lib/data/rules_sections_*.dart)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.flutter.dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(find lib:*)",
+      "Bash(ls:*)"
     ]
   }
 }

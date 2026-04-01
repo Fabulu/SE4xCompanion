@@ -273,8 +273,9 @@ class AlienTurnHeader extends StatelessWidget {
   }
 }
 
-/// Inline number display that can be tapped to edit.
-class _InlineNumberEdit extends StatefulWidget {
+/// Compact inline number stepper with small +/- buttons.
+/// No keyboard input -- tap-only.
+class _InlineNumberEdit extends StatelessWidget {
   final int value;
   final ValueChanged<int>? onChanged;
   final TextStyle style;
@@ -286,76 +287,53 @@ class _InlineNumberEdit extends StatefulWidget {
   });
 
   @override
-  State<_InlineNumberEdit> createState() => _InlineNumberEditState();
-}
-
-class _InlineNumberEditState extends State<_InlineNumberEdit> {
-  bool _editing = false;
-  late TextEditingController _controller;
-  late FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value.toString());
-    _focusNode = FocusNode()..addListener(_onFocus);
-  }
-
-  @override
-  void didUpdateWidget(_InlineNumberEdit old) {
-    super.didUpdateWidget(old);
-    if (!_editing) _controller.text = widget.value.toString();
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocus);
-    _focusNode.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onFocus() {
-    if (!_focusNode.hasFocus && _editing) _commit();
-  }
-
-  void _commit() {
-    final v = int.tryParse(_controller.text);
-    setState(() => _editing = false);
-    if (v != null) widget.onChanged?.call(v);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_editing) {
-      return SizedBox(
-        width: 32,
-        child: EditableText(
-          controller: _controller,
-          focusNode: _focusNode,
-          style: widget.style,
-          textAlign: TextAlign.center,
-          cursorColor: Theme.of(context).colorScheme.primary,
-          backgroundCursorColor: Colors.grey,
-          keyboardType: TextInputType.number,
-          onSubmitted: (_) => _commit(),
-        ),
+    final theme = Theme.of(context);
+    if (onChanged == null) {
+      return Text(
+        value.toString(),
+        style: style,
+        textAlign: TextAlign.center,
       );
     }
-    return GestureDetector(
-      onTap: widget.onChanged != null
-          ? () {
-              setState(() => _editing = true);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _focusNode.requestFocus();
-              });
-            }
-          : null,
-      child: Text(
-        widget.value.toString(),
-        style: widget.style,
-        textAlign: TextAlign.center,
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 16,
+            icon: const Icon(Icons.remove),
+            color: theme.colorScheme.onSurface,
+            onPressed: () => onChanged!(value - 1),
+            splashRadius: 12,
+          ),
+        ),
+        SizedBox(
+          width: 20,
+          child: Text(
+            value.toString(),
+            style: style,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 16,
+            icon: const Icon(Icons.add),
+            color: theme.colorScheme.onSurface,
+            onPressed: () => onChanged!(value + 1),
+            splashRadius: 12,
+          ),
+        ),
+      ],
     );
   }
 }

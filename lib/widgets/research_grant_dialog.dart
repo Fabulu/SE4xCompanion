@@ -3,11 +3,11 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../data/tech_costs.dart';
 import '../services/dice_service.dart';
 import 'animated_dice.dart';
+import 'number_input.dart';
 
 /// Result of a research grant funding session.
 class ResearchGrantResult {
@@ -128,8 +128,7 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
   final _random = Random();
 
   // Manual entry
-  final _manualController = TextEditingController();
-  final _manualFocus = FocusNode();
+  int _manualValue = 0;
 
   @override
   void dispose() {
@@ -138,8 +137,6 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
     for (final p in _particles) {
       p.controller.dispose();
     }
-    _manualController.dispose();
-    _manualFocus.dispose();
     _diceController.disposeControllers();
     super.dispose();
   }
@@ -527,31 +524,12 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          width: 120,
-          child: Center(
-            child: TextField(
-              controller: _manualController,
-              focusNode: _manualFocus,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                hintText: '0',
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
+        Center(
+          child: NumberInput(
+            value: _manualValue,
+            min: 1,
+            max: _grantCount * 10,
+            onChanged: (v) => setState(() => _manualValue = v),
           ),
         ),
       ],
@@ -672,20 +650,19 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
             ),
         ];
       case _DialogPhase.manualEntry:
-        final enteredValue = int.tryParse(_manualController.text) ?? 0;
         return [
           TextButton(
             onPressed: () {
               setState(() {
                 _phase = _DialogPhase.setup;
                 _totalRolled = 0;
-                _manualController.clear();
+                _manualValue = 0;
               });
             },
             child: const Text('Back'),
           ),
           FilledButton(
-            onPressed: enteredValue > 0 ? _confirmManualEntry : null,
+            onPressed: _manualValue > 0 ? _confirmManualEntry : null,
             child: const Text('Confirm'),
           ),
         ];
@@ -720,14 +697,12 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
   void _beginManualEntry() {
     setState(() {
       _phase = _DialogPhase.manualEntry;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _manualFocus.requestFocus();
+      _manualValue = 0;
     });
   }
 
   void _confirmManualEntry() {
-    final entered = int.tryParse(_manualController.text) ?? 0;
+    final entered = _manualValue;
     if (entered <= 0) return;
 
     final newTotal = widget.currentAccumulated + entered;

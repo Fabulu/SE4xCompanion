@@ -177,6 +177,14 @@ class SettingsPage extends StatelessWidget {
           onChanged: (v) =>
               onConfigChanged(config.copyWith(enableUnpredictableResearch: v)),
         ),
+        _RuleToggle(
+          title: 'Alternate Empire',
+          value: config.enableAlternateEmpire,
+          enabled: config.ownership.closeEncounters,
+          disabledReason: 'Requires Close Encounters expansion',
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableAlternateEmpire: v)),
+        ),
         const Divider(height: 24),
 
         // ── Game Library ──

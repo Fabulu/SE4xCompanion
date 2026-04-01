@@ -23,6 +23,7 @@ class ShipTechPage extends StatelessWidget {
   final bool showExperience;
   final ValueChanged<List<ShipCounter>> onCountersChanged;
   final ValueChanged<int>? onUpgradeCostIncurred;
+  final void Function(String sectionId)? onRuleTap;
 
   const ShipTechPage({
     super.key,
@@ -33,6 +34,7 @@ class ShipTechPage extends StatelessWidget {
     required this.showExperience,
     required this.onCountersChanged,
     this.onUpgradeCostIncurred,
+    this.onRuleTap,
   });
 
   /// Ordered ship types for display, matching the physical sheet layout.
@@ -310,7 +312,7 @@ class ShipTechPage extends StatelessWidget {
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.info_outline, size: 18),
             tooltip: 'Ship info',
-            onPressed: () => showShipInfoDialog(ctx, shipType),
+            onPressed: () => showShipInfoDialog(ctx, shipType, onRuleTap: onRuleTap),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(

@@ -20,6 +20,13 @@ class ShipPurchase {
     return def.buildCost * quantity;
   }
 
+  /// Cost accounting for alternate empire pricing.
+  int effectiveCost(bool isAlternateEmpire) {
+    final def = kShipDefinitions[type];
+    if (def == null) return 0;
+    return def.effectiveBuildCost(isAlternateEmpire) * quantity;
+  }
+
   ShipPurchase copyWith({ShipType? type, int? quantity}) => ShipPurchase(
         type: type ?? this.type,
         quantity: quantity ?? this.quantity,
@@ -131,12 +138,13 @@ class ProductionState {
         .fold(0, (sum, w) => sum + w.cpValue);
   }
 
-  /// CP from IC facilities on homeworld (facilities mode only).
+  /// CP from IC facilities (facilities mode only).
+  /// IC on any non-blocked world adds 5 CP per rule 36.3.
   int facilityCp(GameConfig config) {
     if (!config.enableFacilities) return 0;
     return worlds
         .where(
-            (w) => w.isHomeworld && w.facility == FacilityType.industrial)
+            (w) => !w.isBlocked && w.facility == FacilityType.industrial)
         .fold(0, (sum, w) => sum + 5);
   }
 
@@ -243,13 +251,16 @@ class ProductionState {
   }
 
   /// Total cost of ship purchases this turn.
-  int shipPurchaseCost() {
-    return shipPurchases.fold(0, (sum, p) => sum + p.cost);
+  int shipPurchaseCost({bool isAlternateEmpire = false}) {
+    return shipPurchases.fold(
+        0, (sum, p) => sum + p.effectiveCost(isAlternateEmpire));
   }
 
   /// Effective ship spending: derived from purchases if any, otherwise manual.
-  int effectiveShipSpending() {
-    if (shipPurchases.isNotEmpty) return shipPurchaseCost();
+  int effectiveShipSpending({bool isAlternateEmpire = false}) {
+    if (shipPurchases.isNotEmpty) {
+      return shipPurchaseCost(isAlternateEmpire: isAlternateEmpire);
+    }
     return shipSpendingCp;
   }
 
@@ -260,7 +271,8 @@ class ProductionState {
     return subtotalCp(config, shipCounters) -
         techSpendingCpDerived(config) -
         researchGrantsCp -
-        effectiveShipSpending() -
+        effectiveShipSpending(
+            isAlternateEmpire: config.enableAlternateEmpire) -
         upgradesCp;
   }
 
@@ -365,10 +377,12 @@ class ProductionState {
     final newWorlds = worlds.map((w) {
       int newGrowth = w.growthMarkerLevel;
       int newHwValue = w.homeworldValue;
-      if (!w.isHomeworld && newGrowth < 3 && !w.isBlocked) {
+      // Rule 7.1.2: blocked colonies DO grow normally
+      if (!w.isHomeworld && newGrowth < 3) {
         newGrowth++;
       }
-      if (w.isHomeworld && w.homeworldValue < 30 && !w.isBlocked) {
+      // Rule 7.7.2: damaged homeworlds recover one step
+      if (w.isHomeworld && w.homeworldValue < 30) {
         newHwValue = (w.homeworldValue + 5).clamp(0, 30);
       }
       return w.copyWith(

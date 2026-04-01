@@ -146,16 +146,31 @@ class AppState {
       );
 
   Map<String, dynamic> toJson() => {
+        'version': 1,
         'activeGameId': activeGameId,
         'games': games.map((g) => g.toJson()).toList(),
       };
 
-  factory AppState.fromJson(Map<String, dynamic> json) => AppState(
-        activeGameId: json['activeGameId'] as String?,
-        games: (json['games'] as List?)
-                ?.map(
-                    (g) => SavedGame.fromJson(g as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+  factory AppState.fromJson(Map<String, dynamic> json) {
+    final version = json['version'] as int? ?? 0;
+    final migrated = _migrate(json, version);
+    return AppState(
+      activeGameId: migrated['activeGameId'] as String?,
+      games: (migrated['games'] as List?)
+              ?.map(
+                  (g) => SavedGame.fromJson(g as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+
+  /// Migrate save data from [fromVersion] to the current version.
+  /// Version 0 and 1 are identical (no migration needed).
+  static Map<String, dynamic> _migrate(
+      Map<String, dynamic> json, int fromVersion) {
+    var data = json;
+    // Future migrations go here as incremental steps:
+    // if (fromVersion < 2) { data = _migrateV1toV2(data); }
+    return data;
+  }
 }
