@@ -204,6 +204,10 @@ class _HomePageState extends State<HomePage>
         _gameState.production.copyWith(upgradesCp: newUpgrades));
   }
 
+  void _onGameStateOverride(GameState newState) {
+    _updateGameState(newState, 'Manual Override');
+  }
+
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
     _updateGameState(
         _gameState.copyWith(alienPlayers: aliens), 'Alien Economy');
@@ -588,6 +592,7 @@ class _HomePageState extends State<HomePage>
           onProductionChanged: _onProductionChanged,
           onEndTurn: _onEndTurn,
           onRuleTap: _navigateToRule,
+          onGameStateOverride: _onGameStateOverride,
         );
       case 1:
         return ShipTechPage(

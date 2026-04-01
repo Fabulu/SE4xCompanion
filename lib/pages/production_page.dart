@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/game_config.dart';
+import '../models/game_state.dart';
 import '../models/production_state.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
@@ -12,6 +13,7 @@ import '../widgets/number_input.dart';
 import '../widgets/research_grant_dialog.dart';
 import '../widgets/section_header.dart';
 import '../widgets/ship_info_dialog.dart';
+import '../widgets/manual_override_dialog.dart';
 import '../widgets/tech_detail_dialog.dart';
 import '../widgets/tech_tracker.dart';
 
@@ -162,6 +164,7 @@ class ProductionPage extends StatefulWidget {
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
+  final ValueChanged<GameState>? onGameStateOverride;
 
   const ProductionPage({
     super.key,
@@ -172,6 +175,7 @@ class ProductionPage extends StatefulWidget {
     required this.onProductionChanged,
     required this.onEndTurn,
     this.onRuleTap,
+    this.onGameStateOverride,
   });
 
   @override
@@ -539,6 +543,9 @@ class _ProductionPageState extends State<ProductionPage>
 
         // End Turn
         _buildEndTurnButton(context),
+
+        const SizedBox(height: 16),
+        _buildManualOverrideButton(context),
 
         const SizedBox(height: 32),
       ],
@@ -2004,6 +2011,35 @@ class _ProductionPageState extends State<ProductionPage>
         ),
       ),
     );
+  }
+
+  Widget _buildManualOverrideButton(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showManualOverride(context),
+        icon: Icon(Icons.build, size: 18, color: theme.colorScheme.error.withValues(alpha: 0.6)),
+        label: Text('Manual Override', style: TextStyle(fontSize: 14, color: theme.colorScheme.error.withValues(alpha: 0.6))),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.3)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+        ),
+      ),
+    );
+  }
+
+  void _showManualOverride(BuildContext context) async {
+    final currentGameState = GameState(
+      config: widget.config,
+      turnNumber: widget.turnNumber,
+      production: widget.production,
+      shipCounters: widget.shipCounters,
+    );
+    final result = await showManualOverrideDialog(context, currentGameState);
+    if (result != null && widget.onGameStateOverride != null) {
+      widget.onGameStateOverride!(result);
+    }
   }
 
   void _confirmEndTurn(BuildContext context) {
