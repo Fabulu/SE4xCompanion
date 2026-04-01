@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:se4x/data/empire_advantages.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/data/tech_costs.dart';
 import 'package:se4x/models/game_config.dart';
@@ -823,6 +824,120 @@ void main() {
         },
       );
       expect(ps.techSpendingCpDerived(baseConfig), 90);
+    });
+  });
+
+  group('Empire Advantage effects', () {
+    // Giant Race (#34): hullSizeModifier = +1
+    const giantRaceConfig = GameConfig(selectedEmpireAdvantage: 34);
+    // Insectoids (#43): hullSizeModifier = -1
+    const insectoidsConfig = GameConfig(selectedEmpireAdvantage: 43);
+    // Robot Race (#190): maintenancePercent = 50
+    const robotRaceConfig = GameConfig(selectedEmpireAdvantage: 190);
+    // Gifted Scientists (#41): techCostMultiplier = 0.67
+    const giftedConfig = GameConfig(selectedEmpireAdvantage: 41);
+    // Star Wolves (#51): DD cost modifier = -1
+    const starWolvesConfig = GameConfig(selectedEmpireAdvantage: 51);
+
+    test('Giant Race (+1 hull) increases maintenance: DD hull 1->2, CA hull 2->3', () {
+      final counters = [
+        const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true), // hull 1 + 1 = 2
+        const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2 + 1 = 3
+      ];
+      const ps = ProductionState();
+      // Without EA: 1 + 2 = 3
+      expect(ps.maintenanceTotal(counters, baseConfig), 3);
+      // With Giant Race: 2 + 3 = 5
+      expect(ps.maintenanceTotal(counters, giantRaceConfig), 5);
+    });
+
+    test('Insectoids (-1 hull) decreases maintenance: DD hull 1->0, CA hull 2->1', () {
+      final counters = [
+        const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true), // hull 1 - 1 = 0
+        const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2 - 1 = 1
+      ];
+      const ps = ProductionState();
+      // With Insectoids: 0 + 1 = 1
+      expect(ps.maintenanceTotal(counters, insectoidsConfig), 1);
+    });
+
+    test('Robot Race (50% maintenance) halves total and rounds UP: 5 maintenance -> 3', () {
+      // Need 5 hull points of built non-exempt ships
+      final counters = [
+        const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
+        const ShipCounter(type: ShipType.bc, number: 1, isBuilt: true), // hull 3
+      ];
+      const ps = ProductionState();
+      // Base: 2 + 3 = 5
+      expect(ps.maintenanceTotal(counters, baseConfig), 5);
+      // Robot Race: ceil(5 * 0.50) = ceil(2.5) = 3
+      expect(ps.maintenanceTotal(counters, robotRaceConfig), 3);
+    });
+
+    test('Robot Race with odd maintenance: 7 maintenance -> 4', () {
+      final counters = [
+        const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true), // hull 1
+        const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
+        const ShipCounter(type: ShipType.tn, number: 1, isBuilt: true), // hull 4
+      ];
+      const ps = ProductionState();
+      // Base: 1 + 2 + 4 = 7
+      expect(ps.maintenanceTotal(counters, baseConfig), 7);
+      // Robot Race: ceil(7 * 0.50) = ceil(3.5) = 4
+      expect(ps.maintenanceTotal(counters, robotRaceConfig), 4);
+    });
+
+    test('Gifted Scientists tech cost multiplier: Attack 1 normally 20 CP, with 0.67 multiplier -> 13 CP', () {
+      final ps = ProductionState(
+        pendingTechPurchases: {TechId.attack: 1}, // base cost 20
+      );
+      // Normal: 20
+      expect(ps.techSpendingCpDerived(baseConfig), 20);
+      // Gifted Scientists: floor(20 * 0.67) = floor(13.4) = 13
+      expect(ps.techSpendingCpDerived(giftedConfig), 13);
+    });
+
+    test('Star Wolves DD cost modifier: DD normally 6, with -1 -> 5', () {
+      // Star Wolves has costModifiers: {ShipType.scout: -1}
+      // Actually Star Wolves modifies scout, not DD. Let me use the correct ship.
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.scout, quantity: 1),
+        ],
+      );
+      // Scout base cost is 6, Star Wolves gives scout -1 = 5
+      expect(ps.shipPurchaseCost(starWolvesConfig), 5);
+      // Without EA: 6
+      expect(ps.shipPurchaseCost(baseConfig), 6);
+    });
+
+    test('Insectoids cost modifier: DD normally 6, with -2 -> 4', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.dd, quantity: 1),
+        ],
+      );
+      // DD base cost is 6, Insectoids gives DD -2 = 4
+      expect(ps.shipPurchaseCost(insectoidsConfig), 4);
+      // Without EA: 6
+      expect(ps.shipPurchaseCost(baseConfig), 6);
+    });
+
+    test('Blocked techs: with Insectoids selected, visibleTechs filtered by blockedTechs should NOT contain fighters', () {
+      // Insectoids blocks fighters and militaryAcad
+      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 43);
+      final allTechs = visibleTechs(
+        facilitiesMode: false,
+        closeEncountersOwned: true,
+      );
+      final filtered = allTechs.where((id) => !ea.blockedTechs.contains(id)).toList();
+      expect(filtered, isNot(contains(TechId.fighters)));
+      expect(filtered, isNot(contains(TechId.militaryAcad)));
+      // But other techs should still be present
+      expect(filtered, contains(TechId.attack));
+      expect(filtered, contains(TechId.defense));
     });
   });
 }

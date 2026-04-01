@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/game_config.dart';
+import '../models/game_modifier.dart';
 import '../models/game_state.dart';
 import '../models/production_state.dart';
 import '../models/ship_counter.dart';
@@ -161,6 +162,7 @@ class ProductionPage extends StatefulWidget {
   final int turnNumber;
   final ProductionState production;
   final List<ShipCounter> shipCounters;
+  final List<GameModifier> activeModifiers;
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
@@ -172,6 +174,7 @@ class ProductionPage extends StatefulWidget {
     required this.turnNumber,
     required this.production,
     required this.shipCounters,
+    this.activeModifiers = const [],
     required this.onProductionChanged,
     required this.onEndTurn,
     this.onRuleTap,
@@ -245,7 +248,7 @@ class _ProductionPageState extends State<ProductionPage>
     ));
 
     _prevRemainingCp =
-        widget.production.remainingCp(widget.config, widget.shipCounters);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers);
   }
 
   @override
@@ -254,7 +257,7 @@ class _ProductionPageState extends State<ProductionPage>
 
     // Task 3C: pop on remaining CP change
     final newRemaining =
-        widget.production.remainingCp(widget.config, widget.shipCounters);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers);
     if (_prevRemainingCp != null && newRemaining != _prevRemainingCp) {
       _cpPopController.forward(from: 0);
     }
@@ -294,6 +297,7 @@ class _ProductionPageState extends State<ProductionPage>
   GameConfig get config => widget.config;
   ProductionState get production => widget.production;
   List<ShipCounter> get shipCounters => widget.shipCounters;
+  List<GameModifier> get modifiers => widget.activeModifiers;
 
   // ---- helpers ----
 
@@ -366,11 +370,11 @@ class _ProductionPageState extends State<ProductionPage>
 
     if (config.enableFacilities) {
       // Uses RP
-      final rpAvail = production.remainingRp(config);
+      final rpAvail = production.remainingRp(config, modifiers);
       return rpAvail >= cost;
     } else {
       // Uses CP
-      final cpAvail = production.remainingCp(config, shipCounters);
+      final cpAvail = production.remainingCp(config, shipCounters, modifiers);
       return cpAvail >= cost;
     }
   }
@@ -399,7 +403,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   /// How many grants the player can afford (each grant = 5 CP).
   int _maxGrantsAffordable() {
-    final remaining = production.remainingCp(config, shipCounters);
+    final remaining = production.remainingCp(config, shipCounters, modifiers);
     return (remaining / 5).floor().clamp(0, 999);
   }
 
@@ -599,9 +603,9 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
 
   Widget _buildCarryOverWarning() {
-    final remainingCp = production.remainingCp(config, shipCounters);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers);
     final remainingRp =
-        config.enableFacilities ? production.remainingRp(config) : 0;
+        config.enableFacilities ? production.remainingRp(config, modifiers) : 0;
     final cpExcess = remainingCp - 30;
     final rpExcess = remainingRp - 30;
 
@@ -668,15 +672,15 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
 
   Widget _buildCpLedgerBase() {
-    final maint = production.maintenanceTotal(shipCounters, config);
+    final maint = production.maintenanceTotal(shipCounters, config, modifiers);
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
     final pipelineCp = production.pipelineCp();
-    final totalCp = production.totalCp(config);
-    final subtotal = production.subtotalCp(config, shipCounters);
-    final techSpending = production.techSpendingCpDerived(config);
-    final shipSpending = production.effectiveShipSpending(config);
-    final remaining = production.remainingCp(config, shipCounters);
+    final totalCp = production.totalCp(config, modifiers);
+    final subtotal = production.subtotalCp(config, shipCounters, modifiers);
+    final techSpending = production.techSpendingCpDerived(config, modifiers);
+    final shipSpending = production.effectiveShipSpending(config, modifiers);
+    final remaining = production.remainingCp(config, shipCounters, modifiers);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -765,8 +769,8 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildLpLedger() {
     final colonyLp = production.colonyLp(config);
-    final maint = production.maintenanceTotal(shipCounters, config);
-    final remainingLp = production.remainingLp(config, shipCounters);
+    final maint = production.maintenanceTotal(shipCounters, config, modifiers);
+    final remainingLp = production.remainingLp(config, shipCounters, modifiers);
 
     return LedgerGrid(
       title: 'LP LEDGER',
@@ -804,11 +808,11 @@ class _ProductionPageState extends State<ProductionPage>
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
     final pipelineCp = production.pipelineCp();
-    final totalCp = production.totalCp(config);
-    final penaltyLp = production.penaltyLp(config, shipCounters);
-    final subtotal = production.subtotalCp(config, shipCounters);
-    final shipSpending = production.effectiveShipSpending(config);
-    final remaining = production.remainingCp(config, shipCounters);
+    final totalCp = production.totalCp(config, modifiers);
+    final penaltyLp = production.penaltyLp(config, shipCounters, modifiers);
+    final subtotal = production.subtotalCp(config, shipCounters, modifiers);
+    final shipSpending = production.effectiveShipSpending(config, modifiers);
+    final remaining = production.remainingCp(config, shipCounters, modifiers);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -880,8 +884,8 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildRpLedger() {
     final colonyRp = production.colonyRp(config);
-    final techSpending = production.techSpendingRpDerived(config);
-    final remainingRp = production.remainingRp(config);
+    final techSpending = production.techSpendingRpDerived(config, modifiers);
+    final remainingRp = production.remainingRp(config, modifiers);
 
     return LedgerGrid(
       title: 'RP LEDGER',
@@ -1026,7 +1030,7 @@ class _ProductionPageState extends State<ProductionPage>
       return const SizedBox.shrink();
     }
 
-    final totalMaint = production.maintenanceTotal(shipCounters, config);
+    final totalMaint = production.maintenanceTotal(shipCounters, config, modifiers);
 
     // Build rows sorted by definition order.
     final sortedTypes = builtByType.keys.toList()
@@ -1361,7 +1365,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildShipPurchaseSection(BuildContext context) {
     final theme = Theme.of(context);
     final purchases = production.shipPurchases;
-    final totalCost = production.shipPurchaseCost(config);
+    final totalCost = production.shipPurchaseCost(config, modifiers);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1385,7 +1389,7 @@ class _ProductionPageState extends State<ProductionPage>
             }
           }
           if (newMaint > 0) {
-            final currentMaint = production.maintenanceTotal(shipCounters, config);
+            final currentMaint = production.maintenanceTotal(shipCounters, config, modifiers);
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Text(
@@ -1579,13 +1583,13 @@ class _ProductionPageState extends State<ProductionPage>
   bool _canAffordOneMore(ShipType type) {
     final def = kShipDefinitions[type];
     if (def == null) return false;
-    final remaining = production.remainingCp(config, shipCounters);
+    final remaining = production.remainingCp(config, shipCounters, modifiers);
     return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire);
   }
 
   void _showAddShipDialog(BuildContext context) {
     // Task 2: Filter to ships the player has tech to build AND can afford
-    final remaining = production.remainingCp(config, shipCounters);
+    final remaining = production.remainingCp(config, shipCounters, modifiers);
 
     final isAlt = config.enableAlternateEmpire;
     final buyableShips = kShipDefinitions.entries
@@ -2041,6 +2045,7 @@ class _ProductionPageState extends State<ProductionPage>
       turnNumber: widget.turnNumber,
       production: widget.production,
       shipCounters: widget.shipCounters,
+      activeModifiers: widget.activeModifiers,
     );
     final result = await showManualOverrideDialog(context, currentGameState);
     if (result != null && widget.onGameStateOverride != null) {
@@ -2049,9 +2054,9 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _confirmEndTurn(BuildContext context) {
-    final remainingCp = production.remainingCp(config, shipCounters);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers);
     final cpLost = remainingCp > 30 ? remainingCp - 30 : 0;
-    final remainingRp = config.enableFacilities ? production.remainingRp(config) : null;
+    final remainingRp = config.enableFacilities ? production.remainingRp(config, modifiers) : null;
     final rpLost = (remainingRp != null && remainingRp > 30) ? remainingRp - 30 : 0;
 
     showDialog<bool>(

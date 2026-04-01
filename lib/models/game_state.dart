@@ -2,6 +2,7 @@
 
 import 'alien_economy.dart';
 import 'game_config.dart';
+import 'game_modifier.dart';
 import 'production_state.dart';
 import 'ship_counter.dart';
 import 'turn_summary.dart';
@@ -13,6 +14,7 @@ class GameState {
   final List<ShipCounter> shipCounters;
   final List<AlienPlayer> alienPlayers;
   final List<TurnSummary> turnSummaries;
+  final List<GameModifier> activeModifiers;
 
   const GameState({
     this.config = const GameConfig(),
@@ -21,6 +23,7 @@ class GameState {
     this.shipCounters = const [],
     this.alienPlayers = const [],
     this.turnSummaries = const [],
+    this.activeModifiers = const [],
   });
 
   GameState copyWith({
@@ -30,6 +33,7 @@ class GameState {
     List<ShipCounter>? shipCounters,
     List<AlienPlayer>? alienPlayers,
     List<TurnSummary>? turnSummaries,
+    List<GameModifier>? activeModifiers,
   }) =>
       GameState(
         config: config ?? this.config,
@@ -38,6 +42,7 @@ class GameState {
         shipCounters: shipCounters ?? this.shipCounters,
         alienPlayers: alienPlayers ?? this.alienPlayers,
         turnSummaries: turnSummaries ?? this.turnSummaries,
+        activeModifiers: activeModifiers ?? this.activeModifiers,
       );
 
   Map<String, dynamic> toJson() => {
@@ -47,6 +52,7 @@ class GameState {
         'shipCounters': shipCounters.map((c) => c.toJson()).toList(),
         'alienPlayers': alienPlayers.map((a) => a.toJson()).toList(),
         'turnSummaries': turnSummaries.map((s) => s.toJson()).toList(),
+        'activeModifiers': activeModifiers.map((m) => m.toJson()).toList(),
       };
 
   factory GameState.fromJson(Map<String, dynamic> json) => GameState(
@@ -71,6 +77,11 @@ class GameState {
         turnSummaries: (json['turnSummaries'] as List?)
                 ?.map((s) =>
                     TurnSummary.fromJson(s as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        activeModifiers: (json['activeModifiers'] as List?)
+                ?.map((m) =>
+                    GameModifier.fromJson(m as Map<String, dynamic>))
                 .toList() ??
             const [],
       );

@@ -3,6 +3,7 @@
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import 'game_config.dart';
+import 'game_modifier.dart';
 import 'ship_counter.dart';
 import 'technology.dart';
 import 'world.dart';
@@ -185,22 +186,54 @@ class ProductionState {
   // ---------------------------------------------------------------------------
 
   /// Total maintenance cost from built, non-exempt ship counters.
-  int maintenanceTotal(List<ShipCounter> shipCounters, GameConfig config) {
+  ///
+  /// When [modifiers] are provided, per-type and global maintenance modifiers
+  /// (from Alien Tech cards, etc.) are applied after the base calculation.
+  int maintenanceTotal(List<ShipCounter> shipCounters, GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     final ea = config.empireAdvantage;
     final hullMod = ea?.hullSizeModifier ?? 0;
+
+    // Collect per-type percent modifiers from GameModifier list.
+    final typePercentMods = <ShipType, int>{};
+    int? globalPercent;
+    for (final mod in modifiers) {
+      if (mod.type != 'maintenanceMod') continue;
+      if (mod.isPercent) {
+        if (mod.shipType != null) {
+          typePercentMods[mod.shipType!] = mod.value;
+        } else {
+          globalPercent = mod.value;
+        }
+      }
+    }
+
     int total = 0;
     for (final c in shipCounters) {
       if (!c.isBuilt) continue;
       final def = kShipDefinitions[c.type];
       if (def == null || def.maintenanceExempt) continue;
-      final effectiveHull = (def.hullSize + hullMod).clamp(0, 99);
-      total += effectiveHull;
+      int shipMaint = (def.hullSize + hullMod).clamp(0, 99);
+      // Apply per-type percent modifier (e.g., "SC/DD half maint").
+      if (typePercentMods.containsKey(c.type)) {
+        shipMaint = (shipMaint * typePercentMods[c.type]! / 100).ceil();
+      }
+      total += shipMaint;
     }
+
     int result = total + maintenanceIncrease - maintenanceDecrease;
     if (result < 0) result = 0;
+
+    // Apply EA global maintenance percent.
     if (ea != null && ea.maintenancePercent != 100) {
       result = (result * ea.maintenancePercent / 100).ceil();
     }
+
+    // Apply global modifier maintenance percent (shipType null).
+    if (globalPercent != null) {
+      result = (result * globalPercent / 100).ceil();
+    }
+
     return result;
   }
 
@@ -208,42 +241,65 @@ class ProductionState {
   // CP track totals
   // ---------------------------------------------------------------------------
 
+  /// Sum of all incomeMod modifier values.
+  static int modifierIncome(List<GameModifier> modifiers) {
+    int total = 0;
+    for (final mod in modifiers) {
+      if (mod.type == 'incomeMod') total += mod.value;
+    }
+    return total;
+  }
+
   /// Gross CP income before subtractions.
-  int totalCp(GameConfig config) {
+  int totalCp(GameConfig config, [List<GameModifier> modifiers = const []]) {
     int total = cpCarryOver + colonyCp(config) + mineralCp() + pipelineCp();
     if (config.enableFacilities) {
       total += facilityCp(config);
     }
+    total += modifierIncome(modifiers);
     return total;
   }
 
   /// LP penalty: if facilities+logistics and LP maintenance > available LP,
   /// shortfall * 3 is deducted from CP.
-  int penaltyLp(GameConfig config, List<ShipCounter> shipCounters) {
+  int penaltyLp(GameConfig config, List<ShipCounter> shipCounters,
+      [List<GameModifier> modifiers = const []]) {
     if (!config.enableFacilities || !config.enableLogistics) return 0;
     final lpAvailable = totalLp(config);
-    final lpMaint = maintenanceTotal(shipCounters, config);
+    final lpMaint = maintenanceTotal(shipCounters, config, modifiers);
     if (lpMaint <= lpAvailable) return 0;
     return (lpMaint - lpAvailable) * 3;
   }
 
   /// CP after maintenance, bid, and LP penalty.
-  int subtotalCp(GameConfig config, List<ShipCounter> shipCounters) {
-    int sub = totalCp(config) - turnOrderBid;
+  int subtotalCp(GameConfig config, List<ShipCounter> shipCounters,
+      [List<GameModifier> modifiers = const []]) {
+    int sub = totalCp(config, modifiers) - turnOrderBid;
     if (!config.enableFacilities) {
       // Base mode: maintenance comes from CP
-      sub -= maintenanceTotal(shipCounters, config);
+      sub -= maintenanceTotal(shipCounters, config, modifiers);
     }
-    sub -= penaltyLp(config, shipCounters);
+    sub -= penaltyLp(config, shipCounters, modifiers);
     return sub;
   }
 
+  /// Sum of all techCostMod modifier values.
+  static int _techCostModTotal(List<GameModifier> modifiers) {
+    int total = 0;
+    for (final mod in modifiers) {
+      if (mod.type == 'techCostMod') total += mod.value;
+    }
+    return total;
+  }
+
   /// Cost of pending tech purchases in CP (base mode only).
-  int techSpendingCpDerived(GameConfig config) {
+  int techSpendingCpDerived(GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     if (config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
     final ea = config.empireAdvantage;
     final mult = ea?.techCostMultiplier ?? 1.0;
+    final techMod = _techCostModTotal(modifiers);
     int total = 0;
     final fm = config.useFacilitiesCosts;
     for (final entry in pendingTechPurchases.entries) {
@@ -255,6 +311,7 @@ class ProductionState {
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
         if (mult != 1.0) cost = (cost * mult).floor();
+        cost = (cost + techMod).clamp(0, 999);
         total += cost;
       }
     }
@@ -262,36 +319,53 @@ class ProductionState {
   }
 
   /// Total cost of ship purchases this turn.
-  int shipPurchaseCost(GameConfig config) {
+  int shipPurchaseCost(GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     final mods = config.shipCostModifiers;
     final isAlt = config.enableAlternateEmpire;
+
+    // Collect costMod modifiers by ship type.
+    final costMods = <ShipType, int>{};
+    for (final mod in modifiers) {
+      if (mod.type == 'costMod' && mod.shipType != null) {
+        costMods[mod.shipType!] = (costMods[mod.shipType!] ?? 0) + mod.value;
+      }
+    }
+
     return shipPurchases.fold(0, (sum, p) {
       final def = kShipDefinitions[p.type];
       if (def == null) return sum;
       int unitCost = def.effectiveBuildCost(isAlt);
+      // Apply EA cost modifiers.
       if (mods.containsKey(p.type)) {
         unitCost = (unitCost + mods[p.type]!).clamp(1, 999);
+      }
+      // Apply active game modifiers (Alien Tech, etc.).
+      if (costMods.containsKey(p.type)) {
+        unitCost = (unitCost + costMods[p.type]!).clamp(1, 999);
       }
       return sum + unitCost * p.quantity;
     });
   }
 
   /// Effective ship spending: derived from purchases if any, otherwise manual.
-  int effectiveShipSpending(GameConfig config) {
+  int effectiveShipSpending(GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     if (shipPurchases.isNotEmpty) {
-      return shipPurchaseCost(config);
+      return shipPurchaseCost(config, modifiers);
     }
     return shipSpendingCp;
   }
 
   /// Remaining CP after all spending.
-  int remainingCp(GameConfig config, List<ShipCounter> shipCounters) {
+  int remainingCp(GameConfig config, List<ShipCounter> shipCounters,
+      [List<GameModifier> modifiers = const []]) {
     // techSpendingCpDerived returns 0 when unpredictable research is on,
     // so researchGrantsCp replaces it seamlessly.
-    return subtotalCp(config, shipCounters) -
-        techSpendingCpDerived(config) -
+    return subtotalCp(config, shipCounters, modifiers) -
+        techSpendingCpDerived(config, modifiers) -
         researchGrantsCp -
-        effectiveShipSpending(config) -
+        effectiveShipSpending(config, modifiers) -
         upgradesCp;
   }
 
@@ -304,8 +378,10 @@ class ProductionState {
     return lpCarryOver + colonyLp(config);
   }
 
-  int remainingLp(GameConfig config, [List<ShipCounter> shipCounters = const []]) {
-    return totalLp(config) - maintenanceTotal(shipCounters, config) - lpPlacedOnLc;
+  int remainingLp(GameConfig config,
+      [List<ShipCounter> shipCounters = const [],
+      List<GameModifier> modifiers = const []]) {
+    return totalLp(config) - maintenanceTotal(shipCounters, config, modifiers) - lpPlacedOnLc;
   }
 
   // ---------------------------------------------------------------------------
@@ -318,11 +394,13 @@ class ProductionState {
   }
 
   /// Cost of pending tech purchases in RP (facilities mode only).
-  int techSpendingRpDerived(GameConfig config) {
+  int techSpendingRpDerived(GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     if (!config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
     final ea = config.empireAdvantage;
     final mult = ea?.techCostMultiplier ?? 1.0;
+    final techMod = _techCostModTotal(modifiers);
     int total = 0;
     for (final entry in pendingTechPurchases.entries) {
       final costEntry = kFacilitiesTechCosts[entry.key];
@@ -332,18 +410,20 @@ class ProductionState {
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
         if (mult != 1.0) cost = (cost * mult).floor();
+        cost = (cost + techMod).clamp(0, 999);
         total += cost;
       }
     }
     return total;
   }
 
-  int remainingRp(GameConfig config) {
+  int remainingRp(GameConfig config,
+      [List<GameModifier> modifiers = const []]) {
     if (config.enableUnpredictableResearch) {
       // Unpredictable research uses CP grants, not RP for tech.
       return totalRp(config);
     }
-    return totalRp(config) - techSpendingRpDerived(config);
+    return totalRp(config) - techSpendingRpDerived(config, modifiers);
   }
 
   // ---------------------------------------------------------------------------
@@ -366,15 +446,16 @@ class ProductionState {
   /// Prepare the state for the next turn.
   ProductionState prepareForNextTurn(
     GameConfig config,
-    List<ShipCounter> shipCounters,
-  ) {
+    List<ShipCounter> shipCounters, [
+    List<GameModifier> modifiers = const [],
+  ]) {
     // 1. Calculate carry-overs (CP capped at 30, RP capped at 30, LP/TP unlimited)
-    final cpRemain = remainingCp(config, shipCounters).clamp(0, 30);
+    final cpRemain = remainingCp(config, shipCounters, modifiers).clamp(0, 30);
     final rpRemain =
-        config.enableFacilities ? remainingRp(config).clamp(0, 30) : 0;
+        config.enableFacilities ? remainingRp(config, modifiers).clamp(0, 30) : 0;
     final lpRemain =
         (config.enableFacilities && config.enableLogistics)
-            ? remainingLp(config, shipCounters)
+            ? remainingLp(config, shipCounters, modifiers)
             : 0;
     final tpRemain =
         (config.enableFacilities && config.enableTemporal)

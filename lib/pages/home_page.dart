@@ -243,13 +243,14 @@ class _HomePageState extends State<HomePage>
         .length;
 
     // Resource calculations
-    final remainingCp = prod.remainingCp(config, counters);
-    final remainingRp = config.enableFacilities ? prod.remainingRp(config) : 0;
+    final mods = _gameState.activeModifiers;
+    final remainingCp = prod.remainingCp(config, counters, mods);
+    final remainingRp = config.enableFacilities ? prod.remainingRp(config, mods) : 0;
     final cpLostToCap = math.max(0, remainingCp - 30);
     final rpLostToCap = config.enableFacilities ? math.max(0, remainingRp - 30) : 0;
     final cpCarryOver = remainingCp.clamp(0, 30);
     final rpCarryOver = config.enableFacilities ? remainingRp.clamp(0, 30) : 0;
-    final maintenancePaid = prod.maintenanceTotal(counters, config);
+    final maintenancePaid = prod.maintenanceTotal(counters, config, mods);
 
     final summary = TurnSummary(
       turnNumber: _gameState.turnNumber,
@@ -264,7 +265,7 @@ class _HomePageState extends State<HomePage>
       maintenancePaid: maintenancePaid,
     );
 
-    final nextProduction = prod.prepareForNextTurn(config, counters);
+    final nextProduction = prod.prepareForNextTurn(config, counters, mods);
     _updateGameState(
       _gameState.copyWith(
         turnNumber: _gameState.turnNumber + 1,
@@ -523,6 +524,7 @@ class _HomePageState extends State<HomePage>
     final prod = _gameState.production;
     final config = _gameState.config;
     final counters = _gameState.shipCounters;
+    final activeMods = _gameState.activeModifiers;
 
     return Scaffold(
       appBar: AppBar(
@@ -553,11 +555,11 @@ class _HomePageState extends State<HomePage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(36),
           child: _ResourceBar(
-            totalCp: prod.totalCp(config),
-            maintenance: prod.maintenanceTotal(counters, config),
-            remainingCp: prod.remainingCp(config, counters),
-            remainingRp: config.enableFacilities ? prod.remainingRp(config) : null,
-            remainingLp: config.enableLogistics ? prod.remainingLp(config, counters) : null,
+            totalCp: prod.totalCp(config, activeMods),
+            maintenance: prod.maintenanceTotal(counters, config, activeMods),
+            remainingCp: prod.remainingCp(config, counters, activeMods),
+            remainingRp: config.enableFacilities ? prod.remainingRp(config, activeMods) : null,
+            remainingLp: config.enableLogistics ? prod.remainingLp(config, counters, activeMods) : null,
           ),
         ),
       ),
@@ -603,6 +605,7 @@ class _HomePageState extends State<HomePage>
           turnNumber: _gameState.turnNumber,
           production: _gameState.production,
           shipCounters: _gameState.shipCounters,
+          activeModifiers: _gameState.activeModifiers,
           onProductionChanged: _onProductionChanged,
           onEndTurn: _onEndTurn,
           onRuleTap: _navigateToRule,

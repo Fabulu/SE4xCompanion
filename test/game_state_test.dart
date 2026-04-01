@@ -315,5 +315,60 @@ void main() {
       expect(restored.enableFacilities, true);
       expect(restored.enableLogistics, false);
     });
+
+    test('GameConfig with selectedEmpireAdvantage round-trips correctly', () {
+      const config = GameConfig(selectedEmpireAdvantage: 34);
+      final json = config.toJson();
+      final restored = GameConfig.fromJson(json);
+
+      expect(restored.selectedEmpireAdvantage, 34);
+    });
+
+    test('GameConfig.empireAdvantage getter returns correct EA', () {
+      const config = GameConfig(selectedEmpireAdvantage: 34);
+      final ea = config.empireAdvantage;
+
+      expect(ea, isNotNull);
+      expect(ea!.cardNumber, 34);
+      expect(ea.name, 'Giant Race');
+      expect(ea.hullSizeModifier, 1);
+    });
+
+    test('GameConfig.empireAdvantage returns null when no EA selected', () {
+      const config = GameConfig();
+      expect(config.empireAdvantage, isNull);
+    });
+
+    test('GameConfig.empireAdvantage returns null for invalid card number', () {
+      const config = GameConfig(selectedEmpireAdvantage: 9999);
+      expect(config.empireAdvantage, isNull);
+    });
+
+    test('GameConfig.shipCostModifiers returns correct map', () {
+      // Giant Race (#34) has +2 cost modifier on many ship types
+      const config = GameConfig(selectedEmpireAdvantage: 34);
+      final mods = config.shipCostModifiers;
+
+      expect(mods[ShipType.dd], 2);
+      expect(mods[ShipType.ca], 2);
+      expect(mods[ShipType.bc], 2);
+      // Giant Race also has colonyShipCostModifier: 2
+      expect(mods[ShipType.colonyShip], 2);
+    });
+
+    test('GameConfig.shipCostModifiers returns empty map when no EA selected', () {
+      const config = GameConfig();
+      expect(config.shipCostModifiers, isEmpty);
+    });
+
+    test('GameConfig.shipCostModifiers for Insectoids has negative modifiers', () {
+      const config = GameConfig(selectedEmpireAdvantage: 43);
+      final mods = config.shipCostModifiers;
+
+      expect(mods[ShipType.dd], -2);
+      expect(mods[ShipType.ca], -2);
+      // Insectoids also has colonyShipCostModifier: -2
+      expect(mods[ShipType.colonyShip], -2);
+    });
   });
 }

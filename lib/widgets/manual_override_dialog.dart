@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/empire_advantages.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
+import '../models/game_modifier.dart';
 import '../models/game_state.dart';
 import '../models/production_state.dart';
 import '../models/technology.dart';
@@ -88,6 +89,9 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
   // Accumulated research
   late Map<String, int> _accumulatedResearch;
 
+  // Active modifiers
+  late List<GameModifier> _activeModifiers;
+
   @override
   void initState() {
     super.initState();
@@ -122,6 +126,9 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
 
     // Accumulated research
     _accumulatedResearch = Map<String, int>.from(prod.accumulatedResearch);
+
+    // Active modifiers
+    _activeModifiers = List<GameModifier>.from(widget.gameState.activeModifiers);
   }
 
   List<TechId> _visibleTechs() {
@@ -170,6 +177,7 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
     return widget.gameState.copyWith(
       turnNumber: _turnNumber,
       production: newProd,
+      activeModifiers: _activeModifiers,
     );
   }
 
@@ -234,6 +242,10 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                     _buildEaEffectsSummary(theme, ea),
                     const SizedBox(height: 12),
                   ],
+
+                  // --- Active Modifiers ---
+                  _buildModifiersSection(theme),
+                  const SizedBox(height: 12),
 
                   // --- Resources ---
                   const SectionHeader(title: 'Resources'),
@@ -432,6 +444,249 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
           ],
         ),
       ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active Modifiers section
+  // ---------------------------------------------------------------------------
+
+  Widget _buildModifiersSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Active Modifiers',
+          trailing: TextButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add'),
+            onPressed: () => _showAddModifierDialog(context),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+
+        if (_activeModifiers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'No active modifiers',
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+
+        for (int i = 0; i < _activeModifiers.length; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _activeModifiers[i].name,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        _activeModifiers[i].effectDescription,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() {
+                    _activeModifiers = List<GameModifier>.from(_activeModifiers)
+                      ..removeAt(i);
+                  }),
+                ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 8),
+
+        // Quick-add presets
+        Text(
+          'Quick Add',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final preset in kModifierPresets)
+              ActionChip(
+                label: Text(preset.label, style: const TextStyle(fontSize: 11)),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                onPressed: () => setState(() {
+                  _activeModifiers = [
+                    ..._activeModifiers,
+                    ...preset.modifiers,
+                  ];
+                }),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showAddModifierDialog(BuildContext parentContext) {
+    String name = '';
+    String type = 'costMod';
+    ShipType? shipType = ShipType.dd;
+    int value = 0;
+    bool isPercent = false;
+
+    final typeLabels = {
+      'costMod': 'Cost',
+      'maintenanceMod': 'Maintenance',
+      'incomeMod': 'Income',
+      'techCostMod': 'Tech Cost',
+    };
+
+    // Ship types with their abbreviations for the dropdown.
+    final shipTypes = ShipType.values.where((t) {
+      final def = kShipDefinitions[t];
+      return def != null;
+    }).toList();
+
+    showDialog(
+      context: parentContext,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setInnerState) {
+            final needsShipType = type == 'costMod' || type == 'maintenanceMod';
+            return AlertDialog(
+              title: const Text('Add Modifier'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'e.g., Alien Tech Card',
+                        isDense: true,
+                      ),
+                      onChanged: (v) => name = v,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: type,
+                      decoration: const InputDecoration(
+                        labelText: 'Type',
+                        isDense: true,
+                      ),
+                      items: typeLabels.entries
+                          .map((e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setInnerState(() => type = v!),
+                    ),
+                    if (needsShipType) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<ShipType?>(
+                        initialValue: shipType,
+                        decoration: const InputDecoration(
+                          labelText: 'Ship Type',
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('All (global)'),
+                          ),
+                          ...shipTypes.map((t) {
+                            final def = kShipDefinitions[t]!;
+                            return DropdownMenuItem(
+                              value: t,
+                              child: Text('${def.abbreviation} - ${def.name}'),
+                            );
+                          }),
+                        ],
+                        onChanged: (v) => setInnerState(() => shipType = v),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text('Value: ', style: TextStyle(fontSize: 14)),
+                        Expanded(
+                          child: NumberInput(
+                            value: value,
+                            min: -99,
+                            max: 999,
+                            onChanged: (v) => setInnerState(() => value = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (type == 'maintenanceMod') ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Text('Percentage', style: TextStyle(fontSize: 14)),
+                          Switch(
+                            value: isPercent,
+                            onChanged: (v) => setInnerState(() => isPercent = v),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (name.isEmpty) name = 'Custom Modifier';
+                    final mod = GameModifier(
+                      name: name,
+                      type: type,
+                      shipType: needsShipType ? shipType : null,
+                      value: value,
+                      isPercent: isPercent,
+                    );
+                    setState(() {
+                      _activeModifiers = [..._activeModifiers, mod];
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
