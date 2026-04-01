@@ -103,7 +103,7 @@ void main() {
       ];
       const ps = ProductionState();
       // 1 + 2 + 3 = 6
-      expect(ps.maintenanceTotal(counters), 6);
+      expect(ps.maintenanceTotal(counters, const GameConfig()), 6);
     });
 
     test('unbuilt ships do not count towards maintenance', () {
@@ -112,7 +112,7 @@ void main() {
         const ShipCounter(type: ShipType.ca, number: 1, isBuilt: false),
       ];
       const ps = ProductionState();
-      expect(ps.maintenanceTotal(counters), 0);
+      expect(ps.maintenanceTotal(counters, const GameConfig()), 0);
     });
 
     test('maintenance-exempt ships do not count', () {
@@ -124,7 +124,7 @@ void main() {
         const ShipCounter(type: ShipType.decoy, number: 1, isBuilt: true),     // exempt
       ];
       const ps = ProductionState();
-      expect(ps.maintenanceTotal(counters), 0);
+      expect(ps.maintenanceTotal(counters, const GameConfig()), 0);
     });
 
     test('maintenance increase and decrease adjustments', () {
@@ -133,12 +133,12 @@ void main() {
       ];
       const ps = ProductionState(maintenanceIncrease: 3, maintenanceDecrease: 1);
       // 1 + 3 - 1 = 3
-      expect(ps.maintenanceTotal(counters), 3);
+      expect(ps.maintenanceTotal(counters, const GameConfig()), 3);
     });
 
     test('zero maintenance with no ships', () {
       const ps = ProductionState();
-      expect(ps.maintenanceTotal([]), 0);
+      expect(ps.maintenanceTotal([], const GameConfig()), 0);
     });
   });
 

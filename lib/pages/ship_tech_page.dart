@@ -130,6 +130,14 @@ class ShipTechPage extends StatelessWidget {
     // Transport always shown (needed for ground combat)
     visible.add(ShipType.transport);
 
+    // Empire Advantage: hide fighter-related types if fighters tech is blocked
+    final blockedTechs = config.empireAdvantage?.blockedTechs ?? const [];
+    if (blockedTechs.contains(TechId.fighters)) {
+      visible.remove(ShipType.fighter);
+      visible.remove(ShipType.cv);
+      visible.remove(ShipType.bv);
+    }
+
     return visible;
   }
 

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../data/empire_advantages.dart';
+import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/game_state.dart';
+import '../models/production_state.dart';
 import '../models/technology.dart';
+import '../models/world.dart';
 import 'number_input.dart';
 import 'section_header.dart';
 
@@ -72,6 +76,18 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
   late int _turnNumber;
   late Map<TechId, int> _techLevels;
 
+  // World overrides
+  late List<WorldState> _worlds;
+
+  // Production spending
+  late int _lpPlacedOnLc;
+  late int _tpSpending;
+  late Map<TechId, int> _pendingTechPurchases;
+  late List<ShipPurchase> _shipPurchases;
+
+  // Accumulated research
+  late Map<String, int> _accumulatedResearch;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +110,18 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
     for (final id in _visibleTechs()) {
       _techLevels[id] = prod.techState.getLevel(id, facilitiesMode: fm);
     }
+
+    // World overrides
+    _worlds = List<WorldState>.from(prod.worlds);
+
+    // Production spending
+    _lpPlacedOnLc = prod.lpPlacedOnLc;
+    _tpSpending = prod.tpSpending;
+    _pendingTechPurchases = Map<TechId, int>.from(prod.pendingTechPurchases);
+    _shipPurchases = List<ShipPurchase>.from(prod.shipPurchases);
+
+    // Accumulated research
+    _accumulatedResearch = Map<String, int>.from(prod.accumulatedResearch);
   }
 
   List<TechId> _visibleTechs() {
@@ -131,6 +159,12 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
       maintenanceDecrease: _maintenanceDecrease,
       researchGrantsCp: _researchGrantsCp,
       techState: newTech,
+      worlds: _worlds,
+      lpPlacedOnLc: _lpPlacedOnLc,
+      tpSpending: _tpSpending,
+      pendingTechPurchases: _pendingTechPurchases,
+      shipPurchases: _shipPurchases,
+      accumulatedResearch: _accumulatedResearch,
     );
 
     return widget.gameState.copyWith(
@@ -143,6 +177,7 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final techs = _visibleTechs();
+    final ea = widget.gameState.config.empireAdvantage;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -194,6 +229,12 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 shrinkWrap: true,
                 children: [
+                  // --- Empire Advantage Effects Display ---
+                  if (ea != null) ...[
+                    _buildEaEffectsSummary(theme, ea),
+                    const SizedBox(height: 12),
+                  ],
+
                   // --- Resources ---
                   const SectionHeader(title: 'Resources'),
                   const SizedBox(height: 4),
@@ -210,6 +251,120 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
 
                   const SizedBox(height: 12),
 
+                  // --- Production Spending ---
+                  const SectionHeader(title: 'Production Spending'),
+                  const SizedBox(height: 4),
+                  _row('LP Placed on LC', _lpPlacedOnLc, 0, 999, (v) => setState(() => _lpPlacedOnLc = v)),
+                  _row('TP Spending', _tpSpending, 0, 999, (v) => setState(() => _tpSpending = v)),
+
+                  // Pending tech purchases
+                  if (_pendingTechPurchases.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text('Pending Tech Purchases',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                            )),
+                        const Spacer(),
+                        TextButton.icon(
+                          icon: const Icon(Icons.clear_all, size: 16),
+                          label: const Text('Clear All'),
+                          onPressed: () => setState(() => _pendingTechPurchases = {}),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                    for (final entry in _pendingTechPurchases.entries)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${_techDisplayNames[entry.key] ?? entry.key.name} -> Lv ${entry.value}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 16),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => setState(() {
+                                _pendingTechPurchases = Map<TechId, int>.from(_pendingTechPurchases)
+                                  ..remove(entry.key);
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+
+                  // Ship purchases
+                  if (_shipPurchases.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text('Ship Purchases',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                            )),
+                        const Spacer(),
+                        TextButton.icon(
+                          icon: const Icon(Icons.clear_all, size: 16),
+                          label: const Text('Clear All'),
+                          onPressed: () => setState(() => _shipPurchases = []),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                    for (int i = 0; i < _shipPurchases.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${_shipPurchases[i].quantity}x ${kShipDefinitions[_shipPurchases[i].type]?.abbreviation ?? _shipPurchases[i].type.name}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 16),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => setState(() {
+                                _shipPurchases = List<ShipPurchase>.from(_shipPurchases)
+                                  ..removeAt(i);
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+
+                  const SizedBox(height: 12),
+
+                  // --- Worlds ---
+                  const SectionHeader(title: 'Worlds'),
+                  const SizedBox(height: 4),
+                  for (int i = 0; i < _worlds.length; i++)
+                    _buildWorldOverride(theme, i),
+
+                  const SizedBox(height: 12),
+
                   // --- Technology Levels ---
                   const SectionHeader(title: 'Technology Levels'),
                   const SizedBox(height: 4),
@@ -223,6 +378,26 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                     ),
 
                   const SizedBox(height: 12),
+
+                  // --- Accumulated Research ---
+                  if (_accumulatedResearch.isNotEmpty) ...[
+                    SectionHeader(
+                      title: 'Accumulated Research',
+                      trailing: TextButton.icon(
+                        icon: const Icon(Icons.clear_all, size: 16),
+                        label: const Text('Clear All'),
+                        onPressed: () => setState(() => _accumulatedResearch = {}),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    for (final key in _accumulatedResearch.keys.toList())
+                      _buildAccumulatedResearchRow(theme, key),
+                    const SizedBox(height: 12),
+                  ],
 
                   // --- Turn ---
                   const SectionHeader(title: 'Turn'),
@@ -259,6 +434,205 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Empire Advantage effects summary
+  // ---------------------------------------------------------------------------
+
+  Widget _buildEaEffectsSummary(ThemeData theme, EmpireAdvantage ea) {
+    final effects = <String>[];
+
+    if (ea.hullSizeModifier != 0) {
+      final sign = ea.hullSizeModifier > 0 ? '+' : '';
+      effects.add('Hull size $sign${ea.hullSizeModifier}');
+    }
+    if (ea.maintenancePercent != 100) {
+      effects.add('Maintenance ${ea.maintenancePercent}%');
+    }
+    if (ea.costModifiers.isNotEmpty) {
+      final modStrs = ea.costModifiers.entries.map((e) {
+        final def = kShipDefinitions[e.key];
+        final abbr = def?.abbreviation ?? e.key.name;
+        final sign = e.value > 0 ? '+' : '';
+        return '$abbr $sign${e.value} CP';
+      });
+      effects.add('Cost: ${modStrs.join(', ')}');
+    }
+    if (ea.colonyShipCostModifier != 0) {
+      final sign = ea.colonyShipCostModifier > 0 ? '+' : '';
+      effects.add('Colony Ship $sign${ea.colonyShipCostModifier} CP');
+    }
+    if (ea.techCostMultiplier != 1.0) {
+      effects.add('Tech cost x${ea.techCostMultiplier}');
+    }
+    if (ea.blockedTechs.isNotEmpty) {
+      final names = ea.blockedTechs.map((t) => _techDisplayNames[t] ?? t.name);
+      effects.add('Blocked: ${names.join(', ')}');
+    }
+    if (ea.startingTechOverrides.isNotEmpty) {
+      final strs = ea.startingTechOverrides.entries.map((e) {
+        return '${_techDisplayNames[e.key] ?? e.key.name} ${e.value}';
+      });
+      effects.add('Starting: ${strs.join(', ')}');
+    }
+
+    if (effects.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: theme.colorScheme.primaryContainer,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EA: ${ea.name} (#${ea.cardNumber})',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            effects.join(' | '),
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // World override rows
+  // ---------------------------------------------------------------------------
+
+  Widget _buildWorldOverride(ThemeData theme, int index) {
+    final world = _worlds[index];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            world.name.isEmpty ? 'World ${index + 1}' : world.name,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          if (world.isHomeworld)
+            _row('Homeworld Value', world.homeworldValue, 5, 30, (v) {
+              // Snap to multiples of 5
+              final snapped = (v / 5).round() * 5;
+              setState(() {
+                _worlds = List<WorldState>.from(_worlds);
+                _worlds[index] = world.copyWith(homeworldValue: snapped.clamp(5, 30));
+              });
+            }),
+          if (!world.isHomeworld)
+            _row('Growth Marker', world.growthMarkerLevel, 0, 3, (v) {
+              setState(() {
+                _worlds = List<WorldState>.from(_worlds);
+                _worlds[index] = world.copyWith(growthMarkerLevel: v);
+              });
+            }),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text('Blocked', style: TextStyle(fontSize: 14)),
+                ),
+                Switch(
+                  value: world.isBlocked,
+                  onChanged: (v) {
+                    setState(() {
+                      _worlds = List<WorldState>.from(_worlds);
+                      _worlds[index] = world.copyWith(isBlocked: v);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          _row('Mineral Income', world.mineralIncome, 0, 99, (v) {
+            setState(() {
+              _worlds = List<WorldState>.from(_worlds);
+              _worlds[index] = world.copyWith(mineralIncome: v);
+            });
+          }),
+          _row('Pipeline Income', world.pipelineIncome, 0, 99, (v) {
+            setState(() {
+              _worlds = List<WorldState>.from(_worlds);
+              _worlds[index] = world.copyWith(pipelineIncome: v);
+            });
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Accumulated research row
+  // ---------------------------------------------------------------------------
+
+  Widget _buildAccumulatedResearchRow(ThemeData theme, String key) {
+    final value = _accumulatedResearch[key] ?? 0;
+    // Parse key format: "techId_targetLevel"
+    final parts = key.split('_');
+    final displayKey = parts.length >= 2
+        ? '${parts.sublist(0, parts.length - 1).join('_')} Lv ${parts.last}'
+        : key;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              displayKey,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          NumberInput(
+            value: value,
+            min: 0,
+            max: 999,
+            onChanged: (v) => setState(() {
+              _accumulatedResearch = Map<String, int>.from(_accumulatedResearch);
+              _accumulatedResearch[key] = v;
+            }),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => setState(() {
+              _accumulatedResearch = Map<String, int>.from(_accumulatedResearch)
+                ..remove(key);
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Generic row helper
+  // ---------------------------------------------------------------------------
 
   /// A dense row: label on left, NumberInput on right.
   Widget _row(String label, int value, int min, int max, ValueChanged<int> onChanged) {

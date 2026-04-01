@@ -331,12 +331,19 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   /// Cost to buy the next level of a tech (from its effective level).
+  /// Applies EA techCostMultiplier (e.g. Gifted Scientists) if present.
   int? _nextCost(TechId id) {
     final table =
         config.useFacilitiesCosts ? kFacilitiesTechCosts : kBaseTechCosts;
     final entry = table[id];
     if (entry == null) return null;
-    return entry.costForNext(_effectiveLevel(id));
+    final baseCost = entry.costForNext(_effectiveLevel(id));
+    if (baseCost == null) return null;
+    final ea = config.empireAdvantage;
+    if (ea != null && ea.techCostMultiplier != 1.0) {
+      return (baseCost * ea.techCostMultiplier).floor();
+    }
+    return baseCost;
   }
 
   int _maxLevel(TechId id) {
@@ -661,15 +668,14 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
 
   Widget _buildCpLedgerBase() {
-    final maint = production.maintenanceTotal(shipCounters);
+    final maint = production.maintenanceTotal(shipCounters, config);
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
     final pipelineCp = production.pipelineCp();
     final totalCp = production.totalCp(config);
     final subtotal = production.subtotalCp(config, shipCounters);
     final techSpending = production.techSpendingCpDerived(config);
-    final shipSpending = production.effectiveShipSpending(
-        isAlternateEmpire: config.enableAlternateEmpire);
+    final shipSpending = production.effectiveShipSpending(config);
     final remaining = production.remainingCp(config, shipCounters);
     final unpredictable = config.enableUnpredictableResearch;
 
@@ -759,7 +765,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildLpLedger() {
     final colonyLp = production.colonyLp(config);
-    final maint = production.maintenanceTotal(shipCounters);
+    final maint = production.maintenanceTotal(shipCounters, config);
     final remainingLp = production.remainingLp(config, shipCounters);
 
     return LedgerGrid(
@@ -801,8 +807,7 @@ class _ProductionPageState extends State<ProductionPage>
     final totalCp = production.totalCp(config);
     final penaltyLp = production.penaltyLp(config, shipCounters);
     final subtotal = production.subtotalCp(config, shipCounters);
-    final shipSpending = production.effectiveShipSpending(
-        isAlternateEmpire: config.enableAlternateEmpire);
+    final shipSpending = production.effectiveShipSpending(config);
     final remaining = production.remainingCp(config, shipCounters);
     final unpredictable = config.enableUnpredictableResearch;
 
@@ -1021,7 +1026,7 @@ class _ProductionPageState extends State<ProductionPage>
       return const SizedBox.shrink();
     }
 
-    final totalMaint = production.maintenanceTotal(shipCounters);
+    final totalMaint = production.maintenanceTotal(shipCounters, config);
 
     // Build rows sorted by definition order.
     final sortedTypes = builtByType.keys.toList()
@@ -1118,12 +1123,14 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
 
   Widget _buildTechSection(BuildContext context) {
-    final techs = visibleTechs(
+    final allTechs = visibleTechs(
       facilitiesMode: config.enableFacilities,
       closeEncountersOwned: config.ownership.closeEncounters,
       replicatorsEnabled: config.enableReplicators,
       advancedConEnabled: config.enableAdvancedConstruction,
     );
+    final blocked = config.empireAdvantage?.blockedTechs ?? const [];
+    final techs = allTechs.where((id) => !blocked.contains(id)).toList();
 
     final unpredictable = config.enableUnpredictableResearch;
     final costLabel = config.enableFacilities ? 'RP' : 'CP';
@@ -1354,8 +1361,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildShipPurchaseSection(BuildContext context) {
     final theme = Theme.of(context);
     final purchases = production.shipPurchases;
-    final totalCost = production.shipPurchaseCost(
-        isAlternateEmpire: config.enableAlternateEmpire);
+    final totalCost = production.shipPurchaseCost(config);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1379,7 +1385,7 @@ class _ProductionPageState extends State<ProductionPage>
             }
           }
           if (newMaint > 0) {
-            final currentMaint = production.maintenanceTotal(shipCounters);
+            final currentMaint = production.maintenanceTotal(shipCounters, config);
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Text(

@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/card_manifest.dart';
 import '../data/rules_data.dart';
 import '../data/rules_phases.dart';
 import '../widgets/rule_text.dart';
 
-enum _ViewMode { phase, full, search }
+enum _ViewMode { phase, full, cards, search }
 
 class RulesReferencePage extends StatefulWidget {
   const RulesReferencePage({super.key});
@@ -27,6 +28,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
   // Expansion state
   final Set<String> _expandedSections = {};
   final Set<String> _expandedPhases = {};
+  final Set<String> _expandedCardGroups = {};
 
   // Keys for scroll-to-section
   final Map<String, GlobalKey> _sectionKeys = {};
@@ -230,6 +232,12 @@ class RulesReferencePageState extends State<RulesReferencePage> {
                   selected: _viewMode == _ViewMode.phase,
                   onTap: () => setState(() => _viewMode = _ViewMode.phase),
                 ),
+                const SizedBox(width: 8),
+                _ModeChip(
+                  label: 'Cards',
+                  selected: _viewMode == _ViewMode.cards,
+                  onTap: () => setState(() => _viewMode = _ViewMode.cards),
+                ),
               ],
             ),
           ),
@@ -240,10 +248,17 @@ class RulesReferencePageState extends State<RulesReferencePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                '${_searchResults.length} result${_searchResults.length == 1 ? '' : 's'}',
-                style: theme.textTheme.bodySmall,
-              ),
+              child: Builder(builder: (context) {
+                final cardCount = kAllCards.where((c) {
+                  return c.name.toLowerCase().contains(_searchQuery) ||
+                      c.description.toLowerCase().contains(_searchQuery);
+                }).length;
+                final total = _searchResults.length + cardCount;
+                return Text(
+                  '$total result${total == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodySmall,
+                );
+              }),
             ),
           ),
 
@@ -268,6 +283,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
       _ViewMode.search => _buildSearchResults(),
       _ViewMode.phase => _buildPhaseView(),
       _ViewMode.full => _buildFullView(),
+      _ViewMode.cards => _buildCardView(),
     };
     return result;
   }
@@ -401,7 +417,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
   // ---------------------------------------------------------------------------
 
   List<Widget> _buildSearchResults() {
-    return _searchResults.map((section) {
+    final ruleWidgets = _searchResults.map((section) {
       final isExpanded = _expandedSections.contains(section.id);
       return _RuleSectionTile(
         key: _keyFor(section.id),
@@ -431,6 +447,145 @@ class RulesReferencePageState extends State<RulesReferencePage> {
             : null,
       );
     }).toList();
+
+    // Search cards as well
+    final cardResults = kAllCards.where((c) {
+      return c.name.toLowerCase().contains(_searchQuery) ||
+          c.description.toLowerCase().contains(_searchQuery);
+    }).toList();
+
+    if (cardResults.isEmpty) return ruleWidgets;
+
+    final theme = Theme.of(context);
+    return [
+      ...ruleWidgets,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Text(
+          'Cards (${cardResults.length})',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+      for (final card in cardResults) _buildCardTile(card),
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Card view
+  // ---------------------------------------------------------------------------
+
+  static const _cardGroups = <String, String>{
+    'empire': 'Empire Advantages',
+    'replicatorEmpire': 'Replicator Empire Advantages',
+    'alienTech': 'Alien Technology',
+    'crew': 'Crew Cards',
+    'resource': 'Resource Cards',
+    'planetAttribute': 'Planet Attributes',
+    'scenarioModifier': 'Scenario Modifiers',
+  };
+
+  List<Widget> _buildCardView() {
+    final widgets = <Widget>[];
+    for (final entry in _cardGroups.entries) {
+      final typeKey = entry.key;
+      final groupName = entry.value;
+      final cards = kAllCards.where((c) => c.type == typeKey).toList();
+      if (cards.isEmpty) continue;
+
+      final isExpanded = _expandedCardGroups.contains(typeKey);
+      widgets.add(
+        _PhaseHeader(
+          title: groupName,
+          count: cards.length,
+          isExpanded: isExpanded,
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                _expandedCardGroups.remove(typeKey);
+              } else {
+                _expandedCardGroups.add(typeKey);
+              }
+            });
+          },
+        ),
+      );
+
+      if (isExpanded) {
+        for (final card in cards) {
+          widgets.add(_buildCardTile(card));
+        }
+      }
+    }
+    return widgets;
+  }
+
+  Widget _buildCardTile(CardEntry card) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Number badge
+          Container(
+            width: 36,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '${card.number}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.primary,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  card.description,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+                if (card.revealCondition != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    card.revealCondition!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

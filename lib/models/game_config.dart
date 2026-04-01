@@ -1,5 +1,8 @@
 // Game configuration: which expansions are owned and which rules are active.
 
+import '../data/empire_advantages.dart';
+import '../data/ship_definitions.dart';
+
 class ExpansionOwnership {
   final bool closeEncounters;
   final bool replicators;
@@ -46,6 +49,7 @@ class GameConfig {
   final bool enableShipExperience;
   final bool enableUnpredictableResearch;
   final bool enableAlternateEmpire;
+  final int? selectedEmpireAdvantage;
 
   const GameConfig({
     this.ownership = const ExpansionOwnership(),
@@ -57,10 +61,35 @@ class GameConfig {
     this.enableShipExperience = false,
     this.enableUnpredictableResearch = false,
     this.enableAlternateEmpire = false,
+    this.selectedEmpireAdvantage,
   });
 
   /// Whether to use the facilities cost table instead of the base cost table.
   bool get useFacilitiesCosts => enableFacilities;
+
+  /// The selected Empire Advantage card, if any.
+  EmpireAdvantage? get empireAdvantage {
+    if (selectedEmpireAdvantage == null) return null;
+    try {
+      return kEmpireAdvantages
+          .firstWhere((ea) => ea.cardNumber == selectedEmpireAdvantage);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Combined ship cost modifiers from the Empire Advantage, including the
+  /// colony ship cost modifier mapped onto [ShipType.colonyShip].
+  Map<ShipType, int> get shipCostModifiers {
+    final ea = empireAdvantage;
+    if (ea == null) return const {};
+    final mods = Map<ShipType, int>.from(ea.costModifiers);
+    if (ea.colonyShipCostModifier != 0) {
+      mods[ShipType.colonyShip] =
+          (mods[ShipType.colonyShip] ?? 0) + ea.colonyShipCostModifier;
+    }
+    return mods;
+  }
 
   GameConfig copyWith({
     ExpansionOwnership? ownership,
@@ -72,6 +101,8 @@ class GameConfig {
     bool? enableShipExperience,
     bool? enableUnpredictableResearch,
     bool? enableAlternateEmpire,
+    int? selectedEmpireAdvantage,
+    bool clearEmpireAdvantage = false,
   }) =>
       GameConfig(
         ownership: ownership ?? this.ownership,
@@ -87,6 +118,9 @@ class GameConfig {
             enableUnpredictableResearch ?? this.enableUnpredictableResearch,
         enableAlternateEmpire:
             enableAlternateEmpire ?? this.enableAlternateEmpire,
+        selectedEmpireAdvantage: clearEmpireAdvantage
+            ? null
+            : (selectedEmpireAdvantage ?? this.selectedEmpireAdvantage),
       );
 
   Map<String, dynamic> toJson() => {
@@ -99,6 +133,7 @@ class GameConfig {
         'enableShipExperience': enableShipExperience,
         'enableUnpredictableResearch': enableUnpredictableResearch,
         'enableAlternateEmpire': enableAlternateEmpire,
+        'selectedEmpireAdvantage': selectedEmpireAdvantage,
       };
 
   factory GameConfig.fromJson(Map<String, dynamic> json) => GameConfig(
@@ -115,5 +150,7 @@ class GameConfig {
             json['enableUnpredictableResearch'] as bool? ?? false,
         enableAlternateEmpire:
             json['enableAlternateEmpire'] as bool? ?? false,
+        selectedEmpireAdvantage:
+            json['selectedEmpireAdvantage'] as int?,
       );
 }

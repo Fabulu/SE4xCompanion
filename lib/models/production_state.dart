@@ -185,16 +185,23 @@ class ProductionState {
   // ---------------------------------------------------------------------------
 
   /// Total maintenance cost from built, non-exempt ship counters.
-  int maintenanceTotal(List<ShipCounter> shipCounters) {
+  int maintenanceTotal(List<ShipCounter> shipCounters, GameConfig config) {
+    final ea = config.empireAdvantage;
+    final hullMod = ea?.hullSizeModifier ?? 0;
     int total = 0;
     for (final c in shipCounters) {
       if (!c.isBuilt) continue;
       final def = kShipDefinitions[c.type];
       if (def == null || def.maintenanceExempt) continue;
-      total += def.hullSize;
+      final effectiveHull = (def.hullSize + hullMod).clamp(0, 99);
+      total += effectiveHull;
     }
-    final result = total + maintenanceIncrease - maintenanceDecrease;
-    return result < 0 ? 0 : result;
+    int result = total + maintenanceIncrease - maintenanceDecrease;
+    if (result < 0) result = 0;
+    if (ea != null && ea.maintenancePercent != 100) {
+      result = (result * ea.maintenancePercent / 100).ceil();
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -215,7 +222,7 @@ class ProductionState {
   int penaltyLp(GameConfig config, List<ShipCounter> shipCounters) {
     if (!config.enableFacilities || !config.enableLogistics) return 0;
     final lpAvailable = totalLp(config);
-    final lpMaint = maintenanceTotal(shipCounters);
+    final lpMaint = maintenanceTotal(shipCounters, config);
     if (lpMaint <= lpAvailable) return 0;
     return (lpMaint - lpAvailable) * 3;
   }
@@ -225,7 +232,7 @@ class ProductionState {
     int sub = totalCp(config) - turnOrderBid;
     if (!config.enableFacilities) {
       // Base mode: maintenance comes from CP
-      sub -= maintenanceTotal(shipCounters);
+      sub -= maintenanceTotal(shipCounters, config);
     }
     sub -= penaltyLp(config, shipCounters);
     return sub;
@@ -235,6 +242,8 @@ class ProductionState {
   int techSpendingCpDerived(GameConfig config) {
     if (config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
+    final ea = config.empireAdvantage;
+    final mult = ea?.techCostMultiplier ?? 1.0;
     int total = 0;
     final fm = config.useFacilitiesCosts;
     for (final entry in pendingTechPurchases.entries) {
@@ -244,22 +253,33 @@ class ProductionState {
       final currentLevel =
           techState.getLevel(entry.key, facilitiesMode: fm);
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
-        total += costEntry.levelCosts[lvl] ?? 0;
+        int cost = costEntry.levelCosts[lvl] ?? 0;
+        if (mult != 1.0) cost = (cost * mult).floor();
+        total += cost;
       }
     }
     return total;
   }
 
   /// Total cost of ship purchases this turn.
-  int shipPurchaseCost({bool isAlternateEmpire = false}) {
-    return shipPurchases.fold(
-        0, (sum, p) => sum + p.effectiveCost(isAlternateEmpire));
+  int shipPurchaseCost(GameConfig config) {
+    final mods = config.shipCostModifiers;
+    final isAlt = config.enableAlternateEmpire;
+    return shipPurchases.fold(0, (sum, p) {
+      final def = kShipDefinitions[p.type];
+      if (def == null) return sum;
+      int unitCost = def.effectiveBuildCost(isAlt);
+      if (mods.containsKey(p.type)) {
+        unitCost = (unitCost + mods[p.type]!).clamp(1, 999);
+      }
+      return sum + unitCost * p.quantity;
+    });
   }
 
   /// Effective ship spending: derived from purchases if any, otherwise manual.
-  int effectiveShipSpending({bool isAlternateEmpire = false}) {
+  int effectiveShipSpending(GameConfig config) {
     if (shipPurchases.isNotEmpty) {
-      return shipPurchaseCost(isAlternateEmpire: isAlternateEmpire);
+      return shipPurchaseCost(config);
     }
     return shipSpendingCp;
   }
@@ -271,8 +291,7 @@ class ProductionState {
     return subtotalCp(config, shipCounters) -
         techSpendingCpDerived(config) -
         researchGrantsCp -
-        effectiveShipSpending(
-            isAlternateEmpire: config.enableAlternateEmpire) -
+        effectiveShipSpending(config) -
         upgradesCp;
   }
 
@@ -286,7 +305,7 @@ class ProductionState {
   }
 
   int remainingLp(GameConfig config, [List<ShipCounter> shipCounters = const []]) {
-    return totalLp(config) - maintenanceTotal(shipCounters) - lpPlacedOnLc;
+    return totalLp(config) - maintenanceTotal(shipCounters, config) - lpPlacedOnLc;
   }
 
   // ---------------------------------------------------------------------------
@@ -302,6 +321,8 @@ class ProductionState {
   int techSpendingRpDerived(GameConfig config) {
     if (!config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
+    final ea = config.empireAdvantage;
+    final mult = ea?.techCostMultiplier ?? 1.0;
     int total = 0;
     for (final entry in pendingTechPurchases.entries) {
       final costEntry = kFacilitiesTechCosts[entry.key];
@@ -309,7 +330,9 @@ class ProductionState {
       final currentLevel =
           techState.getLevel(entry.key, facilitiesMode: true);
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
-        total += costEntry.levelCosts[lvl] ?? 0;
+        int cost = costEntry.levelCosts[lvl] ?? 0;
+        if (mult != 1.0) cost = (cost * mult).floor();
+        total += cost;
       }
     }
     return total;

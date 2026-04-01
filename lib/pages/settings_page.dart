@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/empire_advantages.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
 import '../models/turn_summary.dart';
@@ -184,6 +185,15 @@ class SettingsPage extends StatelessWidget {
           disabledReason: 'Requires Close Encounters expansion',
           onChanged: (v) =>
               onConfigChanged(config.copyWith(enableAlternateEmpire: v)),
+        ),
+        const Divider(height: 24),
+
+        // ── Empire Advantage ──
+        _SectionTitle(title: 'EMPIRE ADVANTAGE'),
+        const SizedBox(height: 8),
+        _EmpireAdvantageTile(
+          config: config,
+          onConfigChanged: onConfigChanged,
         ),
         const Divider(height: 24),
 
@@ -691,6 +701,144 @@ class _TurnSummaryTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EmpireAdvantageTile extends StatelessWidget {
+  final GameConfig config;
+  final ValueChanged<GameConfig> onConfigChanged;
+
+  const _EmpireAdvantageTile({
+    required this.config,
+    required this.onConfigChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ea = config.empireAdvantage;
+    final label = ea != null ? '#${ea.cardNumber} ${ea.name}' : 'None';
+
+    return ListTile(
+      title: const Text('Selected', style: TextStyle(fontSize: 16)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right,
+              size: 20,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+        ],
+      ),
+      onTap: () => _showPicker(context),
+    );
+  }
+
+  void _showPicker(BuildContext context) {
+    final replicatorsOwned = config.ownership.replicators;
+    final filtered = kEmpireAdvantages
+        .where((ea) => !ea.isReplicator || replicatorsOwned)
+        .toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (_, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Text('Empire Advantage',
+                          style: theme.textTheme.titleMedium),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: filtered.length + 1,
+                    itemBuilder: (_, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          leading: const Icon(Icons.clear),
+                          title: const Text('None'),
+                          selected:
+                              config.selectedEmpireAdvantage == null,
+                          onTap: () {
+                            onConfigChanged(config.copyWith(
+                                clearEmpireAdvantage: true));
+                            Navigator.of(ctx).pop();
+                          },
+                        );
+                      }
+                      final ea = filtered[index - 1];
+                      final desc = ea.description.length > 80
+                          ? '${ea.description.substring(0, 80)}...'
+                          : ea.description;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: ea.isReplicator
+                              ? theme.colorScheme.error.withValues(alpha: 0.15)
+                              : theme.colorScheme.primary
+                                  .withValues(alpha: 0.15),
+                          child: Text(
+                            '${ea.cardNumber}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: ea.isReplicator
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        title: Text(ea.name,
+                            style: const TextStyle(fontSize: 15)),
+                        subtitle: Text(desc,
+                            style: const TextStyle(fontSize: 12),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        selected: config.selectedEmpireAdvantage ==
+                            ea.cardNumber,
+                        onTap: () {
+                          onConfigChanged(config.copyWith(
+                              selectedEmpireAdvantage: ea.cardNumber));
+                          Navigator.of(ctx).pop();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

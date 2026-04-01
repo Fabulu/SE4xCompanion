@@ -249,7 +249,7 @@ class _HomePageState extends State<HomePage>
     final rpLostToCap = config.enableFacilities ? math.max(0, remainingRp - 30) : 0;
     final cpCarryOver = remainingCp.clamp(0, 30);
     final rpCarryOver = config.enableFacilities ? remainingRp.clamp(0, 30) : 0;
-    final maintenancePaid = prod.maintenanceTotal(counters);
+    final maintenancePaid = prod.maintenanceTotal(counters, config);
 
     final summary = TurnSummary(
       turnNumber: _gameState.turnNumber,
@@ -353,9 +353,23 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onConfigChanged(GameConfig config) {
-    // When config changes, keep existing production data but let computations
-    // re-derive based on the new config. No data is lost.
-    _updateGameState(_gameState.copyWith(config: config), 'Settings');
+    // Check if EA was just selected and has starting tech overrides
+    final ea = config.empireAdvantage;
+    final oldEa = _gameState.config.empireAdvantage;
+    if (ea != null && ea != oldEa && ea.startingTechOverrides.isNotEmpty) {
+      // Auto-apply starting tech overrides
+      var newTechState = _gameState.production.techState;
+      for (final entry in ea.startingTechOverrides.entries) {
+        final currentLevel = newTechState.getLevel(entry.key, facilitiesMode: config.useFacilitiesCosts);
+        if (entry.value > currentLevel) {
+          newTechState = newTechState.setLevel(entry.key, entry.value);
+        }
+      }
+      final newProduction = _gameState.production.copyWith(techState: newTechState);
+      _updateGameState(_gameState.copyWith(config: config, production: newProduction), 'Empire Advantage: ${ea.name}');
+    } else {
+      _updateGameState(_gameState.copyWith(config: config), 'Settings');
+    }
   }
 
   void _onGameNameChanged(String name) {
@@ -540,7 +554,7 @@ class _HomePageState extends State<HomePage>
           preferredSize: const Size.fromHeight(36),
           child: _ResourceBar(
             totalCp: prod.totalCp(config),
-            maintenance: prod.maintenanceTotal(counters),
+            maintenance: prod.maintenanceTotal(counters, config),
             remainingCp: prod.remainingCp(config, counters),
             remainingRp: config.enableFacilities ? prod.remainingRp(config) : null,
             remainingLp: config.enableLogistics ? prod.remainingLp(config, counters) : null,

@@ -45,7 +45,8 @@
       "WebFetch(domain:api.flutter.dev)",
       "WebFetch(domain:github.com)",
       "Bash(find lib:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(GRADLE_OPTS=\"-Xmx2G\" flutter build apk --release)"
     ]
   }
 }
