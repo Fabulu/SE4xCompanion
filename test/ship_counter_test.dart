@@ -247,19 +247,27 @@ void main() {
   group('upgradeCost', () {
     test('returns correct hull size', () {
       const dd = ShipCounter(type: ShipType.dd, number: 1, isBuilt: true);
-      expect(dd.upgradeCost, 1);
+      expect(dd.upgradeCost(), 1);
 
       const ca = ShipCounter(type: ShipType.ca, number: 1, isBuilt: true);
-      expect(ca.upgradeCost, 2);
+      expect(ca.upgradeCost(), 2);
 
       const bc = ShipCounter(type: ShipType.bc, number: 1, isBuilt: true);
-      expect(bc.upgradeCost, 3);
+      expect(bc.upgradeCost(), 3);
 
       const bb = ShipCounter(type: ShipType.bb, number: 1, isBuilt: true);
-      expect(bb.upgradeCost, 3);
+      expect(bb.upgradeCost(), 3);
 
       const tn = ShipCounter(type: ShipType.tn, number: 1, isBuilt: true);
-      expect(tn.upgradeCost, 4);
+      expect(tn.upgradeCost(), 4);
+    });
+
+    test('returns AGT hull size when facilitiesMode is true', () {
+      const bc = ShipCounter(type: ShipType.bc, number: 1, isBuilt: true);
+      expect(bc.upgradeCost(facilitiesMode: true), 2); // AGT BC hull = 2
+
+      const tn = ShipCounter(type: ShipType.tn, number: 1, isBuilt: true);
+      expect(tn.upgradeCost(facilitiesMode: true), 5); // AGT TN hull = 5
     });
   });
 

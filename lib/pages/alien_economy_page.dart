@@ -772,7 +772,7 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
           const SizedBox(width: 8),
           // CP
           SizedBox(
-            width: 100,
+            width: 116,
             child: NumberInput(
               value: fleet.cp,
               min: 0,

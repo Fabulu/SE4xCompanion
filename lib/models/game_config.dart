@@ -2,6 +2,7 @@
 
 import '../data/empire_advantages.dart';
 import '../data/ship_definitions.dart';
+import '../data/tech_costs.dart';
 
 class ExpansionOwnership {
   final bool closeEncounters;
@@ -51,6 +52,16 @@ class GameConfig {
   final bool enableAlternateEmpire;
   final int? selectedEmpireAdvantage;
 
+  // Scenario overrides
+  final String? scenarioId;
+  final String? replicatorDifficulty;
+  final double shipCostMultiplier;
+  final double techCostMultiplier;
+  final double colonyIncomeMultiplier;
+  final int colonyGrowthBonus;
+  final List<TechId> scenarioBlockedTechs;
+  final List<ShipType> scenarioBlockedShips;
+
   const GameConfig({
     this.ownership = const ExpansionOwnership(),
     this.enableFacilities = false,
@@ -62,6 +73,14 @@ class GameConfig {
     this.enableUnpredictableResearch = false,
     this.enableAlternateEmpire = false,
     this.selectedEmpireAdvantage,
+    this.scenarioId,
+    this.replicatorDifficulty,
+    this.shipCostMultiplier = 1.0,
+    this.techCostMultiplier = 1.0,
+    this.colonyIncomeMultiplier = 1.0,
+    this.colonyGrowthBonus = 0,
+    this.scenarioBlockedTechs = const [],
+    this.scenarioBlockedShips = const [],
   });
 
   /// Whether to use the facilities cost table instead of the base cost table.
@@ -103,6 +122,15 @@ class GameConfig {
     bool? enableAlternateEmpire,
     int? selectedEmpireAdvantage,
     bool clearEmpireAdvantage = false,
+    String? scenarioId,
+    bool clearScenario = false,
+    String? replicatorDifficulty,
+    double? shipCostMultiplier,
+    double? techCostMultiplier,
+    double? colonyIncomeMultiplier,
+    int? colonyGrowthBonus,
+    List<TechId>? scenarioBlockedTechs,
+    List<ShipType>? scenarioBlockedShips,
   }) =>
       GameConfig(
         ownership: ownership ?? this.ownership,
@@ -121,6 +149,23 @@ class GameConfig {
         selectedEmpireAdvantage: clearEmpireAdvantage
             ? null
             : (selectedEmpireAdvantage ?? this.selectedEmpireAdvantage),
+        scenarioId: clearScenario
+            ? null
+            : (scenarioId ?? this.scenarioId),
+        replicatorDifficulty:
+            clearScenario ? null : (replicatorDifficulty ?? this.replicatorDifficulty),
+        shipCostMultiplier:
+            shipCostMultiplier ?? this.shipCostMultiplier,
+        techCostMultiplier:
+            techCostMultiplier ?? this.techCostMultiplier,
+        colonyIncomeMultiplier:
+            colonyIncomeMultiplier ?? this.colonyIncomeMultiplier,
+        colonyGrowthBonus:
+            colonyGrowthBonus ?? this.colonyGrowthBonus,
+        scenarioBlockedTechs:
+            scenarioBlockedTechs ?? this.scenarioBlockedTechs,
+        scenarioBlockedShips:
+            scenarioBlockedShips ?? this.scenarioBlockedShips,
       );
 
   Map<String, dynamic> toJson() => {
@@ -134,6 +179,16 @@ class GameConfig {
         'enableUnpredictableResearch': enableUnpredictableResearch,
         'enableAlternateEmpire': enableAlternateEmpire,
         'selectedEmpireAdvantage': selectedEmpireAdvantage,
+        'scenarioId': scenarioId,
+        'replicatorDifficulty': replicatorDifficulty,
+        'shipCostMultiplier': shipCostMultiplier,
+        'techCostMultiplier': techCostMultiplier,
+        'colonyIncomeMultiplier': colonyIncomeMultiplier,
+        'colonyGrowthBonus': colonyGrowthBonus,
+        'scenarioBlockedTechs':
+            scenarioBlockedTechs.map((t) => t.name).toList(),
+        'scenarioBlockedShips':
+            scenarioBlockedShips.map((s) => s.name).toList(),
       };
 
   factory GameConfig.fromJson(Map<String, dynamic> json) => GameConfig(
@@ -152,5 +207,34 @@ class GameConfig {
             json['enableAlternateEmpire'] as bool? ?? false,
         selectedEmpireAdvantage:
             json['selectedEmpireAdvantage'] as int?,
+        scenarioId: json['scenarioId'] as String?,
+        replicatorDifficulty: json['replicatorDifficulty'] as String?,
+        shipCostMultiplier:
+            (json['shipCostMultiplier'] as num?)?.toDouble() ?? 1.0,
+        techCostMultiplier:
+            (json['techCostMultiplier'] as num?)?.toDouble() ?? 1.0,
+        colonyIncomeMultiplier:
+            (json['colonyIncomeMultiplier'] as num?)?.toDouble() ?? 1.0,
+        colonyGrowthBonus: json['colonyGrowthBonus'] as int? ?? 0,
+        scenarioBlockedTechs: (json['scenarioBlockedTechs'] as List?)
+                ?.map((name) {
+                  for (final id in TechId.values) {
+                    if (id.name == name) return id;
+                  }
+                  return null;
+                })
+                .whereType<TechId>()
+                .toList() ??
+            const [],
+        scenarioBlockedShips: (json['scenarioBlockedShips'] as List?)
+                ?.map((name) {
+                  for (final t in ShipType.values) {
+                    if (t.name == name) return t;
+                  }
+                  return null;
+                })
+                .whereType<ShipType>()
+                .toList() ??
+            const [],
       );
 }

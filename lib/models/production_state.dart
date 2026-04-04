@@ -21,11 +21,11 @@ class ShipPurchase {
     return def.buildCost * quantity;
   }
 
-  /// Cost accounting for alternate empire pricing.
-  int effectiveCost(bool isAlternateEmpire) {
+  /// Cost accounting for alternate empire and AGT pricing.
+  int effectiveCost(bool isAlternateEmpire, {bool facilitiesMode = false}) {
     final def = kShipDefinitions[type];
     if (def == null) return 0;
-    return def.effectiveBuildCost(isAlternateEmpire) * quantity;
+    return def.effectiveBuildCost(isAlternateEmpire, facilitiesMode: facilitiesMode) * quantity;
   }
 
   ShipPurchase copyWith({ShipType? type, int? quantity}) => ShipPurchase(
@@ -84,6 +84,9 @@ class ProductionState {
   final Map<String, int> accumulatedResearch; // key: "techId_targetLevel" -> accumulated roll total
   final int researchGrantsCp; // CP spent on grants THIS turn
 
+  // --- Quick Learners EA #40 ---
+  final List<TechId> techPurchaseOrder; // order techs were bought this turn
+
   const ProductionState({
     this.cpCarryOver = 0,
     this.turnOrderBid = 0,
@@ -103,6 +106,7 @@ class ProductionState {
     this.pendingTechPurchases = const {},
     this.accumulatedResearch = const {},
     this.researchGrantsCp = 0,
+    this.techPurchaseOrder = const [],
   });
 
   // ---------------------------------------------------------------------------
@@ -128,15 +132,34 @@ class ProductionState {
   // ---------------------------------------------------------------------------
 
   /// Total CP from colonies/homeworld (non-blocked).
+  /// Includes Industrious Race (#35) bonus: +5 home colony, +1 other colonies.
   int colonyCp(GameConfig config) {
+    final active = worlds.where((w) => !w.isBlocked);
+    int total;
     if (config.enableFacilities) {
-      return worlds
-          .where((w) => !w.isBlocked)
-          .fold(0, (sum, w) => sum + w.cpInFacilitiesMode());
+      total = active.fold(0, (sum, w) => sum + w.cpInFacilitiesMode());
+    } else {
+      total = active.fold(0, (sum, w) => sum + w.cpValue);
     }
-    return worlds
-        .where((w) => !w.isBlocked)
-        .fold(0, (sum, w) => sum + w.cpValue);
+    // Industrious Race (#35): +5 homeworld, +1 per other colony
+    if (config.empireAdvantage?.cardNumber == 35) {
+      for (final w in active) {
+        total += w.isHomeworld ? 5 : 1;
+      }
+    }
+    // Scenario colony income multiplier (e.g., 4P 3v1 solo: 2x non-HW)
+    if (config.colonyIncomeMultiplier != 1.0) {
+      int hwCp = 0;
+      for (final w in active) {
+        if (w.isHomeworld) {
+          hwCp += config.enableFacilities ? w.cpInFacilitiesMode() : w.cpValue;
+          if (config.empireAdvantage?.cardNumber == 35) hwCp += 5;
+        }
+      }
+      final colonyCpOnly = total - hwCp;
+      total = hwCp + (colonyCpOnly * config.colonyIncomeMultiplier).ceil();
+    }
+    return total;
   }
 
   /// CP from IC facilities (facilities mode only).
@@ -178,8 +201,13 @@ class ProductionState {
       worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.mineralIncome);
 
   /// Total pipeline income across worlds (non-blocked).
-  int pipelineCp() =>
-      worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.pipelineIncome);
+  /// Traders (#49): connected colonies produce +2 CP instead of +1 per pipeline.
+  int pipelineCp([GameConfig? config]) {
+    final mult = (config?.empireAdvantage?.cardNumber == 49) ? 2 : 1;
+    return worlds
+        .where((w) => !w.isBlocked)
+        .fold(0, (sum, w) => sum + w.pipelineIncome * mult);
+  }
 
   // ---------------------------------------------------------------------------
   // Maintenance
@@ -213,7 +241,7 @@ class ProductionState {
       if (!c.isBuilt) continue;
       final def = kShipDefinitions[c.type];
       if (def == null || def.maintenanceExempt) continue;
-      int shipMaint = (def.hullSize + hullMod).clamp(0, 99);
+      int shipMaint = (def.effectiveHullSize(config.useFacilitiesCosts) + hullMod).clamp(0, 99);
       // Apply per-type percent modifier (e.g., "SC/DD half maint").
       if (typePercentMods.containsKey(c.type)) {
         shipMaint = (shipMaint * typePercentMods[c.type]! / 100).ceil();
@@ -252,7 +280,7 @@ class ProductionState {
 
   /// Gross CP income before subtractions.
   int totalCp(GameConfig config, [List<GameModifier> modifiers = const []]) {
-    int total = cpCarryOver + colonyCp(config) + mineralCp() + pipelineCp();
+    int total = cpCarryOver + colonyCp(config) + mineralCp() + pipelineCp(config);
     if (config.enableFacilities) {
       total += facilityCp(config);
     }
@@ -298,8 +326,11 @@ class ProductionState {
     if (config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
     final ea = config.empireAdvantage;
-    final mult = ea?.techCostMultiplier ?? 1.0;
+    final eaMult = ea?.techCostMultiplier ?? 1.0;
+    final scenMult = config.techCostMultiplier;
     final techMod = _techCostModTotal(modifiers);
+    final isQuickLearners = ea?.cardNumber == 40;
+    final firstTech = techPurchaseOrder.isNotEmpty ? techPurchaseOrder.first : null;
     int total = 0;
     final fm = config.useFacilitiesCosts;
     for (final entry in pendingTechPurchases.entries) {
@@ -308,21 +339,37 @@ class ProductionState {
       if (costEntry == null) continue;
       final currentLevel =
           techState.getLevel(entry.key, facilitiesMode: fm);
+      int techTotal = 0;
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
-        if (mult != 1.0) cost = (cost * mult).floor();
+        if (eaMult != 1.0) cost = (cost * eaMult).floor();
+        if (scenMult != 1.0) cost = (cost * scenMult).ceil();
         cost = (cost + techMod).clamp(0, 999);
-        total += cost;
+        techTotal += cost;
       }
+      // Quick Learners (#40): first tech this turn costs 50% less
+      if (isQuickLearners && entry.key == firstTech) {
+        techTotal = (techTotal * 0.5).floor();
+      }
+      total += techTotal;
     }
     return total;
   }
 
   /// Total cost of ship purchases this turn.
   int shipPurchaseCost(GameConfig config,
-      [List<GameModifier> modifiers = const []]) {
+      [List<GameModifier> modifiers = const [],
+      Map<ShipType, int> shipSpecialAbilities = const {}]) {
     final mods = config.shipCostModifiers;
     final isAlt = config.enableAlternateEmpire;
+    final ea = config.empireAdvantage;
+    final cpPerUnit = ea?.cpPerUnitBuilt ?? 0;
+
+    // Ship types excluded from cpPerUnitBuilt rebate.
+    const noRebate = {
+      ShipType.colonyShip, ShipType.shipyard, ShipType.base,
+      ShipType.starbase, ShipType.decoy,
+    };
 
     // Collect costMod modifiers by ship type.
     final costMods = <ShipType, int>{};
@@ -335,37 +382,42 @@ class ProductionState {
     return shipPurchases.fold(0, (sum, p) {
       final def = kShipDefinitions[p.type];
       if (def == null) return sum;
-      int unitCost = def.effectiveBuildCost(isAlt);
-      // Apply EA cost modifiers.
-      if (mods.containsKey(p.type)) {
-        unitCost = (unitCost + mods[p.type]!).clamp(1, 999);
+      int unitCost = def.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts);
+      // Accumulate all cost modifiers before clamping.
+      if (mods.containsKey(p.type)) unitCost += mods[p.type]!;
+      if (costMods.containsKey(p.type)) unitCost += costMods[p.type]!;
+      if (cpPerUnit > 0 && !noRebate.contains(p.type)) unitCost -= cpPerUnit;
+      if (shipSpecialAbilities[p.type] == 12) unitCost -= 2;
+      // Scenario ship cost multiplier (e.g., 2v1 allied: 1.5x)
+      if (config.shipCostMultiplier != 1.0) {
+        unitCost = (unitCost * config.shipCostMultiplier).ceil();
       }
-      // Apply active game modifiers (Alien Tech, etc.).
-      if (costMods.containsKey(p.type)) {
-        unitCost = (unitCost + costMods[p.type]!).clamp(1, 999);
-      }
+      // Clamp once: minimum 1 CP per unit.
+      unitCost = unitCost.clamp(1, 999);
       return sum + unitCost * p.quantity;
     });
   }
 
   /// Effective ship spending: derived from purchases if any, otherwise manual.
   int effectiveShipSpending(GameConfig config,
-      [List<GameModifier> modifiers = const []]) {
+      [List<GameModifier> modifiers = const [],
+      Map<ShipType, int> shipSpecialAbilities = const {}]) {
     if (shipPurchases.isNotEmpty) {
-      return shipPurchaseCost(config, modifiers);
+      return shipPurchaseCost(config, modifiers, shipSpecialAbilities);
     }
     return shipSpendingCp;
   }
 
   /// Remaining CP after all spending.
   int remainingCp(GameConfig config, List<ShipCounter> shipCounters,
-      [List<GameModifier> modifiers = const []]) {
+      [List<GameModifier> modifiers = const [],
+      Map<ShipType, int> shipSpecialAbilities = const {}]) {
     // techSpendingCpDerived returns 0 when unpredictable research is on,
     // so researchGrantsCp replaces it seamlessly.
     return subtotalCp(config, shipCounters, modifiers) -
         techSpendingCpDerived(config, modifiers) -
         researchGrantsCp -
-        effectiveShipSpending(config, modifiers) -
+        effectiveShipSpending(config, modifiers, shipSpecialAbilities) -
         upgradesCp;
   }
 
@@ -399,20 +451,29 @@ class ProductionState {
     if (!config.enableFacilities) return 0;
     if (config.enableUnpredictableResearch) return 0;
     final ea = config.empireAdvantage;
-    final mult = ea?.techCostMultiplier ?? 1.0;
+    final eaMult = ea?.techCostMultiplier ?? 1.0;
+    final scenMult = config.techCostMultiplier;
     final techMod = _techCostModTotal(modifiers);
+    final isQuickLearners = ea?.cardNumber == 40;
+    final firstTech = techPurchaseOrder.isNotEmpty ? techPurchaseOrder.first : null;
     int total = 0;
     for (final entry in pendingTechPurchases.entries) {
       final costEntry = kFacilitiesTechCosts[entry.key];
       if (costEntry == null) continue;
       final currentLevel =
           techState.getLevel(entry.key, facilitiesMode: true);
+      int techTotal = 0;
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
-        if (mult != 1.0) cost = (cost * mult).floor();
+        if (eaMult != 1.0) cost = (cost * eaMult).floor();
+        if (scenMult != 1.0) cost = (cost * scenMult).ceil();
         cost = (cost + techMod).clamp(0, 999);
-        total += cost;
+        techTotal += cost;
       }
+      if (isQuickLearners && entry.key == firstTech) {
+        techTotal = (techTotal * 0.5).floor();
+      }
+      total += techTotal;
     }
     return total;
   }
@@ -448,9 +509,10 @@ class ProductionState {
     GameConfig config,
     List<ShipCounter> shipCounters, [
     List<GameModifier> modifiers = const [],
+    Map<ShipType, int> shipSpecialAbilities = const {},
   ]) {
     // 1. Calculate carry-overs (CP capped at 30, RP capped at 30, LP/TP unlimited)
-    final cpRemain = remainingCp(config, shipCounters, modifiers).clamp(0, 30);
+    final cpRemain = remainingCp(config, shipCounters, modifiers, shipSpecialAbilities).clamp(0, 30);
     final rpRemain =
         config.enableFacilities ? remainingRp(config, modifiers).clamp(0, 30) : 0;
     final lpRemain =
@@ -482,8 +544,9 @@ class ProductionState {
       int newGrowth = w.growthMarkerLevel;
       int newHwValue = w.homeworldValue;
       // Rule 7.1.2: blocked colonies DO grow normally
+      // Handicap scenario: colonies grow extra steps
       if (!w.isHomeworld && newGrowth < 3) {
-        newGrowth++;
+        newGrowth = (newGrowth + 1 + config.colonyGrowthBonus).clamp(0, 3);
       }
       // Rule 7.7.2: damaged homeworlds recover one step
       if (w.isHomeworld && w.homeworldValue < 30) {
@@ -516,6 +579,7 @@ class ProductionState {
       pendingTechPurchases: const {},
       accumulatedResearch: newAccumulated,
       researchGrantsCp: 0,
+      techPurchaseOrder: const [],
     );
   }
 
@@ -542,6 +606,7 @@ class ProductionState {
     Map<TechId, int>? pendingTechPurchases,
     Map<String, int>? accumulatedResearch,
     int? researchGrantsCp,
+    List<TechId>? techPurchaseOrder,
   }) =>
       ProductionState(
         cpCarryOver: cpCarryOver ?? this.cpCarryOver,
@@ -566,6 +631,7 @@ class ProductionState {
         accumulatedResearch:
             accumulatedResearch ?? this.accumulatedResearch,
         researchGrantsCp: researchGrantsCp ?? this.researchGrantsCp,
+        techPurchaseOrder: techPurchaseOrder ?? this.techPurchaseOrder,
       );
 
   Map<String, dynamic> toJson() => {
@@ -588,6 +654,7 @@ class ProductionState {
             pendingTechPurchases.map((k, v) => MapEntry(k.name, v)),
         'accumulatedResearch': accumulatedResearch,
         'researchGrantsCp': researchGrantsCp,
+        'techPurchaseOrder': techPurchaseOrder.map((id) => id.name).toList(),
       };
 
   factory ProductionState.fromJson(Map<String, dynamic> json) {
@@ -635,6 +702,11 @@ class ProductionState {
       pendingTechPurchases: pending,
       accumulatedResearch: accumulated,
       researchGrantsCp: json['researchGrantsCp'] as int? ?? 0,
+      techPurchaseOrder: (json['techPurchaseOrder'] as List?)
+              ?.map((name) => _techIdFromName(name as String))
+              .whereType<TechId>()
+              .toList() ??
+          const [],
     );
   }
 

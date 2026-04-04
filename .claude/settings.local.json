@@ -46,7 +46,9 @@
       "WebFetch(domain:github.com)",
       "Bash(find lib:*)",
       "Bash(ls:*)",
-      "Bash(GRADLE_OPTS=\"-Xmx2G\" flutter build apk --release)"
+      "Bash(GRADLE_OPTS=\"-Xmx2G\" flutter build apk --release)",
+      "Read(//c/programmieren/se4x/**)",
+      "Bash(dart test:*)"
     ]
   }
 }

@@ -269,7 +269,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
             child: ListView(
               controller: _scrollController,
               cacheExtent: double.infinity,
-              padding: const EdgeInsets.only(bottom: 80),
+              padding: const EdgeInsets.only(bottom: 16),
               children: _buildContent(),
             ),
           ),

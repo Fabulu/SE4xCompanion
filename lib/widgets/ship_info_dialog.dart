@@ -6,6 +6,7 @@ import '../data/ship_definitions.dart';
 Future<void> showShipInfoDialog(
   BuildContext context,
   ShipType type, {
+  bool facilitiesMode = false,
   void Function(String sectionId)? onRuleTap,
 }) {
   final def = kShipDefinitions[type]!;
@@ -35,30 +36,43 @@ Future<void> showShipInfoDialog(
               ],
 
               // Stats grid
-              _buildStatsGrid(theme, def),
+              _buildStatsGrid(theme, def, facilitiesMode),
 
-              if (def.prerequisite != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.lock_outline,
-                      size: 16,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Requires: ${def.prerequisite}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              () {
+                // Show AGT-correct prerequisite when in facilities mode
+                String? prereq;
+                if (facilitiesMode && def.agtShipSizeReq != null) {
+                  prereq = 'Ship Size ${def.agtShipSizeReq}';
+                } else {
+                  prereq = def.prerequisite;
+                }
+                if (facilitiesMode && def.type == ShipType.starbase) {
+                  prereq = '${prereq ?? "Advanced Con 2"} (upgrade from Base)';
+                }
+                if (prereq == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Requires: $prereq',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                );
+              }(),
 
               if (def.ruleSection != null) ...[
                 const SizedBox(height: 8),
@@ -95,7 +109,7 @@ Future<void> showShipInfoDialog(
   );
 }
 
-Widget _buildStatsGrid(ThemeData theme, ShipDefinition def) {
+Widget _buildStatsGrid(ThemeData theme, ShipDefinition def, bool facilitiesMode) {
   final labelStyle = TextStyle(
     fontSize: 13,
     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -107,18 +121,22 @@ Widget _buildStatsGrid(ThemeData theme, ShipDefinition def) {
     color: theme.colorScheme.onSurface,
   );
 
+  final hull = def.effectiveHullSize(facilitiesMode);
+  final cost = def.effectiveBuildCost(false, facilitiesMode: facilitiesMode);
+  final weapon = def.effectiveWeaponClass(facilitiesMode);
+
   final rows = <TableRow>[
     TableRow(children: [
       Text('Hull Size', style: labelStyle),
-      Text('${def.hullSize}', style: valueStyle),
+      Text('$hull', style: valueStyle),
       Text('Build Cost', style: labelStyle),
-      Text('${def.buildCost}', style: valueStyle),
+      Text('$cost', style: valueStyle),
     ]),
     TableRow(children: [
       Text('Weapon Class', style: labelStyle),
-      Text(def.weaponClass.isEmpty ? '-' : def.weaponClass, style: valueStyle),
+      Text(weapon.isEmpty ? '-' : weapon, style: valueStyle),
       Text('Maintenance', style: labelStyle),
-      Text(def.maintenanceExempt ? 'Free' : '${def.buildCost ~/ 2}', style: valueStyle),
+      Text(def.maintenanceExempt ? 'Free' : '$hull', style: valueStyle),
     ]),
   ];
 

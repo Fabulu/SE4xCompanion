@@ -18,6 +18,7 @@ class Se4XApp extends StatelessWidget {
           surfaceContainerHighest: Color(0xFF2A2A2A),
           primary: Color(0xFF8AB4F8),
           secondary: Color(0xFF78909C),
+          tertiary: Color(0xFFFFCA28), // warning/caution amber
           error: Color(0xFFCF6679),
           onSurface: Color(0xFFDADADA),
           onPrimary: Color(0xFF1E1E1E),

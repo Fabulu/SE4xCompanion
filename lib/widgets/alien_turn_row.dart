@@ -119,7 +119,7 @@ class AlienTurnRow extends StatelessWidget {
           _colSep(theme),
           // Extra econ + rolled econ count
           SizedBox(
-            width: 36,
+            width: 64,
             child: isPast
                 ? Text(
                     '${econCount + extraEcon}E',
@@ -259,7 +259,7 @@ class AlienTurnHeader extends StatelessWidget {
           const SizedBox(width: 9),
           SizedBox(width: 56, child: Text('Rolls', style: style, textAlign: TextAlign.center)),
           const SizedBox(width: 9),
-          SizedBox(width: 36, child: Text('Ext', style: style, textAlign: TextAlign.center)),
+          SizedBox(width: 64, child: Text('Ext', style: style, textAlign: TextAlign.center)),
           const SizedBox(width: 9),
           Expanded(flex: 2, child: Text('Fleet', style: style)),
           const SizedBox(width: 9),
@@ -308,7 +308,7 @@ class _InlineNumberEdit extends StatelessWidget {
             iconSize: 16,
             icon: const Icon(Icons.remove),
             color: theme.colorScheme.onSurface,
-            onPressed: () => onChanged!(value - 1),
+            onPressed: value > 0 ? () => onChanged!(value - 1) : null,
             splashRadius: 12,
           ),
         ),
@@ -329,7 +329,7 @@ class _InlineNumberEdit extends StatelessWidget {
             iconSize: 16,
             icon: const Icon(Icons.add),
             color: theme.colorScheme.onSurface,
-            onPressed: () => onChanged!(value + 1),
+            onPressed: value < 99 ? () => onChanged!(value + 1) : null,
             splashRadius: 12,
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:se4x/data/alien_tables.dart';
 import 'package:se4x/models/alien_economy.dart';
 import 'package:se4x/models/game_config.dart';
 import 'package:se4x/models/game_state.dart';
+import 'package:se4x/models/map_state.dart';
 import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
@@ -44,6 +45,21 @@ void main() {
         alienPlayers: [
           const AlienPlayer(name: 'Red', color: 'red', currentTurn: 3),
         ],
+        mapState: GameMapState.initial(
+          layoutPreset: MapLayoutPreset.special5p,
+        ).copyWith(
+          selectedHex: const HexCoord(0, 0),
+          fleets: const [
+            FleetStackState(
+              id: 'fleet-1',
+              coord: HexCoord(0, 0),
+              owner: 'Blue',
+              label: 'Fleet',
+              shipCounterIds: ['dd:1'],
+              composition: {'SC': 3},
+            ),
+          ],
+        ),
       );
 
       final json = gs.toJson();
@@ -61,6 +77,24 @@ void main() {
       expect(restored.shipCounters[0].attack, 1);
       expect(restored.alienPlayers.length, 1);
       expect(restored.alienPlayers[0].name, 'Red');
+      expect(restored.mapState.layoutPreset, MapLayoutPreset.special5p);
+      expect(restored.mapState.selectedHex?.id, '0,0');
+      expect(restored.mapState.fleets, hasLength(1));
+    });
+
+    test('legacy GameState without mapState gets default board', () {
+      final restored = GameState.fromJson({
+        'turnNumber': 2,
+        'production': {
+          'worlds': [
+            {'name': 'HW', 'isHomeworld': true, 'homeworldValue': 30}
+          ],
+        },
+      });
+
+      expect(restored.turnNumber, 2);
+      expect(restored.mapState.hexes, isNotEmpty);
+      expect(restored.mapState.layoutPreset, MapLayoutPreset.standard4p);
     });
   });
 

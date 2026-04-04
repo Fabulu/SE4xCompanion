@@ -2,22 +2,40 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/alien_economy.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
+import '../models/map_state.dart';
 import '../models/production_state.dart';
+import '../models/replicator_state.dart';
 import '../models/ship_counter.dart';
+import '../models/technology.dart';
 import '../models/turn_summary.dart';
 import '../models/world.dart';
 import '../services/persistence_service.dart';
+import '../widgets/new_game_wizard.dart';
+import '../widgets/space_hockey_game.dart';
 import '../widgets/starting_fleet_dialog.dart';
+import '../widgets/vp_tracker.dart';
 import 'alien_economy_page.dart';
+import 'map_page.dart';
 import 'production_page.dart';
+import 'replicator_page.dart';
 import 'rules_reference_page.dart';
 import 'settings_page.dart';
 import 'ship_tech_page.dart';
+
+enum _TabId { production, map, shipTech, aliens, replicator, rules, settings }
+
+class _TabDef {
+  final _TabId id;
+  final IconData icon;
+  final String label;
+  const _TabDef({required this.id, required this.icon, required this.label});
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -36,6 +54,35 @@ class _HomePageState extends State<HomePage>
   String _activeGameId = '';
   bool _isLoading = true;
   int _currentTabIndex = 0;
+
+  List<_TabDef> get _visibleTabs {
+    final tabs = <_TabDef>[
+      const _TabDef(id: _TabId.production, icon: Icons.grid_on, label: 'Production'),
+      const _TabDef(id: _TabId.map, icon: Icons.map_outlined, label: 'Map'),
+      const _TabDef(id: _TabId.shipTech, icon: Icons.shield, label: 'Ships'),
+    ];
+    if (_gameState.alienPlayers.isNotEmpty) {
+      tabs.add(const _TabDef(id: _TabId.aliens, icon: Icons.smart_toy, label: 'Aliens'));
+    }
+    if (_gameState.config.enableReplicators) {
+      tabs.add(const _TabDef(id: _TabId.replicator, icon: Icons.bug_report, label: 'Replicator'));
+    }
+    tabs.add(const _TabDef(id: _TabId.rules, icon: Icons.menu_book, label: 'Rules'));
+    tabs.add(const _TabDef(id: _TabId.settings, icon: Icons.settings, label: 'Settings'));
+    return tabs;
+  }
+
+  _TabId get _currentTabId {
+    final tabs = _visibleTabs;
+    final idx = _currentTabIndex.clamp(0, tabs.length - 1);
+    return tabs[idx].id;
+  }
+
+  void _selectTab(_TabId id) {
+    final tabs = _visibleTabs;
+    final idx = tabs.indexWhere((t) => t.id == id);
+    if (idx >= 0) setState(() => _currentTabIndex = idx);
+  }
 
   final _rulesKey = GlobalKey<RulesReferencePageState>();
 
@@ -86,7 +133,7 @@ class _HomePageState extends State<HomePage>
       );
       setState(() {
         _appState = appState;
-        _gameState = activeSave.state;
+        _gameState = _syncedMapState(activeSave.state);
         _gameName = activeSave.name;
         _activeGameId = activeSave.id;
         _isLoading = false;
@@ -107,6 +154,7 @@ class _HomePageState extends State<HomePage>
       production: const ProductionState(
         worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
       ),
+      mapState: GameMapState.initial(),
       shipCounters: createAllCounters(),
       alienPlayers: const [],
     );
@@ -131,6 +179,85 @@ class _HomePageState extends State<HomePage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showStartingFleetDialog();
     });
+  }
+
+  void _createNewGameFromWizard(NewGameResult result) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final scenario = scenarioById(result.config.scenarioId);
+    final config = _normalizeConfigForScenario(result.config, scenario);
+    final hwValue = config.enableFacilities ? 20 : 30;
+
+    // Build starting tech state from scenario overrides
+    TechState startTech = const TechState();
+    for (final entry in result.startingTechOverrides.entries) {
+      startTech = startTech.setLevel(entry.key, entry.value);
+    }
+
+    final newState = GameState(
+      config: config,
+      turnNumber: 1,
+      production: ProductionState(
+        worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: hwValue)],
+        techState: startTech,
+      ),
+      mapState: GameMapState.initial(),
+      shipCounters: createAllCounters(),
+      alienPlayers: [
+        for (int i = 0; i < result.alienPlayerCount; i++)
+          AlienPlayer(name: 'Alien ${i + 1}', color: ['Red', 'Blue', 'Yellow'][i % 3]),
+      ],
+    );
+
+    // Apply starting fleet by stamping counters
+    var counters = newState.shipCounters;
+    if (result.startingFleet != null) {
+      final updated = List<ShipCounter>.from(counters);
+      for (final entry in result.startingFleet!.entries) {
+        int built = 0;
+        for (int i = 0; i < updated.length && built < entry.value; i++) {
+          if (updated[i].type == entry.key && !updated[i].isBuilt) {
+            updated[i] = ShipCounter.stampFromTech(
+              entry.key,
+              updated[i].number,
+              startTech,
+              facilitiesMode: config.useFacilitiesCosts,
+            );
+            built++;
+          }
+        }
+      }
+      counters = updated;
+    }
+
+    var finalState = newState.copyWith(shipCounters: counters);
+
+    finalState = _applyScenarioState(
+      finalState,
+      config: config,
+      scenario: scenario,
+      forceReplicator: result.isReplicatorGame,
+      syncVictoryPoints: true,
+      syncReplicatorSetup: true,
+    );
+
+    final saved = SavedGame(
+      id: id,
+      name: result.gameName,
+      updatedAt: DateTime.now(),
+      state: finalState,
+    );
+    final games = [..._appState.games, saved];
+    setState(() {
+      _appState = _appState.copyWith(games: games, activeGameId: id);
+      _gameState = finalState;
+      _gameName = result.gameName;
+      _activeGameId = id;
+      _isLoading = false;
+      _undoHistory.clear();
+      _undoDescriptions.clear();
+      _lastActionWasEndTurn = false;
+    });
+    _save();
   }
 
   Future<void> _showStartingFleetDialog() async {
@@ -191,11 +318,13 @@ class _HomePageState extends State<HomePage>
   // ---------------------------------------------------------------------------
 
   void _onProductionChanged(ProductionState production) {
-    _updateGameState(_gameState.copyWith(production: production), 'Production');
+    final nextState = _syncedMapState(_gameState.copyWith(production: production));
+    _updateGameState(nextState, 'Production');
   }
 
   void _onCountersChanged(List<ShipCounter> counters) {
-    _updateGameState(_gameState.copyWith(shipCounters: counters), 'Ship Tech');
+    final nextState = _syncedMapState(_gameState.copyWith(shipCounters: counters));
+    _updateGameState(nextState, 'Ship Tech');
   }
 
   void _onUpgradeCost(int cost) {
@@ -212,6 +341,72 @@ class _HomePageState extends State<HomePage>
     _updateGameState(
         _gameState.copyWith(alienPlayers: aliens), 'Alien Economy');
   }
+
+  void _onMapChanged(
+    GameMapState mapState, {
+    bool recordUndo = true,
+    String? description,
+  }) {
+    final nextState = _syncedMapState(_gameState.copyWith(mapState: mapState));
+    if (recordUndo) {
+      _updateGameState(nextState, description ?? 'Map');
+      return;
+    }
+    setState(() {
+      _gameState = nextState;
+    });
+    _save();
+  }
+
+  GameState _syncedMapState(GameState state) {
+    final validWorldNames = state.production.worlds.map((world) => world.name).toSet();
+    final validShipIds = state.shipCounters
+        .where((counter) => counter.isBuilt)
+        .map(_shipCounterId)
+        .toSet();
+
+    final nextHexes = [
+      for (final hex in state.mapState.hexes)
+        if (hex.worldName != null && !validWorldNames.contains(hex.worldName))
+          hex.copyWith(clearWorldName: true)
+        else
+          hex,
+    ];
+
+    final nextFleets = <FleetStackState>[];
+    for (final fleet in state.mapState.fleets) {
+      if (fleet.isEnemy) {
+        nextFleets.add(fleet);
+        continue;
+      }
+      final shipCounterIds = fleet.shipCounterIds
+          .where(validShipIds.contains)
+          .toList();
+      if (shipCounterIds.isEmpty) continue;
+      nextFleets.add(
+        fleet.copyWith(
+          shipCounterIds: shipCounterIds,
+          composition: const {},
+        ),
+      );
+    }
+
+    final selectedFleetId = nextFleets.any((fleet) => fleet.id == state.mapState.selectedFleetId)
+        ? state.mapState.selectedFleetId
+        : null;
+
+    return state.copyWith(
+      mapState: state.mapState.copyWith(
+        hexes: nextHexes,
+        fleets: nextFleets,
+        selectedFleetId: selectedFleetId,
+        clearSelectedFleetId: selectedFleetId == null,
+      ),
+    );
+  }
+
+  static String _shipCounterId(ShipCounter counter) =>
+      '${counter.type.name}:${counter.number}';
 
   void _onEndTurn() {
     final prod = _gameState.production;
@@ -244,7 +439,7 @@ class _HomePageState extends State<HomePage>
 
     // Resource calculations
     final mods = _gameState.activeModifiers;
-    final remainingCp = prod.remainingCp(config, counters, mods);
+    final remainingCp = prod.remainingCp(config, counters, mods, _gameState.shipSpecialAbilities);
     final remainingRp = config.enableFacilities ? prod.remainingRp(config, mods) : 0;
     final cpLostToCap = math.max(0, remainingCp - 30);
     final rpLostToCap = config.enableFacilities ? math.max(0, remainingRp - 30) : 0;
@@ -265,7 +460,7 @@ class _HomePageState extends State<HomePage>
       maintenancePaid: maintenancePaid,
     );
 
-    final nextProduction = prod.prepareForNextTurn(config, counters, mods);
+    final nextProduction = prod.prepareForNextTurn(config, counters, mods, _gameState.shipSpecialAbilities);
     _updateGameState(
       _gameState.copyWith(
         turnNumber: _gameState.turnNumber + 1,
@@ -347,7 +542,7 @@ class _HomePageState extends State<HomePage>
   }
 
   void _navigateToRule(String sectionId) {
-    setState(() => _currentTabIndex = 4);
+    _selectTab(_TabId.rules);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _rulesKey.currentState?.jumpToSection(sectionId);
     });
@@ -357,20 +552,79 @@ class _HomePageState extends State<HomePage>
     // Check if EA was just selected and has starting tech overrides
     final ea = config.empireAdvantage;
     final oldEa = _gameState.config.empireAdvantage;
+    final scenario = scenarioById(config.scenarioId);
+    final normalizedConfig = _normalizeConfigForScenario(config, scenario);
+    final scenarioChanged =
+        normalizedConfig.scenarioId != _gameState.config.scenarioId;
+    final replicatorModeChanged =
+        normalizedConfig.enableReplicators != _gameState.config.enableReplicators;
+    var nextState = _applyScenarioState(
+      _gameState.copyWith(config: normalizedConfig),
+      config: normalizedConfig,
+      scenario: scenario,
+      syncVictoryPoints: scenarioChanged,
+      syncReplicatorSetup: scenarioChanged || replicatorModeChanged,
+    );
     if (ea != null && ea != oldEa && ea.startingTechOverrides.isNotEmpty) {
       // Auto-apply starting tech overrides
-      var newTechState = _gameState.production.techState;
+      var newTechState = nextState.production.techState;
       for (final entry in ea.startingTechOverrides.entries) {
-        final currentLevel = newTechState.getLevel(entry.key, facilitiesMode: config.useFacilitiesCosts);
+        final currentLevel = newTechState.getLevel(entry.key, facilitiesMode: normalizedConfig.useFacilitiesCosts);
         if (entry.value > currentLevel) {
           newTechState = newTechState.setLevel(entry.key, entry.value);
         }
       }
-      final newProduction = _gameState.production.copyWith(techState: newTechState);
-      _updateGameState(_gameState.copyWith(config: config, production: newProduction), 'Empire Advantage: ${ea.name}');
+      final newProduction = nextState.production.copyWith(techState: newTechState);
+      nextState = nextState.copyWith(production: newProduction);
+      _updateGameState(nextState, 'Empire Advantage: ${ea.name}');
     } else {
-      _updateGameState(_gameState.copyWith(config: config), 'Settings');
+      _updateGameState(nextState, 'Settings');
     }
+  }
+
+  GameState _applyScenarioState(
+    GameState state, {
+    required GameConfig config,
+    ScenarioPreset? scenario,
+    bool forceReplicator = false,
+    bool syncVictoryPoints = false,
+    bool syncReplicatorSetup = false,
+  }) {
+    var result = state;
+    final vpConfig = scenario?.victoryPoints;
+    if (syncVictoryPoints) {
+      result = result.copyWith(victoryPoints: vpConfig?.startingPoints ?? 0);
+    }
+
+    final shouldHaveReplicator = forceReplicator || config.enableReplicators;
+    if (shouldHaveReplicator && (syncReplicatorSetup || result.replicatorState == null)) {
+      result = result.copyWith(
+        replicatorState: ReplicatorState.fromScenario(
+          config.scenarioId,
+          difficulty: config.replicatorDifficulty,
+        ),
+      );
+    } else if (result.replicatorState != null) {
+      result = result.copyWith(clearReplicatorState: true);
+    }
+    return result;
+  }
+
+  GameConfig _normalizeConfigForScenario(
+    GameConfig config,
+    ScenarioPreset? scenario,
+  ) {
+    if (scenario?.replicatorSetup == null) return config;
+    return config.copyWith(
+      enableFacilities: false,
+      enableShipExperience: false,
+      enableReplicators: true,
+      scenarioBlockedShips: [
+        ...config.scenarioBlockedShips,
+        if (!config.scenarioBlockedShips.contains(ShipType.decoy))
+          ShipType.decoy,
+      ],
+    );
   }
 
   void _onGameNameChanged(String name) {
@@ -380,8 +634,10 @@ class _HomePageState extends State<HomePage>
     _save();
   }
 
-  void _onNewGame() {
-    _createNewGame();
+  void _onNewGame() async {
+    final result = await showNewGameWizard(context);
+    if (result == null) return;
+    _createNewGameFromWizard(result);
   }
 
   void _onLoadGame(String gameId) {
@@ -391,7 +647,7 @@ class _HomePageState extends State<HomePage>
     );
     setState(() {
       _activeGameId = target.id;
-      _gameState = target.state;
+      _gameState = _syncedMapState(target.state);
       _gameName = target.name;
       _appState = _appState.copyWith(activeGameId: target.id);
       _undoHistory.clear();
@@ -476,6 +732,7 @@ class _HomePageState extends State<HomePage>
       production: const ProductionState(
         worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
       ),
+      mapState: GameMapState.initial(),
       shipCounters: createAllCounters(),
       alienPlayers: const [],
     );
@@ -483,7 +740,7 @@ class _HomePageState extends State<HomePage>
       _undoHistory.clear();
       _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
-      _gameState = defaultState;
+      _gameState = _syncedMapState(defaultState);
     });
     _save();
   }
@@ -500,7 +757,7 @@ class _HomePageState extends State<HomePage>
     setState(() {
       _appState = _appState.copyWith(games: games, activeGameId: id);
       _activeGameId = id;
-      _gameState = importedState;
+      _gameState = _syncedMapState(importedState);
       _gameName = 'Imported Game';
       _undoHistory.clear();
       _undoDescriptions.clear();
@@ -538,18 +795,25 @@ class _HomePageState extends State<HomePage>
               onPressed: _undo,
             ),
         ],
-        title: AnimatedBuilder(
-          animation: _turnWiggleController,
-          builder: (context, child) {
-            return Transform.rotate(
-              angle: _turnWiggle.value,
-              child: child,
+        title: GestureDetector(
+          onLongPress: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SpaceHockeyGame()),
             );
           },
-          child: Text(
-            '$_gameName  \u2022  Turn ${_gameState.turnNumber}',
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 17),
+          child: AnimatedBuilder(
+            animation: _turnWiggleController,
+            builder: (context, child) {
+              return Transform.rotate(
+                angle: _turnWiggle.value,
+                child: child,
+              );
+            },
+            child: Text(
+              '$_gameName  \u2022  Turn ${_gameState.turnNumber}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 17),
+            ),
           ),
         ),
         bottom: PreferredSize(
@@ -557,7 +821,7 @@ class _HomePageState extends State<HomePage>
           child: _ResourceBar(
             totalCp: prod.totalCp(config, activeMods),
             maintenance: prod.maintenanceTotal(counters, config, activeMods),
-            remainingCp: prod.remainingCp(config, counters, activeMods),
+            remainingCp: prod.remainingCp(config, counters, activeMods, _gameState.shipSpecialAbilities),
             remainingRp: config.enableFacilities ? prod.remainingRp(config, activeMods) : null,
             remainingLp: config.enableLogistics ? prod.remainingLp(config, counters, activeMods) : null,
           ),
@@ -565,54 +829,48 @@ class _HomePageState extends State<HomePage>
       ),
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentTabIndex,
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentTabIndex.clamp(0, _visibleTabs.length - 1),
         onTap: (index) {
           setState(() => _currentTabIndex = index);
-          // Task 3D: wiggle the turn number on tab change
           _turnWiggleController.forward(from: 0);
         },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_on, size: 24),
-            label: 'Production',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shield, size: 24),
-            label: 'Ship Tech',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.smart_toy, size: 24),
-            label: 'Aliens',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings, size: 24),
-            label: 'Settings',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.menu_book, size: 24),
-            label: 'Rules',
-          ),
+        items: [
+          for (final tab in _visibleTabs)
+            BottomNavigationBarItem(
+              icon: Icon(tab.icon, size: 24),
+              label: tab.label,
+            ),
         ],
       ),
     );
   }
 
   Widget _buildBody() {
-    switch (_currentTabIndex) {
-      case 0:
-        return ProductionPage(
+    final scenario = scenarioById(_gameState.config.scenarioId);
+    final vpConfig = scenario?.victoryPoints;
+    final content = switch (_currentTabId) {
+      _TabId.production => ProductionPage(
           config: _gameState.config,
           turnNumber: _gameState.turnNumber,
           production: _gameState.production,
           shipCounters: _gameState.shipCounters,
           activeModifiers: _gameState.activeModifiers,
+          shipSpecialAbilities: _gameState.shipSpecialAbilities,
           onProductionChanged: _onProductionChanged,
           onEndTurn: _onEndTurn,
           onRuleTap: _navigateToRule,
           onGameStateOverride: _onGameStateOverride,
-        );
-      case 1:
-        return ShipTechPage(
+        ),
+      _TabId.map => MapPage(
+          state: _gameState.mapState.hexes.isEmpty
+              ? GameMapState.initial(layoutPreset: _gameState.mapState.layoutPreset)
+              : _gameState.mapState,
+          productionWorlds: _gameState.production.worlds,
+          shipCounters: _gameState.shipCounters,
+          onChanged: _onMapChanged,
+        ),
+      _TabId.shipTech => ShipTechPage(
           config: _gameState.config,
           turnNumber: _gameState.turnNumber,
           techState: _gameState.production.techState.withPending(
@@ -620,17 +878,33 @@ class _HomePageState extends State<HomePage>
           ),
           shipCounters: _gameState.shipCounters,
           showExperience: _gameState.config.enableShipExperience,
+          shipSpecialAbilities: _gameState.shipSpecialAbilities,
           onCountersChanged: _onCountersChanged,
           onUpgradeCostIncurred: _onUpgradeCost,
           onRuleTap: _navigateToRule,
-        );
-      case 2:
-        return AlienEconomyPage(
+        ),
+      _TabId.aliens => AlienEconomyPage(
           alienPlayers: _gameState.alienPlayers,
           onAlienPlayersChanged: _onAlienPlayersChanged,
-        );
-      case 3:
-        return SettingsPage(
+        ),
+      _TabId.replicator => ReplicatorPage(
+          state: _gameState.replicatorState ?? const ReplicatorState(),
+          onChanged: (newState) {
+            _updateGameState(
+              _gameState.copyWith(replicatorState: newState),
+              'Replicator',
+            );
+          },
+          onEndTurn: () {
+            final repState = _gameState.replicatorState ?? const ReplicatorState();
+            final updated = repState.endTurn();
+            _updateGameState(
+              _gameState.copyWith(replicatorState: updated),
+              'Replicator End Turn',
+            );
+          },
+        ),
+      _TabId.settings => SettingsPage(
           config: _gameState.config,
           gameName: _gameName,
           turnNumber: _gameState.turnNumber,
@@ -638,6 +912,7 @@ class _HomePageState extends State<HomePage>
           activeGameId: _activeGameId,
           turnSummaries: _gameState.turnSummaries,
           gameState: _gameState,
+          shipSpecialAbilities: _gameState.shipSpecialAbilities,
           onConfigChanged: _onConfigChanged,
           onGameNameChanged: _onGameNameChanged,
           onNewGame: _onNewGame,
@@ -648,12 +923,39 @@ class _HomePageState extends State<HomePage>
           onResetGame: _onResetGame,
           onSetupStartingFleet: _showStartingFleetDialog,
           onImportGame: _onImportGame,
-        );
-      case 4:
-        return RulesReferencePage(key: _rulesKey);
-      default:
-        return const SizedBox.shrink();
-    }
+          onSpecialAbilitiesChanged: (abilities) {
+            _updateGameState(
+              _gameState.copyWith(shipSpecialAbilities: abilities),
+              'Special Abilities',
+            );
+          },
+        ),
+      _TabId.rules => RulesReferencePage(key: _rulesKey),
+    };
+
+    if (vpConfig == null) return content;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: VpTracker(
+            vp: _gameState.victoryPoints,
+            label: vpConfig.label,
+            thresholdHint: vpConfig.lossText,
+            lossThreshold: vpConfig.lossThreshold,
+            onChanged: (value) {
+              _updateGameState(
+                _gameState.copyWith(victoryPoints: value.clamp(0, 99)),
+                '${vpConfig.label} Tracker',
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(child: content),
+      ],
+    );
   }
 }
 
@@ -768,7 +1070,7 @@ class _ResourceBarState extends State<_ResourceBar>
           if (widget.remainingCp > 30)
             Text(
               '(${widget.remainingCp - 30} lost)',
-              style: mono.copyWith(color: Colors.amber),
+              style: mono.copyWith(color: theme.colorScheme.tertiary),
             ),
           if (widget.remainingRp != null) ...[
             const SizedBox(width: 12),
@@ -777,7 +1079,7 @@ class _ResourceBarState extends State<_ResourceBar>
             if (widget.remainingRp! > 30)
               Text(
                 '(${widget.remainingRp! - 30} lost)',
-                style: mono.copyWith(color: Colors.amber),
+                style: mono.copyWith(color: theme.colorScheme.tertiary),
               ),
           ],
           if (widget.remainingLp != null) ...[

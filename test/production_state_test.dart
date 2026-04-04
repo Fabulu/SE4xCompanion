@@ -338,17 +338,18 @@ void main() {
     });
 
     test('LP penalty: shortfall * 3 deducted from CP', () {
-      // LP available = 2, maintenance = 5, shortfall = 3, penalty = 9
+      // In AGT/Facilities mode, BC hull=2 and CA hull=2, so maintenance = 4
+      // LP available = 2, shortfall = 2, penalty = 6
       final ps = ProductionState(
         lpCarryOver: 2,
         worlds: [hw()],
       );
       final counters = [
-        const ShipCounter(type: ShipType.bc, number: 1, isBuilt: true), // hull 3
+        const ShipCounter(type: ShipType.bc, number: 1, isBuilt: true), // AGT hull 2
         const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
       ];
-      // maintenance = 5, LP available = 2, shortfall = 3, penalty = 9
-      expect(ps.penaltyLp(facilitiesLogisticsConfig, counters), 9);
+      // maintenance = 4, LP available = 2, shortfall = 2, penalty = 6
+      expect(ps.penaltyLp(facilitiesLogisticsConfig, counters), 6);
     });
 
     test('no LP penalty when LP >= maintenance', () {

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/empire_advantages.dart';
+import '../data/scenarios.dart';
+import '../data/ship_definitions.dart';
+import '../data/special_abilities.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
 import '../models/turn_summary.dart';
@@ -25,6 +28,8 @@ class SettingsPage extends StatelessWidget {
   final List<TurnSummary> turnSummaries;
   final GameState gameState;
   final ValueChanged<GameState>? onImportGame;
+  final Map<ShipType, int> shipSpecialAbilities;
+  final ValueChanged<Map<ShipType, int>>? onSpecialAbilitiesChanged;
 
   const SettingsPage({
     super.key,
@@ -45,6 +50,8 @@ class SettingsPage extends StatelessWidget {
     required this.onResetGame,
     required this.onSetupStartingFleet,
     this.onImportGame,
+    this.shipSpecialAbilities = const {},
+    this.onSpecialAbilitiesChanged,
   });
 
   @override
@@ -188,6 +195,20 @@ class SettingsPage extends StatelessWidget {
         ),
         const Divider(height: 24),
 
+        // ── Scenario ──
+        _SectionTitle(title: 'SCENARIO'),
+        const SizedBox(height: 8),
+        _ScenarioTile(
+          config: config,
+          onConfigChanged: onConfigChanged,
+        ),
+        if (scenarioById(config.scenarioId)?.replicatorSetup != null)
+          _ReplicatorDifficultyTile(
+            config: config,
+            onConfigChanged: onConfigChanged,
+          ),
+        const Divider(height: 24),
+
         // ── Empire Advantage ──
         _SectionTitle(title: 'EMPIRE ADVANTAGE'),
         const SizedBox(height: 8),
@@ -195,6 +216,39 @@ class SettingsPage extends StatelessWidget {
           config: config,
           onConfigChanged: onConfigChanged,
         ),
+
+        // ── Ship Special Abilities (Alternate Empire only) ──
+        if (config.enableAlternateEmpire) ...[
+          const SizedBox(height: 16),
+          _SectionTitle(title: 'SHIP SPECIAL ABILITIES'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Rule 24.2: Roll d12 for each ship type before the game starts.',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          for (final shipType in kAbilityEligibleShipTypes)
+            _SpecialAbilityRow(
+              shipType: shipType,
+              currentAbility: shipSpecialAbilities[shipType],
+              onChanged: (value) {
+                final updated =
+                    Map<ShipType, int>.from(shipSpecialAbilities);
+                if (value == null) {
+                  updated.remove(shipType);
+                } else {
+                  updated[shipType] = value;
+                }
+                onSpecialAbilitiesChanged?.call(updated);
+              },
+            ),
+        ],
+
         const Divider(height: 24),
 
         // ── Game Library ──
@@ -679,13 +733,13 @@ class _TurnSummaryTile extends StatelessWidget {
     details.add(Text('CP carry-over: ${summary.cpCarryOver}', style: dimStyle));
     if (summary.cpLostToCap > 0) {
       details.add(Text('CP lost to cap: ${summary.cpLostToCap}',
-          style: dimStyle.copyWith(color: Colors.amber)));
+          style: dimStyle.copyWith(color: theme.colorScheme.tertiary)));
     }
     if (summary.rpCarryOver > 0 || summary.rpLostToCap > 0) {
       details.add(Text('RP carry-over: ${summary.rpCarryOver}', style: dimStyle));
       if (summary.rpLostToCap > 0) {
         details.add(Text('RP lost to cap: ${summary.rpLostToCap}',
-            style: dimStyle.copyWith(color: Colors.amber)));
+            style: dimStyle.copyWith(color: theme.colorScheme.tertiary)));
       }
     }
 
@@ -839,6 +893,374 @@ class _EmpireAdvantageTile extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _SpecialAbilityRow extends StatelessWidget {
+  final ShipType shipType;
+  final int? currentAbility;
+  final ValueChanged<int?> onChanged;
+
+  const _SpecialAbilityRow({
+    required this.shipType,
+    required this.currentAbility,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final def = kShipDefinitions[shipType];
+    final shipName = def?.abbreviation ?? shipType.name;
+    final ability = currentAbility != null
+        ? getSpecialAbility(currentAbility!)
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 48,
+            child: Text(
+              shipName,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () => _showAbilityPicker(context),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    if (ability != null) ...[
+                      Text(
+                        '${currentAbility!}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: ability.affectsProduction
+                              ? theme.colorScheme.tertiary
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          ability.name,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        'Not assigned',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.4),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    const Spacer(),
+                    Icon(Icons.unfold_more, size: 16,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.4)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (currentAbility != null)
+            IconButton(
+              icon: Icon(Icons.clear, size: 18,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => onChanged(null),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showAbilityPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Special Ability for ${kShipDefinitions[shipType]?.name ?? shipType.name}',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: kSpecialAbilities.length,
+                itemBuilder: (ctx, index) {
+                  final ab = kSpecialAbilities[index];
+                  final isSelected = currentAbility == ab.rollValue;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceContainerHighest,
+                      child: Text(
+                        '${ab.rollValue}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    title: Text(ab.name, style: const TextStyle(fontSize: 14)),
+                    subtitle: Text(ab.description,
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    selected: isSelected,
+                    dense: true,
+                    onTap: () {
+                      onChanged(ab.rollValue);
+                      Navigator.of(ctx).pop();
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ScenarioTile extends StatelessWidget {
+  final GameConfig config;
+  final ValueChanged<GameConfig> onConfigChanged;
+
+  const _ScenarioTile({
+    required this.config,
+    required this.onConfigChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scenario = scenarioById(config.scenarioId);
+    final label = scenario != null
+        ? '${scenario.name} (${scenario.section})'
+        : 'None / Custom';
+
+    return ListTile(
+      title: const Text('Scenario', style: TextStyle(fontSize: 16)),
+      subtitle: Text(label, style: TextStyle(
+        fontSize: 13,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+      )),
+      trailing: const Icon(Icons.chevron_right, size: 20),
+      onTap: () => _showPicker(context),
+    );
+  }
+
+  void _showPicker(BuildContext context) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (ctx, scrollController) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Text('Scenario', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        onConfigChanged(config.copyWith(
+                          clearScenario: true,
+                          shipCostMultiplier: 1.0,
+                          techCostMultiplier: 1.0,
+                          colonyIncomeMultiplier: 1.0,
+                          colonyGrowthBonus: 0,
+                          scenarioBlockedTechs: const [],
+                          scenarioBlockedShips: const [],
+                        ));
+                        Navigator.of(ctx).pop();
+                      },
+                      child: const Text('Clear'),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: kScenarios.length,
+                  itemBuilder: (ctx, index) {
+                    final s = kScenarios[index];
+                    final isSelected = config.scenarioId == s.id;
+                    final effects = <String>[];
+                    if (s.shipCostMultiplier != 1.0) {
+                      effects.add('${s.shipCostMultiplier}x ship/tech costs');
+                    }
+                    if (s.colonyIncomeMultiplier != 1.0) {
+                      effects.add('${s.colonyIncomeMultiplier}x colony income');
+                    }
+                    if (s.colonyGrowthBonus > 0) {
+                      effects.add('+${s.colonyGrowthBonus} colony growth');
+                    }
+                    if (s.startingTechOverrides.isNotEmpty) {
+                      effects.add('free starting techs');
+                    }
+                    if (s.blockedTechs.isNotEmpty) {
+                      effects.add('blocked techs');
+                    }
+                    if (s.victoryPoints != null) {
+                      effects.add('${s.victoryPoints!.label} track');
+                    }
+                    if (s.replicatorSetup != null) {
+                      effects.add('replicator setup');
+                    }
+                    final effectStr = effects.isEmpty
+                        ? 'Standard rules'
+                        : effects.join(', ');
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.surfaceContainerHighest,
+                        child: Text(
+                          '${s.playerCount}P',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected
+                                ? theme.colorScheme.onPrimary
+                                : theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      title: Text(s.name, style: const TextStyle(fontSize: 14)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(s.description,
+                              style: const TextStyle(fontSize: 11),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          if (effects.isNotEmpty)
+                            Text(effectStr,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.colorScheme.tertiary,
+                                )),
+                        ],
+                      ),
+                      selected: isSelected,
+                      dense: true,
+                      onTap: () {
+                        onConfigChanged(config.copyWith(
+                          scenarioId: s.id,
+                          shipCostMultiplier: s.shipCostMultiplier,
+                          techCostMultiplier: s.techCostMultiplier,
+                          colonyIncomeMultiplier: s.colonyIncomeMultiplier,
+                          colonyGrowthBonus: s.colonyGrowthBonus,
+                          scenarioBlockedTechs: s.blockedTechs,
+                          scenarioBlockedShips: s.blockedShipTypes,
+                        ));
+                        Navigator.of(ctx).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ReplicatorDifficultyTile extends StatelessWidget {
+  final GameConfig config;
+  final ValueChanged<GameConfig> onConfigChanged;
+
+  const _ReplicatorDifficultyTile({
+    required this.config,
+    required this.onConfigChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = config.replicatorDifficulty ?? 'Normal';
+    return ListTile(
+      title: const Text('Replicator Difficulty', style: TextStyle(fontSize: 16)),
+      subtitle: Text(label, style: const TextStyle(fontSize: 13)),
+      trailing: const Icon(Icons.chevron_right, size: 20),
+      onTap: () => _showPicker(context),
+    );
+  }
+
+  void _showPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final difficulty in const ['Easy', 'Normal', 'Hard', 'Impossible'])
+              ListTile(
+                title: Text(difficulty),
+                selected: (config.replicatorDifficulty ?? 'Normal') == difficulty,
+                onTap: () {
+                  onConfigChanged(config.copyWith(replicatorDifficulty: difficulty));
+                  Navigator.of(ctx).pop();
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import '../models/game_state.dart';
 import '../models/production_state.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
+import '../widgets/empire_summary_card.dart';
 import '../widgets/ledger_grid.dart';
 import '../widgets/number_input.dart';
 import '../widgets/research_grant_dialog.dart';
@@ -61,12 +62,17 @@ bool canBuildShip(
   ShipType type,
   int Function(TechId) effectiveLevel,
   GameConfig config,
-  List<ShipPurchase> existingPurchases,
-) {
+  List<ShipPurchase> existingPurchases, [
+  List<ShipCounter> shipCounters = const [],
+]) {
   final def = kShipDefinitions[type];
   if (def == null) return false;
 
+  // Scenario-blocked ship types
+  if (config.scenarioBlockedShips.contains(type)) return false;
+
   final shipSize = effectiveLevel(TechId.shipSize);
+  final fm = config.useFacilitiesCosts;
 
   final isAlt = config.enableAlternateEmpire;
 
@@ -82,18 +88,20 @@ bool canBuildShip(
     case ShipType.un:
       return false;
 
-    // Standard warships: require Ship Size >= hull size
+    // Standard warships: require Ship Size >= prerequisite (AGT-aware)
     case ShipType.dd:
     case ShipType.ca:
     case ShipType.bc:
     case ShipType.bb:
     case ShipType.dn:
-      return shipSize >= def.hullSize;
+      final required = def.requiredShipSize(fm) ?? def.effectiveHullSize(fm);
+      return shipSize >= required;
 
-    // Titans: require Ship Size >= 4; blocked for alternate empire
+    // Titans: require Ship Size >= 4 (or 7 in AGT); blocked for alternate empire
     case ShipType.tn:
       if (isAlt) return false;
-      return shipSize >= 4;
+      final tnReq = def.requiredShipSize(fm) ?? def.effectiveHullSize(fm);
+      return shipSize >= tnReq;
 
     // Fighters: require Fighters tech >= 1
     case ShipType.fighter:
@@ -136,9 +144,17 @@ bool canBuildShip(
     case ShipType.base:
       return shipSize >= 2;
 
-    // Starbases: require Advanced Construction >= 2
+    // Starbases: require Advanced Construction >= 2 and a built Base
     case ShipType.starbase:
-      return effectiveLevel(TechId.advancedCon) >= 2;
+      if (effectiveLevel(TechId.advancedCon) < 2) return false;
+      return shipCounters.any((c) => c.type == ShipType.base && c.isBuilt);
+
+    // War Sun: requires War Sun EA (#187), max 1 ever, no tech prereqs
+    case ShipType.warSun:
+      if (config.selectedEmpireAdvantage != 187) return false;
+      final alreadyHaveWs =
+          existingPurchases.any((p) => p.type == ShipType.warSun);
+      return !alreadyHaveWs;
 
     // Always available: Colony Ships, Miners, MS Pipelines, Shipyards,
     // Decoys, Scouts, DSN
@@ -163,6 +179,7 @@ class ProductionPage extends StatefulWidget {
   final ProductionState production;
   final List<ShipCounter> shipCounters;
   final List<GameModifier> activeModifiers;
+  final Map<ShipType, int> shipSpecialAbilities;
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
@@ -175,6 +192,7 @@ class ProductionPage extends StatefulWidget {
     required this.production,
     required this.shipCounters,
     this.activeModifiers = const [],
+    this.shipSpecialAbilities = const {},
     required this.onProductionChanged,
     required this.onEndTurn,
     this.onRuleTap,
@@ -248,7 +266,7 @@ class _ProductionPageState extends State<ProductionPage>
     ));
 
     _prevRemainingCp =
-        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities);
   }
 
   @override
@@ -257,7 +275,7 @@ class _ProductionPageState extends State<ProductionPage>
 
     // Task 3C: pop on remaining CP change
     final newRemaining =
-        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities);
     if (_prevRemainingCp != null && newRemaining != _prevRemainingCp) {
       _cpPopController.forward(from: 0);
     }
@@ -298,6 +316,7 @@ class _ProductionPageState extends State<ProductionPage>
   ProductionState get production => widget.production;
   List<ShipCounter> get shipCounters => widget.shipCounters;
   List<GameModifier> get modifiers => widget.activeModifiers;
+  Map<ShipType, int> get abilities => widget.shipSpecialAbilities;
 
   // ---- helpers ----
 
@@ -323,6 +342,26 @@ class _ProductionPageState extends State<ProductionPage>
     );
   }
 
+  /// Effective level including EA tech bonuses (e.g. Expert Tacticians +1 Tactics).
+  /// Used for display and ship stamping, NOT for cost/purchase calculations.
+  int _bonusLevel(TechId id) {
+    final base = _effectiveLevel(id);
+    final ea = config.empireAdvantage;
+    final bonus = ea?.techLevelBonuses[id] ?? 0;
+    if (bonus == 0) return base;
+    // Only apply bonus if the player has purchased beyond the starting level.
+    // Starting level = override from EA, or natural start from cost table.
+    final overrideLevel = ea?.startingTechOverrides[id];
+    final naturalStart = (config.useFacilitiesCosts
+            ? kFacilitiesTechCosts
+            : kBaseTechCosts)[id]
+        ?.startLevel ??
+        0;
+    final startLevel = overrideLevel ?? naturalStart;
+    if (base <= startLevel) return base;
+    return base + bonus;
+  }
+
   /// Number of pending buy levels for a tech this turn.
   int _pendingBuys(TechId id) {
     final pending = production.pendingTechPurchases[id];
@@ -335,7 +374,7 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   /// Cost to buy the next level of a tech (from its effective level).
-  /// Applies EA techCostMultiplier (e.g. Gifted Scientists) if present.
+  /// Applies EA techCostMultiplier and Quick Learners first-tech discount.
   int? _nextCost(TechId id) {
     final table =
         config.useFacilitiesCosts ? kFacilitiesTechCosts : kBaseTechCosts;
@@ -344,10 +383,21 @@ class _ProductionPageState extends State<ProductionPage>
     final baseCost = entry.costForNext(_effectiveLevel(id));
     if (baseCost == null) return null;
     final ea = config.empireAdvantage;
+    int cost = baseCost;
     if (ea != null && ea.techCostMultiplier != 1.0) {
-      return (baseCost * ea.techCostMultiplier).floor();
+      cost = (cost * ea.techCostMultiplier).floor();
     }
-    return baseCost;
+    // Scenario tech cost multiplier
+    if (config.techCostMultiplier != 1.0) {
+      cost = (cost * config.techCostMultiplier).ceil();
+    }
+    // Quick Learners (#40): 50% off if this would be the first tech this turn
+    if (ea?.cardNumber == 40) {
+      final order = production.techPurchaseOrder;
+      final isFirst = order.isEmpty || order.first == id;
+      if (isFirst) cost = (cost * 0.5).floor();
+    }
+    return cost;
   }
 
   int _maxLevel(TechId id) {
@@ -357,6 +407,11 @@ class _ProductionPageState extends State<ProductionPage>
     // Alternate empire: cap Fast BC at level 1 (no Fast 2)
     if (id == TechId.fastBcAbility && config.enableAlternateEmpire && max > 1) {
       max = 1;
+    }
+    // Empire Advantage tech level caps (e.g. House of Speed: Ship Size max 3)
+    final eaCap = config.empireAdvantage?.maxTechLevels[id];
+    if (eaCap != null && eaCap < max) {
+      max = eaCap;
     }
     return max;
   }
@@ -374,7 +429,7 @@ class _ProductionPageState extends State<ProductionPage>
       return rpAvail >= cost;
     } else {
       // Uses CP
-      final cpAvail = production.remainingCp(config, shipCounters, modifiers);
+      final cpAvail = production.remainingCp(config, shipCounters, modifiers, abilities);
       return cpAvail >= cost;
     }
   }
@@ -383,15 +438,20 @@ class _ProductionPageState extends State<ProductionPage>
     final newLevel = _effectiveLevel(id) + 1;
     final pending = Map<TechId, int>.from(production.pendingTechPurchases);
     pending[id] = newLevel;
+    // Track purchase order for Quick Learners discount
+    final order = List<TechId>.from(production.techPurchaseOrder);
+    if (!order.contains(id)) order.add(id);
     widget.onProductionChanged(
-        production.copyWith(pendingTechPurchases: pending));
+        production.copyWith(pendingTechPurchases: pending, techPurchaseOrder: order));
   }
 
   void _undoTech(TechId id) {
     final pending = Map<TechId, int>.from(production.pendingTechPurchases);
     pending.remove(id);
+    final order = List<TechId>.from(production.techPurchaseOrder);
+    order.remove(id);
     widget.onProductionChanged(
-        production.copyWith(pendingTechPurchases: pending));
+        production.copyWith(pendingTechPurchases: pending, techPurchaseOrder: order));
   }
 
   // ---- unpredictable research helpers ----
@@ -403,7 +463,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   /// How many grants the player can afford (each grant = 5 CP).
   int _maxGrantsAffordable() {
-    final remaining = production.remainingCp(config, shipCounters, modifiers);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
     return (remaining / 5).floor().clamp(0, 999);
   }
 
@@ -510,6 +570,13 @@ class _ProductionPageState extends State<ProductionPage>
         _buildTurnHeader(theme),
         const SizedBox(height: 8),
 
+        // Empire Advantage / Alternate Empire summary
+        EmpireSummaryCard(
+          empireAdvantage: config.empireAdvantage,
+          isAlternateEmpire: config.enableAlternateEmpire,
+          shipSpecialAbilities: abilities,
+        ),
+
         // Carry-over warnings
         _buildCarryOverWarning(),
 
@@ -603,7 +670,8 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
 
   Widget _buildCarryOverWarning() {
-    final remainingCp = production.remainingCp(config, shipCounters, modifiers);
+    final theme = Theme.of(context);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities);
     final remainingRp =
         config.enableFacilities ? production.remainingRp(config, modifiers) : 0;
     final cpExcess = remainingCp - 30;
@@ -617,18 +685,18 @@ class _ProductionPageState extends State<ProductionPage>
           padding: const EdgeInsets.all(8),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: 0.15),
+            color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            border: Border.all(color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+              Icon(Icons.warning_amber, color: theme.colorScheme.tertiary, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '$cpExcess CP will be lost at End Turn (carry-over cap is 30)',
-                  style: const TextStyle(fontSize: 14, color: Colors.amber),
+                  style: TextStyle(fontSize: 14, color: theme.colorScheme.tertiary),
                 ),
               ),
             ],
@@ -643,18 +711,18 @@ class _ProductionPageState extends State<ProductionPage>
           padding: const EdgeInsets.all(8),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: 0.15),
+            color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            border: Border.all(color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+              Icon(Icons.warning_amber, color: theme.colorScheme.tertiary, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '$rpExcess RP will be lost at End Turn (carry-over cap is 30)',
-                  style: const TextStyle(fontSize: 14, color: Colors.amber),
+                  style: TextStyle(fontSize: 14, color: theme.colorScheme.tertiary),
                 ),
               ),
             ],
@@ -675,12 +743,12 @@ class _ProductionPageState extends State<ProductionPage>
     final maint = production.maintenanceTotal(shipCounters, config, modifiers);
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
-    final pipelineCp = production.pipelineCp();
+    final pipelineCp = production.pipelineCp(config);
     final totalCp = production.totalCp(config, modifiers);
     final subtotal = production.subtotalCp(config, shipCounters, modifiers);
     final techSpending = production.techSpendingCpDerived(config, modifiers);
-    final shipSpending = production.effectiveShipSpending(config, modifiers);
-    final remaining = production.remainingCp(config, shipCounters, modifiers);
+    final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -807,12 +875,12 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildCpLedgerFacilities() {
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
-    final pipelineCp = production.pipelineCp();
+    final pipelineCp = production.pipelineCp(config);
     final totalCp = production.totalCp(config, modifiers);
     final penaltyLp = production.penaltyLp(config, shipCounters, modifiers);
     final subtotal = production.subtotalCp(config, shipCounters, modifiers);
-    final shipSpending = production.effectiveShipSpending(config, modifiers);
-    final remaining = production.remainingCp(config, shipCounters, modifiers);
+    final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -1072,7 +1140,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildFleetRosterRow(ThemeData theme, ShipType type, int count) {
     final def = kShipDefinitions[type]!;
     final exempt = def.maintenanceExempt;
-    final maintCost = exempt ? null : def.hullSize * count;
+    final maintCost = exempt ? null : def.effectiveHullSize(config.useFacilitiesCosts) * count;
     final maintText = exempt ? 'exempt' : 'maint: $maintCost';
 
     return Padding(
@@ -1094,7 +1162,7 @@ class _ProductionPageState extends State<ProductionPage>
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             visualDensity: VisualDensity.compact,
-            onPressed: () => showShipInfoDialog(context, type, onRuleTap: widget.onRuleTap),
+            onPressed: () => showShipInfoDialog(context, type, facilitiesMode: config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
           ),
           const SizedBox(width: 4),
           SizedBox(
@@ -1133,7 +1201,10 @@ class _ProductionPageState extends State<ProductionPage>
       replicatorsEnabled: config.enableReplicators,
       advancedConEnabled: config.enableAdvancedConstruction,
     );
-    final blocked = config.empireAdvantage?.blockedTechs ?? const [];
+    final blocked = {
+      ...config.empireAdvantage?.blockedTechs ?? <TechId>[],
+      ...config.scenarioBlockedTechs,
+    };
     final techs = allTechs.where((id) => !blocked.contains(id)).toList();
 
     final unpredictable = config.enableUnpredictableResearch;
@@ -1159,12 +1230,15 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildTechRow(TechId id) {
     final effectiveLevel = _effectiveLevel(id);
+    final displayLevel = _bonusLevel(id);
     final startLevel = (config.useFacilitiesCosts
             ? kFacilitiesTechCosts
             : kBaseTechCosts)[id]
         ?.startLevel ??
         0;
     final maxLevel = _maxLevel(id);
+    final bonus = config.empireAdvantage?.techLevelBonuses[id] ?? 0;
+    final displayMax = bonus > 0 ? maxLevel + bonus : maxLevel;
     final nextCost = _nextCost(id);
     final pending = _pendingBuys(id);
     final canAfford = _canAffordTech(id);
@@ -1173,20 +1247,20 @@ class _ProductionPageState extends State<ProductionPage>
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: TechRow(
         name: _techDisplayNames[id] ?? id.name,
-        currentLevel: effectiveLevel,
+        currentLevel: displayLevel,
         startLevel: startLevel,
-        maxLevel: maxLevel,
-        nextCost: nextCost,
+        maxLevel: displayMax,
+        nextCost: effectiveLevel >= maxLevel ? null : nextCost,
         pendingBuys: pending,
-        canAfford: canAfford,
-        onBuy: canAfford ? () => _buyTech(id) : null,
+        canAfford: effectiveLevel >= maxLevel ? false : canAfford,
+        onBuy: (canAfford && effectiveLevel < maxLevel) ? () => _buyTech(id) : null,
         onUndo: pending > 0 ? () => _undoTech(id) : null,
         onInfoTap: () => showTechDetailDialog(
           context,
           techId: id,
           techName: _techDisplayNames[id] ?? id.name,
           facilitiesMode: config.useFacilitiesCosts,
-          currentLevel: effectiveLevel,
+          currentLevel: displayLevel,
         ),
       ),
     );
@@ -1196,6 +1270,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildResearchTechRow(TechId id) {
     final theme = Theme.of(context);
     final effectiveLevel = _effectiveLevel(id);
+    final displayLevel = _bonusLevel(id);
     final maxLevel = _maxLevel(id);
     final isMaxed = effectiveLevel >= maxLevel;
     final pending = _pendingBuys(id);
@@ -1235,11 +1310,11 @@ class _ProductionPageState extends State<ProductionPage>
                   techId: id,
                   techName: name,
                   facilitiesMode: config.useFacilitiesCosts,
-                  currentLevel: effectiveLevel,
+                  currentLevel: displayLevel,
                 ),
               ),
               const SizedBox(width: 4),
-              Text('[$effectiveLevel]', style: monoStyle),
+              Text('[$displayLevel]', style: monoStyle),
               const SizedBox(width: 6),
               Text(' MAX', style: dimStyle),
             ],
@@ -1281,12 +1356,12 @@ class _ProductionPageState extends State<ProductionPage>
                 techId: id,
                 techName: name,
                 facilitiesMode: config.useFacilitiesCosts,
-                currentLevel: effectiveLevel,
+                currentLevel: displayLevel,
               ),
             ),
             const SizedBox(width: 4),
             // Current level -> target
-            Text('[$effectiveLevel]', style: monoStyle),
+            Text('[$displayLevel]', style: monoStyle),
             const SizedBox(width: 4),
             Text('\u2192 $targetLevel', style: monoStyle),
             const SizedBox(width: 8),
@@ -1365,7 +1440,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildShipPurchaseSection(BuildContext context) {
     final theme = Theme.of(context);
     final purchases = production.shipPurchases;
-    final totalCost = production.shipPurchaseCost(config, modifiers);
+    final totalCost = production.shipPurchaseCost(config, modifiers, abilities);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1385,7 +1460,7 @@ class _ProductionPageState extends State<ProductionPage>
           for (final p in purchases) {
             final def = kShipDefinitions[p.type];
             if (def != null && !def.maintenanceExempt) {
-              newMaint += def.hullSize * p.quantity;
+              newMaint += def.effectiveHullSize(config.useFacilitiesCosts) * p.quantity;
             }
           }
           if (newMaint > 0) {
@@ -1427,7 +1502,7 @@ class _ProductionPageState extends State<ProductionPage>
     final def = kShipDefinitions[purchase.type];
     final name = def?.name ?? purchase.type.name;
     final abbr = def?.abbreviation ?? '';
-    final unitCost = def?.effectiveBuildCost(config.enableAlternateEmpire) ?? 0;
+    final unitCost = def?.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts) ?? 0;
 
     // Task 3B: bounce animation on the last added row
     final shouldBounce = _lastBouncedIndex == index;
@@ -1457,7 +1532,7 @@ class _ProductionPageState extends State<ProductionPage>
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               visualDensity: VisualDensity.compact,
-              onPressed: () => showShipInfoDialog(context, purchase.type, onRuleTap: widget.onRuleTap),
+              onPressed: () => showShipInfoDialog(context, purchase.type, facilitiesMode: config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
             ),
             const SizedBox(width: 4),
             // Quantity controls
@@ -1583,27 +1658,28 @@ class _ProductionPageState extends State<ProductionPage>
   bool _canAffordOneMore(ShipType type) {
     final def = kShipDefinitions[type];
     if (def == null) return false;
-    final remaining = production.remainingCp(config, shipCounters, modifiers);
-    return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts);
   }
 
   void _showAddShipDialog(BuildContext context) {
     // Task 2: Filter to ships the player has tech to build AND can afford
-    final remaining = production.remainingCp(config, shipCounters, modifiers);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
 
     final isAlt = config.enableAlternateEmpire;
     final buyableShips = kShipDefinitions.entries
-        .where((e) => e.value.effectiveBuildCost(isAlt) > 0)
+        .where((e) => e.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts) > 0)
         .where((e) => canBuildShip(
               e.key,
               _effectiveLevel,
               config,
               production.shipPurchases,
+              shipCounters,
             ))
-        .where((e) => e.value.effectiveBuildCost(isAlt) <= remaining)
+        .where((e) => e.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts) <= remaining)
         .toList()
-      ..sort((a, b) => a.value.effectiveBuildCost(isAlt)
-          .compareTo(b.value.effectiveBuildCost(isAlt)));
+      ..sort((a, b) => a.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts)
+          .compareTo(b.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts)));
 
     showDialog<ShipType>(
       context: context,
@@ -1646,7 +1722,7 @@ class _ProductionPageState extends State<ProductionPage>
                         ),
                       ),
                       Text(
-                        '${entry.value.effectiveBuildCost(isAlt)}CP',
+                        '${entry.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts)}CP',
                         style: TextStyle(
                           fontSize: 14,
                           color: theme.colorScheme.onSurface
@@ -1660,7 +1736,7 @@ class _ProductionPageState extends State<ProductionPage>
                         constraints: const BoxConstraints(),
                         visualDensity: VisualDensity.compact,
                         onPressed: () =>
-                            showShipInfoDialog(ctx, entry.key, onRuleTap: widget.onRuleTap),
+                            showShipInfoDialog(ctx, entry.key, facilitiesMode: config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
                       ),
                     ],
                   ),
@@ -1767,8 +1843,7 @@ class _ProductionPageState extends State<ProductionPage>
                     ),
                     const SizedBox(width: 8),
                   ],
-                  SizedBox(
-                    width: 80,
+                  Expanded(
                     child: NumberInput(
                       value: world.mineralIncome,
                       onChanged: (v) => _updateWorld(
@@ -1778,8 +1853,7 @@ class _ProductionPageState extends State<ProductionPage>
                     ),
                   ),
                   const SizedBox(width: 4),
-                  SizedBox(
-                    width: 80,
+                  Expanded(
                     child: NumberInput(
                       value: world.pipelineIncome,
                       onChanged: (v) => _updateWorld(
@@ -1903,8 +1977,7 @@ class _ProductionPageState extends State<ProductionPage>
             const SizedBox(height: 4),
             Row(
               children: [
-                SizedBox(
-                  width: 80,
+                Expanded(
                   child: NumberInput(
                     value: world.mineralIncome,
                     onChanged: (v) =>
@@ -1914,8 +1987,7 @@ class _ProductionPageState extends State<ProductionPage>
                   ),
                 ),
                 const SizedBox(width: 4),
-                SizedBox(
-                  width: 80,
+                Expanded(
                   child: NumberInput(
                     value: world.pipelineIncome,
                     onChanged: (v) => _updateWorld(
@@ -2054,10 +2126,11 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _confirmEndTurn(BuildContext context) {
-    final remainingCp = production.remainingCp(config, shipCounters, modifiers);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities);
     final cpLost = remainingCp > 30 ? remainingCp - 30 : 0;
     final remainingRp = config.enableFacilities ? production.remainingRp(config, modifiers) : null;
     final rpLost = (remainingRp != null && remainingRp > 30) ? remainingRp - 30 : 0;
+    final warnColor = Theme.of(context).colorScheme.tertiary;
 
     showDialog<bool>(
       context: context,
@@ -2076,14 +2149,14 @@ class _ProductionPageState extends State<ProductionPage>
               const SizedBox(height: 12),
               Text(
                 'Warning: $cpLost CP will be lost (carry-over max 30).',
-                style: const TextStyle(color: Colors.amber),
+                style: TextStyle(color: warnColor),
               ),
             ],
             if (rpLost > 0) ...[
               const SizedBox(height: 8),
               Text(
                 'Warning: $rpLost RP will be lost (carry-over max 30).',
-                style: const TextStyle(color: Colors.amber),
+                style: TextStyle(color: warnColor),
               ),
             ],
           ],

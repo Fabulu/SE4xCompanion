@@ -21,6 +21,7 @@ class ShipTechPage extends StatelessWidget {
   final TechState techState;
   final List<ShipCounter> shipCounters;
   final bool showExperience;
+  final Map<ShipType, int> shipSpecialAbilities;
   final ValueChanged<List<ShipCounter>> onCountersChanged;
   final ValueChanged<int>? onUpgradeCostIncurred;
   final void Function(String sectionId)? onRuleTap;
@@ -32,6 +33,7 @@ class ShipTechPage extends StatelessWidget {
     required this.techState,
     required this.shipCounters,
     required this.showExperience,
+    this.shipSpecialAbilities = const {},
     required this.onCountersChanged,
     this.onUpgradeCostIncurred,
     this.onRuleTap,
@@ -57,6 +59,7 @@ class ShipTechPage extends StatelessWidget {
     ShipType.sw,
     ShipType.bdMb,
     ShipType.transport,
+    ShipType.warSun,
   ];
 
   /// Determine which ship types are visible given the current config.
@@ -130,6 +133,18 @@ class ShipTechPage extends StatelessWidget {
     // Transport always shown (needed for ground combat)
     visible.add(ShipType.transport);
 
+    // War Sun: show only if War Sun EA (#187) is selected
+    if (config.selectedEmpireAdvantage == 187) {
+      visible.add(ShipType.warSun);
+    }
+
+    // Alternate empire: hide Titans, CVs, BVs (rule 24.1.1)
+    if (config.enableAlternateEmpire) {
+      visible.remove(ShipType.tn);
+      visible.remove(ShipType.cv);
+      visible.remove(ShipType.bv);
+    }
+
     // Empire Advantage: hide fighter-related types if fighters tech is blocked
     final blockedTechs = config.empireAdvantage?.blockedTechs ?? const [];
     if (blockedTechs.contains(TechId.fighters)) {
@@ -148,6 +163,25 @@ class ShipTechPage extends StatelessWidget {
     );
   }
 
+  /// EA tech level bonuses and starting levels for stamping/upgrading.
+  Map<TechId, int> get _techBonuses =>
+      config.empireAdvantage?.techLevelBonuses ?? const {};
+  Map<TechId, int> get _techStartLevels {
+    final ea = config.empireAdvantage;
+    if (ea == null) return const {};
+    // Merge EA starting overrides with cost table start levels.
+    final starts = <TechId, int>{};
+    for (final id in ea.techLevelBonuses.keys) {
+      starts[id] = ea.startingTechOverrides[id] ??
+          (config.useFacilitiesCosts
+                  ? kFacilitiesTechCosts
+                  : kBaseTechCosts)[id]
+              ?.startLevel ??
+          0;
+    }
+    return starts;
+  }
+
   /// Build a counter by stamping current tech levels.
   void _buildCounter(ShipType type, int number) {
     final idx = _indexOfCounter(type, number);
@@ -158,6 +192,9 @@ class ShipTechPage extends StatelessWidget {
       number,
       techState,
       facilitiesMode: config.useFacilitiesCosts,
+      techLevelBonuses: _techBonuses,
+      techStartLevels: _techStartLevels,
+      advancedMunitions: shipSpecialAbilities[type] == 11,
     );
 
     final updated = List<ShipCounter>.from(shipCounters);
@@ -174,13 +211,16 @@ class ShipTechPage extends StatelessWidget {
     final upgraded = counter.upgradeToTech(
       techState,
       facilitiesMode: config.useFacilitiesCosts,
+      techLevelBonuses: _techBonuses,
+      advancedMunitions: shipSpecialAbilities[type] == 11,
+      techStartLevels: _techStartLevels,
     );
     if (upgraded == null) return;
 
     final updated = List<ShipCounter>.from(shipCounters);
     updated[idx] = upgraded;
     onCountersChanged(updated);
-    onUpgradeCostIncurred?.call(counter.upgradeCost);
+    onUpgradeCostIncurred?.call(counter.upgradeCost(facilitiesMode: config.useFacilitiesCosts));
   }
 
   /// Update a counter from a CounterUpdate payload.
@@ -320,7 +360,7 @@ class ShipTechPage extends StatelessWidget {
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.info_outline, size: 18),
             tooltip: 'Ship info',
-            onPressed: () => showShipInfoDialog(ctx, shipType, onRuleTap: onRuleTap),
+            onPressed: () => showShipInfoDialog(ctx, shipType, facilitiesMode: config.useFacilitiesCosts, onRuleTap: onRuleTap),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(
@@ -352,6 +392,7 @@ class ShipTechPage extends StatelessWidget {
             counter.needsUpgrade(
               techState,
               facilitiesMode: config.useFacilitiesCosts,
+              advancedMunitions: shipSpecialAbilities[counter.type] == 11,
             );
 
         items.add(CounterRow(
@@ -380,7 +421,7 @@ class ShipTechPage extends StatelessWidget {
                     update,
                   )
               : null,
-          upgradeCost: canUpgrade ? counter.upgradeCost : null,
+          upgradeCost: canUpgrade ? counter.upgradeCost(facilitiesMode: config.useFacilitiesCosts) : null,
           onUpgrade: canUpgrade
               ? () => _upgradeCounter(
                     template.type,

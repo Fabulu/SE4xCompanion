@@ -1,9 +1,12 @@
 // Top-level game state, saved game wrapper, and app state.
 
+import '../data/ship_definitions.dart';
 import 'alien_economy.dart';
 import 'game_config.dart';
 import 'game_modifier.dart';
+import 'map_state.dart';
 import 'production_state.dart';
+import 'replicator_state.dart';
 import 'ship_counter.dart';
 import 'turn_summary.dart';
 
@@ -16,6 +19,18 @@ class GameState {
   final List<TurnSummary> turnSummaries;
   final List<GameModifier> activeModifiers;
 
+  /// Alternate Empire: random special abilities per ship type (Rule 24.2/24.3).
+  final Map<ShipType, int> shipSpecialAbilities;
+
+  /// Victory Points for solo/coop scenarios (DM VP, Alien VP).
+  final int victoryPoints;
+
+  /// Replicator opponent state (null when not a replicator game).
+  final ReplicatorState? replicatorState;
+
+  /// Manual board state for the native map tab.
+  final GameMapState mapState;
+
   const GameState({
     this.config = const GameConfig(),
     this.turnNumber = 1,
@@ -24,6 +39,13 @@ class GameState {
     this.alienPlayers = const [],
     this.turnSummaries = const [],
     this.activeModifiers = const [],
+    this.shipSpecialAbilities = const {},
+    this.victoryPoints = 0,
+    this.replicatorState,
+    this.mapState = const GameMapState(
+      layoutPreset: MapLayoutPreset.standard4p,
+      hexes: [],
+    ),
   });
 
   GameState copyWith({
@@ -34,6 +56,11 @@ class GameState {
     List<AlienPlayer>? alienPlayers,
     List<TurnSummary>? turnSummaries,
     List<GameModifier>? activeModifiers,
+    Map<ShipType, int>? shipSpecialAbilities,
+    int? victoryPoints,
+    ReplicatorState? replicatorState,
+    GameMapState? mapState,
+    bool clearReplicatorState = false,
   }) =>
       GameState(
         config: config ?? this.config,
@@ -43,6 +70,13 @@ class GameState {
         alienPlayers: alienPlayers ?? this.alienPlayers,
         turnSummaries: turnSummaries ?? this.turnSummaries,
         activeModifiers: activeModifiers ?? this.activeModifiers,
+        shipSpecialAbilities:
+            shipSpecialAbilities ?? this.shipSpecialAbilities,
+        victoryPoints: victoryPoints ?? this.victoryPoints,
+        replicatorState: clearReplicatorState
+            ? null
+            : (replicatorState ?? this.replicatorState),
+        mapState: mapState ?? this.mapState,
       );
 
   Map<String, dynamic> toJson() => {
@@ -53,9 +87,26 @@ class GameState {
         'alienPlayers': alienPlayers.map((a) => a.toJson()).toList(),
         'turnSummaries': turnSummaries.map((s) => s.toJson()).toList(),
         'activeModifiers': activeModifiers.map((m) => m.toJson()).toList(),
+        'shipSpecialAbilities': shipSpecialAbilities
+            .map((k, v) => MapEntry(k.name, v)),
+        'victoryPoints': victoryPoints,
+        if (replicatorState != null)
+          'replicatorState': replicatorState!.toJson(),
+        'mapState': mapState.hexes.isEmpty
+            ? GameMapState.initial(layoutPreset: mapState.layoutPreset).toJson()
+            : mapState.toJson(),
       };
 
-  factory GameState.fromJson(Map<String, dynamic> json) => GameState(
+  factory GameState.fromJson(Map<String, dynamic> json) {
+    final rawAbilities =
+        json['shipSpecialAbilities'] as Map<String, dynamic>? ?? {};
+    final abilities = <ShipType, int>{};
+    for (final e in rawAbilities.entries) {
+      final type = _shipTypeFromName(e.key);
+      if (type != null) abilities[type] = e.value as int;
+    }
+
+    return GameState(
         config: json['config'] != null
             ? GameConfig.fromJson(json['config'] as Map<String, dynamic>)
             : const GameConfig(),
@@ -84,7 +135,24 @@ class GameState {
                     GameModifier.fromJson(m as Map<String, dynamic>))
                 .toList() ??
             const [],
+        shipSpecialAbilities: abilities,
+        victoryPoints: json['victoryPoints'] as int? ?? 0,
+        replicatorState: json['replicatorState'] != null
+            ? ReplicatorState.fromJson(
+                json['replicatorState'] as Map<String, dynamic>)
+            : null,
+        mapState: json['mapState'] != null
+            ? GameMapState.fromJson(json['mapState'] as Map<String, dynamic>)
+            : GameMapState.initial(),
       );
+  }
+
+  static ShipType? _shipTypeFromName(String name) {
+    for (final t in ShipType.values) {
+      if (t.name == name) return t;
+    }
+    return null;
+  }
 }
 
 class SavedGame {

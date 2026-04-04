@@ -13,6 +13,8 @@ class EmpireAdvantage {
   final Map<TechId, int> startingTechOverrides;
   final Map<ShipType, int> costModifiers;
   final List<TechId> blockedTechs;
+  final Map<TechId, int> maxTechLevels;
+  final Map<TechId, int> techLevelBonuses;
   final int colonyShipCostModifier;
   final double techCostMultiplier;
   final int cpPerUnitBuilt;
@@ -28,6 +30,8 @@ class EmpireAdvantage {
     this.startingTechOverrides = const {},
     this.costModifiers = const {},
     this.blockedTechs = const [],
+    this.maxTechLevels = const {},
+    this.techLevelBonuses = const {},
     this.colonyShipCostModifier = 0,
     this.techCostMultiplier = 1.0,
     this.cpPerUnitBuilt = 0,
@@ -218,6 +222,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     startingTechOverrides: {
       TechId.tactics: 1,
     },
+    techLevelBonuses: {TechId.tactics: 1},
   ),
 
   EmpireAdvantage(
@@ -302,7 +307,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     startingTechOverrides: {
       TechId.move: 3,
     },
-    blockedTechs: [TechId.cloaking],
+    maxTechLevels: {TechId.shipSize: 3},
   ),
 
   EmpireAdvantage(
@@ -317,6 +322,20 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     name: 'Shape Shifters',
     description: '''Your Decoys are not revealed until combat actually begins (enemy must enter the hex and fight). In addition, the first time each Decoy is "destroyed" in combat, it is replaced with a free Destroyer instead.''',
     revealCondition: 'Reveal at the start of any combat.',
+  ),
+
+  EmpireAdvantage(
+    cardNumber: 56,
+    name: 'On Board Workshop',
+    description: '''Each CV, BV, and Titan may build one Fighter during the Economic Phase as long as there is room to store it (includes just-researched Fighter tech). The Fighter costs the same as if produced at a Shipyard. Unique ships cannot do this, but Alternate Empire BBs and DNs can. During a Movement Turn, one Fighter may be refitted and the carrying ship may move if the Fighter accompanies it the entire phase.''',
+    revealCondition: 'Reveal when a CV/BV/Titan is present in combat.',
+  ),
+
+  EmpireAdvantage(
+    cardNumber: 57,
+    name: 'Superhighway',
+    description: '''Each ship that spends its entire move on an MS Pipeline chain may move two extra hexes instead of one. "Freie Fahrt für freie Bürger" — free roads for free citizens.''',
+    revealCondition: 'Reveal the first time it is used.',
   ),
 
   EmpireAdvantage(

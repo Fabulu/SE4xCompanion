@@ -81,11 +81,15 @@ class _NumberInputState extends State<NumberInput> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.label != null) ...[
-            Text(
-              widget.label!,
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 14),
+            Flexible(
+              flex: 0,
+              child: Text(
+                widget.label!,
+                style: theme.textTheme.bodySmall?.copyWith(fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
           ],
           _RepeatButton(
             icon: Icons.remove,
@@ -93,14 +97,19 @@ class _NumberInputState extends State<NumberInput> {
             onLongPressStart: canDecrement ? () => _startRepeat(_decrement) : null,
             onLongPressEnd: _stopRepeat,
           ),
-          Container(
-            constraints: const BoxConstraints(minWidth: 48),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              widget.value.toString(),
-              style: monoStyle,
-              textAlign: TextAlign.center,
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 20),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.value.toString(),
+                  style: monoStyle,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
           ),
           _RepeatButton(
@@ -135,18 +144,18 @@ class _RepeatButton extends StatelessWidget {
       onLongPressStart: onLongPressStart != null ? (_) => onLongPressStart!() : null,
       onLongPressEnd: onLongPressEnd != null ? (_) => onLongPressEnd!() : null,
       child: SizedBox(
-        width: 40,
-        height: 40,
+        width: 36,
+        height: 36,
         child: IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
-          iconSize: 24,
+          iconSize: 22,
           icon: Icon(icon),
           color: onPressed != null
               ? theme.colorScheme.onSurface
               : theme.disabledColor,
           onPressed: onPressed,
-          splashRadius: 20,
+          splashRadius: 18,
         ),
       ),
     );

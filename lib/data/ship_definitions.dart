@@ -26,6 +26,7 @@ enum ShipType {
   dsn,
   shipyard,
   decoy,
+  warSun,
 }
 
 class ShipDefinition {
@@ -43,6 +44,12 @@ class ShipDefinition {
   final String? ruleSection;
   final int? alternateBuildCost;
 
+  // AGT/Facilities mode overrides (null = same as base game value)
+  final int? agtBuildCost;
+  final int? agtHullSize;
+  final String? agtWeaponClass;
+  final int? agtShipSizeReq; // explicit Ship Size tech level required in AGT
+
   const ShipDefinition({
     required this.type,
     required this.abbreviation,
@@ -57,13 +64,42 @@ class ShipDefinition {
     this.prerequisite,
     this.ruleSection,
     this.alternateBuildCost,
+    this.agtBuildCost,
+    this.agtHullSize,
+    this.agtWeaponClass,
+    this.agtShipSizeReq,
   });
 
-  /// Returns the effective build cost, using alternate cost when applicable.
-  int effectiveBuildCost(bool isAlternateEmpire) =>
-      (isAlternateEmpire && alternateBuildCost != null)
-          ? alternateBuildCost!
-          : buildCost;
+  /// Effective hull size for the given mode.
+  int effectiveHullSize(bool facilitiesMode) =>
+      (facilitiesMode && agtHullSize != null) ? agtHullSize! : hullSize;
+
+  /// Effective weapon class for the given mode.
+  String effectiveWeaponClass(bool facilitiesMode) =>
+      (facilitiesMode && agtWeaponClass != null) ? agtWeaponClass! : weaponClass;
+
+  /// Returns the effective build cost accounting for AGT mode and alternate empire.
+  int effectiveBuildCost(bool isAlternateEmpire, {bool facilitiesMode = false}) {
+    // Alternate empire cost takes priority (it's specific to that variant)
+    if (isAlternateEmpire && alternateBuildCost != null) {
+      return alternateBuildCost!;
+    }
+    // AGT mode cost
+    if (facilitiesMode && agtBuildCost != null) {
+      return agtBuildCost!;
+    }
+    return buildCost;
+  }
+
+  /// Ship Size tech level required to build this ship, or null if not SS-gated.
+  int? requiredShipSize(bool facilitiesMode) {
+    if (facilitiesMode && agtShipSizeReq != null) return agtShipSizeReq;
+    // Base game: derive from prerequisite string
+    if (prerequisite == null) return null;
+    final match = RegExp(r'Ship Size (\d+)').firstMatch(prerequisite!);
+    if (match != null) return int.parse(match.group(1)!);
+    return null;
+  }
 
   Map<String, dynamic> toJson() => {
         'type': type.name,
@@ -91,6 +127,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Basic warship. C-class, cheap. Attack/Defense capped at 1 by hull size.',
     ruleSection: '8.0',
     alternateBuildCost: 10,
+    agtBuildCost: 9, agtWeaponClass: 'D', agtShipSizeReq: 2,
   ),
   ShipType.ca: ShipDefinition(
     type: ShipType.ca, abbreviation: 'CA', name: 'Cruiser',
@@ -99,6 +136,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     prerequisite: 'Ship Size 2',
     ruleSection: '8.0',
     alternateBuildCost: 12,
+    agtWeaponClass: 'C', agtShipSizeReq: 3,
   ),
   ShipType.bc: ShipDefinition(
     type: ShipType.bc, abbreviation: 'BC', name: 'Battlecruiser',
@@ -107,6 +145,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
     alternateBuildCost: 15,
+    agtHullSize: 2, agtShipSizeReq: 4,
   ),
   ShipType.bb: ShipDefinition(
     type: ShipType.bb, abbreviation: 'BB', name: 'Battleship',
@@ -115,6 +154,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
     alternateBuildCost: 25,
+    agtShipSizeReq: 5,
   ),
   ShipType.dn: ShipDefinition(
     type: ShipType.dn, abbreviation: 'DN', name: 'Dreadnought',
@@ -123,6 +163,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     prerequisite: 'Ship Size 3',
     ruleSection: '8.0',
     alternateBuildCost: 25,
+    agtShipSizeReq: 6,
   ),
   ShipType.tn: ShipDefinition(
     type: ShipType.tn, abbreviation: 'TN', name: 'Titan',
@@ -130,6 +171,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Massive warship. A-class, hull 4. Reduced missile damage. Can mount Attack 4.',
     prerequisite: 'Ship Size 4',
     ruleSection: '22.0',
+    agtHullSize: 5, agtShipSizeReq: 7,
   ),
   ShipType.un: ShipDefinition(
     type: ShipType.un, abbreviation: 'UN', name: 'Unique Ship',
@@ -156,7 +198,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
   ShipType.fighter: ShipDefinition(
     type: ShipType.fighter, abbreviation: 'F', name: 'Fighter',
     hullSize: 1, buildCost: 5, maxCounters: 10, weaponClass: 'D',
-    description: 'Carried by CVs/BVs. D-class. Cannot move independently. Stats improve with Fighter tech.',
+    description: 'D-class. Stats improve with Fighter tech. Normally carried by CVs/BVs. Alternate Empire Fighters move independently without carriers (Rule 24.1.2).',
     prerequisite: 'Fighters 1',
     ruleSection: '15.2',
   ),
@@ -173,6 +215,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Battle Carrier. Holds 6 Fighters. Has Anti-Sensor Hull (immune to mines).',
     prerequisite: 'Advanced Con 2',
     ruleSection: '38.6',
+    agtBuildCost: 20,
   ),
   ShipType.sw: ShipDefinition(
     type: ShipType.sw, abbreviation: 'SW', name: 'Minesweeper',
@@ -188,6 +231,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     prerequisite: 'Boarding 1 or Missile Boats 1',
     ruleSection: '19.0',
     alternateBuildCost: 9,
+    agtBuildCost: 12, agtHullSize: 2, agtWeaponClass: 'F',
   ),
   ShipType.transport: ShipDefinition(
     type: ShipType.transport, abbreviation: 'T', name: 'Transport',
@@ -234,12 +278,14 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Powerful stationary defense. 2 attacks/round. Cannot retreat or be boarded.',
     prerequisite: 'Advanced Con 2',
     ruleSection: '38.5',
+    agtBuildCost: 12, agtHullSize: 4,
   ),
   ShipType.dsn: ShipDefinition(
     type: ShipType.dsn, abbreviation: 'DSN', name: 'Deep Space Network',
     hullSize: 1, buildCost: 5, maintenanceExempt: true, maxCounters: 0,
     description: 'Defense Satellite Network. Stationary colony defense.',
     ruleSection: '14.0',
+    agtBuildCost: 6, agtHullSize: 2,
   ),
   ShipType.shipyard: ShipDefinition(
     type: ShipType.shipyard, abbreviation: 'SY', name: 'Shipyard',
@@ -252,5 +298,12 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     hullSize: 0, buildCost: 1, maintenanceExempt: true, maxCounters: 0,
     description: 'Bluff unit. Eliminated before combat. Moves at current Movement tech. No maintenance.',
     ruleSection: '8.3',
+  ),
+  ShipType.warSun: ShipDefinition(
+    type: ShipType.warSun, abbreviation: 'WS', name: 'War Sun',
+    hullSize: 5, buildCost: 30, maintenanceExempt: false, maxCounters: 1,
+    weaponClass: 'A', baseAttack: 0,
+    description: 'Hull size 5, A-class, 2 attacks per round. Cannot retreat. Cannot be rebuilt if destroyed. No tech prerequisites. Requires War Sun EA (#187).',
+    ruleSection: '24.0',
   ),
 };
