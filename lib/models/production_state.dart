@@ -54,29 +54,35 @@ class ShipPurchase {
 class PipelineAsset {
   final String id;
   final String notes;
+  final int income;
 
   const PipelineAsset({
     required this.id,
     this.notes = '',
+    this.income = 0,
   });
 
   PipelineAsset copyWith({
     String? id,
     String? notes,
+    int? income,
   }) =>
       PipelineAsset(
         id: id ?? this.id,
         notes: notes ?? this.notes,
+        income: income ?? this.income,
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'notes': notes,
+        'income': income,
       };
 
   factory PipelineAsset.fromJson(Map<String, dynamic> json) => PipelineAsset(
         id: json['id'] as String? ?? '',
         notes: json['notes'] as String? ?? '',
+        income: json['income'] as int? ?? 0,
       );
 }
 
@@ -235,6 +241,8 @@ class ProductionState {
   /// Traders (#49): connected colonies produce +2 CP instead of +1 per pipeline.
   int pipelineCp([GameConfig? config]) {
     final mult = (config?.empireAdvantage?.cardNumber == 49) ? 2 : 1;
+    final assetIncome = pipelineAssets.fold(0, (sum, asset) => sum + asset.income);
+    if (assetIncome > 0) return assetIncome * mult;
     return worlds
         .where((w) => !w.isBlocked)
         .fold(0, (sum, w) => sum + w.pipelineIncome * mult);

@@ -1768,6 +1768,7 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildPipelineSection(BuildContext context) {
     final theme = Theme.of(context);
     final assets = production.pipelineAssets;
+    final traders = config.empireAdvantage?.cardNumber == 49;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1776,6 +1777,31 @@ class _ProductionPageState extends State<ProductionPage>
         SectionHeader(
           title: 'PIPELINES',
           subtitle: assets.isNotEmpty ? '${assets.length} assets' : null,
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'Track connected MS Pipeline income here. Enter the base CP each pipeline is currently producing. ${traders ? 'Traders doubles the total automatically.' : 'The total feeds the Economic Phase ledger.'}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'How pipeline income works',
+              onPressed: () => _showInlineHelp(
+                context,
+                'Pipelines',
+                'Add pipeline assets as you build them. In each pipeline row, enter the base CP that connected pipeline is currently producing. The Economic Phase total uses these values. If you are using the Traders Empire Advantage, the app doubles the final pipeline CP automatically. Map placement is tracked separately in the Map tab.',
+              ),
+              icon: const Icon(Icons.info_outline, size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         if (assets.isEmpty)
@@ -1802,24 +1828,43 @@ class _ProductionPageState extends State<ProductionPage>
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'Pipeline ${i + 1}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                        ),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 10,
+                        runSpacing: 6,
+                        children: [
+                          Text(
+                            'Pipeline ${i + 1}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            assets[i].id,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontFamily: 'monospace',
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                            ),
+                          ),
+                          _LabeledWorldControl(
+                            label: 'Connected CP',
+                            helpText:
+                                'Enter the base CP this connected pipeline contributes right now. Leave it at 0 if the asset is not connected or not producing yet.',
+                            child: NumberInput(
+                              value: assets[i].income,
+                              onChanged: (v) => _updatePipelineAsset(
+                                i,
+                                (asset) => asset.copyWith(income: v),
+                              ),
+                              min: 0,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      assets[i].id,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
                     SizedBox(
                       width: 44,
                       height: 44,
@@ -1921,43 +1966,29 @@ class _ProductionPageState extends State<ProductionPage>
               ],
             ),
             // Line 2: Facility (if enabled) + mineral/pipeline
-            if (config.enableFacilities ||
-                world.mineralIncome > 0 ||
-                world.pipelineIncome > 0) ...[
+            if (config.enableFacilities) ...[
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (config.enableFacilities) ...[
-                    _FacilityChip(
-                      facility: world.facility,
-                      onChanged: (f) => _updateWorld(
-                        index,
-                        (w) => f == null
-                            ? w.copyWith(clearFacility: true)
-                            : w.copyWith(facility: f),
+                    _LabeledWorldControl(
+                      label: 'Facility',
+                      helpText:
+                          'Facilities are optional colony improvements. IC = Industrial Center, RC = Research Center, LC = Logistics Center, and TC = Temporal Center.',
+                      child: _FacilityChip(
+                        facility: world.facility,
+                        onChanged: (f) => _updateWorld(
+                          index,
+                          (w) => f == null
+                              ? w.copyWith(clearFacility: true)
+                              : w.copyWith(facility: f),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
                   ],
-                  Expanded(
-                    child: NumberInput(
-                      value: world.mineralIncome,
-                      onChanged: (v) => _updateWorld(
-                          index, (w) => w.copyWith(mineralIncome: v)),
-                      min: 0,
-                      label: 'M',
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: NumberInput(
-                      value: world.pipelineIncome,
-                      onChanged: (v) => _updateWorld(
-                          index, (w) => w.copyWith(pipelineIncome: v)),
-                      min: 0,
-                      label: 'P',
-                    ),
-                  ),
                 ],
               ),
             ],
@@ -2046,7 +2077,9 @@ class _ProductionPageState extends State<ProductionPage>
                 const Spacer(),
                 // Blocked toggle
                 _CompactToggle(
-                  label: 'BLK',
+                  label: 'Blocked',
+                  helpText:
+                      'Blocked colonies usually do not produce normally. Replicator colonies are a special case in the rules.',
                   value: world.isBlocked,
                   onChanged: (v) =>
                       _updateWorld(index, (w) => w.copyWith(isBlocked: v)),
@@ -2069,38 +2102,37 @@ class _ProductionPageState extends State<ProductionPage>
                 ),
               ],
             ),
-            // Line 2: Mineral, Pipeline, Facility
+            // Line 2: Mineral, Facility
             const SizedBox(height: 4),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
+                _LabeledWorldControl(
+                  label: 'Minerals',
+                  helpText:
+                      'Mineral income is the CP produced by mineral finds associated with this colony during the Economic Phase.',
                   child: NumberInput(
                     value: world.mineralIncome,
                     onChanged: (v) =>
                         _updateWorld(index, (w) => w.copyWith(mineralIncome: v)),
                     min: 0,
-                    label: 'M',
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: NumberInput(
-                    value: world.pipelineIncome,
-                    onChanged: (v) => _updateWorld(
-                        index, (w) => w.copyWith(pipelineIncome: v)),
-                    min: 0,
-                    label: 'P',
                   ),
                 ),
                 if (config.enableFacilities) ...[
-                  const SizedBox(width: 8),
-                  _FacilityChip(
-                    facility: world.facility,
-                    onChanged: (f) => _updateWorld(
-                      index,
-                      (w) => f == null
-                          ? w.copyWith(clearFacility: true)
-                          : w.copyWith(facility: f),
+                  _LabeledWorldControl(
+                    label: 'Facility',
+                    helpText:
+                        'Facilities are optional colony improvements. Industrial, Research, Logistics, and Temporal Centers change how a colony contributes to the ledger.',
+                    child: _FacilityChip(
+                      facility: world.facility,
+                      onChanged: (f) => _updateWorld(
+                        index,
+                        (w) => f == null
+                            ? w.copyWith(clearFacility: true)
+                            : w.copyWith(facility: f),
+                      ),
                     ),
                   ),
                 ],
@@ -2180,6 +2212,15 @@ class _ProductionPageState extends State<ProductionPage>
     widget.onProductionChanged(
       production.copyWith(pipelineAssets: updated),
     );
+  }
+
+  void _updatePipelineAsset(
+    int index,
+    PipelineAsset Function(PipelineAsset) mutate,
+  ) {
+    final updated = List<PipelineAsset>.from(production.pipelineAssets);
+    updated[index] = mutate(updated[index]);
+    widget.onProductionChanged(production.copyWith(pipelineAssets: updated));
   }
 
   // ===========================================================================
@@ -2437,11 +2478,13 @@ class _PulsingNegativeCpState extends State<_PulsingNegativeCp>
 /// Compact on/off toggle that shows a short label.
 class _CompactToggle extends StatelessWidget {
   final String label;
+  final String? helpText;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   const _CompactToggle({
     required this.label,
+    this.helpText,
     required this.value,
     required this.onChanged,
   });
@@ -2453,26 +2496,38 @@ class _CompactToggle extends StatelessWidget {
         ? theme.colorScheme.error
         : theme.colorScheme.onSurface.withValues(alpha: 0.3);
 
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-        decoration: BoxDecoration(
-          border: Border.all(color: color, width: 1.5),
-          borderRadius: BorderRadius.circular(4),
-          color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            decoration: BoxDecoration(
+              border: Border.all(color: color, width: 1.5),
+              borderRadius: BorderRadius.circular(4),
+              color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ),
         ),
-      ),
+        if (helpText != null)
+          IconButton(
+            tooltip: 'What does this mean?',
+            onPressed: () => _showInlineHelp(context, label, helpText!),
+            icon: const Icon(Icons.info_outline, size: 18),
+            visualDensity: VisualDensity.compact,
+          ),
+      ],
     );
   }
 }
@@ -2488,24 +2543,24 @@ class _FacilityChip extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const _abbrev = {
-    FacilityType.industrial: 'IC',
-    FacilityType.research: 'RC',
-    FacilityType.logistics: 'LC',
-    FacilityType.temporal: 'TC',
+  static const _labels = {
+    FacilityType.industrial: 'Industrial',
+    FacilityType.research: 'Research',
+    FacilityType.logistics: 'Logistics',
+    FacilityType.temporal: 'Temporal',
   };
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = facility != null ? _abbrev[facility]! : '--';
+    final label = facility != null ? _labels[facility]! : 'None';
     final active = facility != null;
 
     return GestureDetector(
       onTap: _cycle,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        constraints: const BoxConstraints(minWidth: 96, minHeight: 44),
         decoration: BoxDecoration(
           border: Border.all(
             color: active
@@ -2539,4 +2594,57 @@ class _FacilityChip extends StatelessWidget {
     final next = order[(idx + 1) % order.length];
     onChanged(next);
   }
+}
+
+class _LabeledWorldControl extends StatelessWidget {
+  final String label;
+  final String? helpText;
+  final Widget child;
+
+  const _LabeledWorldControl({
+    required this.label,
+    required this.child,
+    this.helpText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (helpText != null)
+          IconButton(
+            tooltip: 'What does this mean?',
+            onPressed: () => _showInlineHelp(context, label, helpText!),
+            icon: const Icon(Icons.info_outline, size: 18),
+            visualDensity: VisualDensity.compact,
+          ),
+        child,
+      ],
+    );
+  }
+}
+
+void _showInlineHelp(BuildContext context, String title, String text) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(text),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
 }

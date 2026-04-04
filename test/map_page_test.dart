@@ -8,35 +8,36 @@ import 'package:se4x/models/world.dart';
 import 'package:se4x/pages/map_page.dart';
 
 void main() {
-  testWidgets('renders asset tray counts and inspector placeholder', (tester) async {
-    final state = baseState(
-      worlds: [
-        world('world-home', 'Homeworld'),
-        world('world-colony', 'Colony'),
-      ],
-      placedWorldIds: const {'world-home'},
-      shipCounters: [
-        ship(ShipType.dd, 1),
-        ship(ShipType.ca, 2),
-      ],
-      fleets: const [
-        FleetStackState(
-          id: 'fleet-1',
-          coord: HexCoord(0, 0),
-          shipCounterIds: ['dd:1'],
-        ),
-      ],
-      pipelineAssets: const [
-        PipelineAsset(id: 'pipe-1'),
-        PipelineAsset(id: 'pipe-2'),
-      ],
-      placedPipelineIds: const {'pipe-1'},
-      selectedHex: null,
-    );
+  testWidgets('map fills the tab width and the inspector expands when selection exists', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       mapHarness(
-        state,
+        baseState(
+          worlds: [
+            world('world-home', 'Homeworld'),
+            world('world-colony', 'Colony'),
+          ],
+          placedWorldIds: const {'world-home'},
+          shipCounters: [
+            ship(ShipType.dd, 1),
+            ship(ShipType.ca, 2),
+          ],
+          fleets: const [
+            FleetStackState(
+              id: 'fleet-1',
+              coord: HexCoord(0, 0),
+              shipCounterIds: ['dd:1'],
+            ),
+          ],
+          pipelineAssets: const [
+            PipelineAsset(id: 'pipe-1'),
+            PipelineAsset(id: 'pipe-2'),
+          ],
+          placedPipelineIds: const {'pipe-1'},
+          selectedHex: null,
+        ),
         productionWorlds: [
           world('world-home', 'Homeworld'),
           world('world-colony', 'Colony'),
@@ -52,10 +53,41 @@ void main() {
       ),
     );
 
+    final viewer = tester.getSize(find.byType(InteractiveViewer));
+    expect(viewer.width, greaterThan(1700));
     expect(find.text('Worlds: 1'), findsOneWidget);
     expect(find.text('Ships: 1'), findsOneWidget);
     expect(find.text('Pipelines: 1'), findsOneWidget);
-    expect(find.text('Select a hex to edit terrain, ledger worlds, tokens, and fleets.'), findsOneWidget);
+    expect(find.text('Collapsed. Tap to expand.'), findsOneWidget);
+  });
+
+  testWidgets('a preselected hex opens the inspector content immediately', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      mapHarness(
+        baseState(
+          worlds: [world('world-home', 'Homeworld')],
+          placedWorldIds: const {'world-home'},
+          shipCounters: [ship(ShipType.dd, 1)],
+          fleets: const [
+            FleetStackState(
+              id: 'fleet-1',
+              coord: HexCoord(0, 0),
+              shipCounterIds: ['dd:1'],
+            ),
+          ],
+          selectedHex: const HexCoord(0, 0),
+          selectedFleetId: 'fleet-1',
+        ),
+        productionWorlds: [world('world-home', 'Homeworld')],
+        shipCounters: [ship(ShipType.dd, 1)],
+      ),
+    );
+
+    expect(find.text('Terrain'), findsOneWidget);
+    expect(find.text('Label'), findsOneWidget);
   });
 
   testWidgets('only unplaced worlds can be placed', (tester) async {
@@ -230,6 +262,7 @@ GameMapState baseState({
   List<PipelineAsset> pipelineAssets = const [],
   Set<String> placedPipelineIds = const {},
   HexCoord? selectedHex,
+  String? selectedFleetId,
 }) {
   final hexes = GameMapState.initial().hexes.map((hex) {
     final worldId = placedWorldIds.isNotEmpty && hex.coord == const HexCoord(0, 0)
@@ -245,6 +278,7 @@ GameMapState baseState({
     hexes: hexes,
     fleets: fleets,
     selectedHex: selectedHex,
+    selectedFleetId: selectedFleetId,
   );
 }
 

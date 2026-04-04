@@ -8,13 +8,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
 import '../models/game_state.dart';
 
 class PersistenceService {
   static const _fileName = 'companion_state.json';
   static const _dirName = 'se4x';
 
-  String _resolveDirectory() {
+  Future<String> _resolveDirectory() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final dir = await getApplicationDocumentsDirectory();
+      return '${dir.path}${Platform.pathSeparator}$_dirName';
+    }
+
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'];
       if (appData != null) return '$appData${Platform.pathSeparator}$_dirName';
@@ -33,15 +40,15 @@ class PersistenceService {
     return '$home/.config/$_dirName';
   }
 
-  File _resolveFile() {
-    final dir = _resolveDirectory();
+  Future<File> _resolveFile() async {
+    final dir = await _resolveDirectory();
     return File('$dir${Platform.pathSeparator}$_fileName');
   }
 
   /// Load the persisted app state, or null if none exists or it's corrupted.
   Future<AppState?> load() async {
     try {
-      final file = _resolveFile();
+      final file = await _resolveFile();
       if (!await file.exists()) return null;
       final contents = await file.readAsString();
       final json = jsonDecode(contents) as Map<String, dynamic>;
@@ -53,7 +60,7 @@ class PersistenceService {
 
   /// Save the app state to disk.
   Future<void> save(AppState state) async {
-    final file = _resolveFile();
+    final file = await _resolveFile();
     final dir = file.parent;
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -65,7 +72,7 @@ class PersistenceService {
   /// Delete the persisted state file.
   Future<void> clear() async {
     try {
-      final file = _resolveFile();
+      final file = await _resolveFile();
       if (await file.exists()) {
         await file.delete();
       }

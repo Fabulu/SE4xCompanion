@@ -109,26 +109,26 @@ class ReplicatorPage extends StatelessWidget {
         // ── Empire advantage picker ──
         if (state.empireAdvantage == null) ...[
           const SizedBox(height: 4),
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Advantage:', style: theme.textTheme.bodySmall),
-              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text('Advantage:', style: theme.textTheme.bodySmall),
+              ),
               ..._kEmpireAdvantages.map(
-                (adv) => Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: ActionChip(
-                    label: Text(adv, style: const TextStyle(fontSize: 11)),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () =>
-                        onChanged(state.copyWith(empireAdvantage: adv)),
-                  ),
+                (adv) => ActionChip(
+                  label: Text(adv, style: const TextStyle(fontSize: 11)),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => onChanged(state.copyWith(empireAdvantage: adv)),
                 ),
               ),
               ActionChip(
                 label: const Text('None', style: TextStyle(fontSize: 11)),
                 visualDensity: VisualDensity.compact,
-                onPressed: () =>
-                    onChanged(state.copyWith(empireAdvantage: '-')),
+                onPressed: () => onChanged(state.copyWith(empireAdvantage: '-')),
               ),
             ],
           ),
@@ -321,22 +321,29 @@ class ReplicatorPage extends StatelessWidget {
     bool bold = false,
   }) {
     final theme = Theme.of(context);
-    return SizedBox(
-      height: 32,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 160,
-            child: Text(label, style: theme.textTheme.bodyMedium),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(label, style: theme.textTheme.bodyMedium),
+            ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontFeatures: const [FontFeature.tabularFigures()],
-              fontFamily: 'monospace',
-              fontSize: 16,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              color: theme.colorScheme.onSurface,
+          Expanded(
+            child: Text(
+              value,
+              softWrap: true,
+              style: TextStyle(
+                fontFeatures: const [FontFeature.tabularFigures()],
+                fontFamily: 'monospace',
+                fontSize: 16,
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ),
         ],

@@ -141,47 +141,27 @@ class _HomePageState extends State<HomePage>
         _lastActionWasEndTurn = false;
       });
     } else {
-      // Create a default new game
-      _createNewGame();
+      setState(() {
+        _appState = const AppState();
+        _gameState = const GameState();
+        _gameName = 'New Game';
+        _activeGameId = '';
+        _isLoading = false;
+        _undoHistory.clear();
+        _undoDescriptions.clear();
+        _lastActionWasEndTurn = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openNewGameWizard();
+      });
     }
   }
 
-  void _createNewGame() {
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final defaultState = GameState(
-      config: const GameConfig(),
-      turnNumber: 1,
-      production: const ProductionState(
-        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
-      ),
-      mapState: GameMapState.initial(),
-      shipCounters: createAllCounters(),
-      alienPlayers: const [],
-    );
-    final saved = SavedGame(
-      id: id,
-      name: 'New Game',
-      updatedAt: DateTime.now(),
-      state: defaultState,
-    );
-    final games = [..._appState.games, saved];
-    setState(() {
-      _appState = _appState.copyWith(games: games, activeGameId: id);
-      _gameState = defaultState;
-      _gameName = 'New Game';
-      _activeGameId = id;
-      _isLoading = false;
-      _undoHistory.clear();
-      _undoDescriptions.clear();
-      _lastActionWasEndTurn = false;
-    });
-    _save();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showStartingFleetDialog();
-    });
-  }
-
-  void _createNewGameFromWizard(NewGameResult result) {
+  void _createNewGameFromWizard(
+    NewGameResult result, {
+    String? replaceGameId,
+  }) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final scenario = scenarioById(result.config.scenarioId);
     final config = _normalizeConfigForScenario(result.config, scenario);
@@ -246,7 +226,12 @@ class _HomePageState extends State<HomePage>
       updatedAt: DateTime.now(),
       state: finalState,
     );
-    final games = [..._appState.games, saved];
+    final games = replaceGameId == null
+        ? [..._appState.games, saved]
+        : [
+            ..._appState.games.where((game) => game.id != replaceGameId),
+            saved,
+          ];
     setState(() {
       _appState = _appState.copyWith(games: games, activeGameId: id);
       _gameState = finalState;
@@ -258,6 +243,14 @@ class _HomePageState extends State<HomePage>
       _lastActionWasEndTurn = false;
     });
     _save();
+  }
+
+  Future<void> _openNewGameWizard({String? replaceGameId}) async {
+    final result = await showNewGameWizard(context);
+    if (!mounted || result == null) {
+      return;
+    }
+    _createNewGameFromWizard(result, replaceGameId: replaceGameId);
   }
 
   Future<void> _showStartingFleetDialog() async {
@@ -609,9 +602,7 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onNewGame() async {
-    final result = await showNewGameWizard(context);
-    if (result == null) return;
-    _createNewGameFromWizard(result);
+    await _openNewGameWizard();
   }
 
   void _onLoadGame(String gameId) {
@@ -650,11 +641,8 @@ class _HomePageState extends State<HomePage>
   void _onDeleteGame(String gameId) {
     final games = _appState.games.where((g) => g.id != gameId).toList();
     if (games.isEmpty) {
-      // Don't allow deleting the last game; create a new one instead
-      setState(() {
-        _appState = _appState.copyWith(games: const []);
-      });
-      _createNewGame();
+      // Keep the existing game until the wizard returns a replacement.
+      _openNewGameWizard(replaceGameId: gameId);
       return;
     }
 

@@ -1,8 +1,10 @@
-// Space Air Hockey easter egg — a silly mini-game hidden in the app.
+// Space Air Hockey easter egg - a silly mini-game hidden in the app.
 // Tap the title bar to discover it.
 
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 
 class SpaceHockeyGame extends StatefulWidget {
@@ -16,24 +18,26 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
   static const double puckRadius = 12;
   static const double paddleRadius = 24;
   static const double goalWidth = 100;
+  static const Duration _controlDelay = Duration(seconds: 1);
 
-  // Field dimensions (set in build from constraints)
   double fieldW = 300;
   double fieldH = 500;
 
-  // Puck state
   double puckX = 150;
   double puckY = 250;
   double puckDx = 0;
   double puckDy = 0;
 
-  // Player paddle (bottom)
   double playerX = 150;
   double playerY = 420;
 
-  // CPU paddle (top)
   double cpuX = 150;
   double cpuY = 80;
+
+  double _playerVx = 0;
+  double _playerVy = 0;
+  double _cpuVx = 0;
+  double _cpuVy = 0;
 
   int playerScore = 0;
   int cpuScore = 0;
@@ -41,16 +45,33 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
   String? flashText;
   Timer? _gameLoop;
   final _random = Random();
+  bool _layoutInitialized = false;
 
-  // Stars for background
+  int? _playerPointerId;
+  int? _opponentPointerId;
+  DateTime _playerControlUnlockAt = DateTime.now();
+
   late List<_Star> _stars;
 
   @override
   void initState() {
     super.initState();
     _stars = List.generate(40, (_) => _Star(_random));
+    _resetRound(towardPlayerGoal: false);
     _startLoop();
   }
+
+  @override
+  void dispose() {
+    _gameLoop?.cancel();
+    super.dispose();
+  }
+
+  bool get _isTwoPlayerMode => _opponentPointerId != null;
+
+  bool get _playerControlUnlocked =>
+      DateTime.now().isAfter(_playerControlUnlockAt) ||
+      DateTime.now().isAtSameMomentAs(_playerControlUnlockAt);
 
   void _startLoop() {
     _gameLoop?.cancel();
@@ -60,30 +81,34 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
     });
   }
 
-  @override
-  void dispose() {
-    _gameLoop?.cancel();
-    super.dispose();
-  }
+  void _resetRound({required bool towardPlayerGoal}) {
+    playerX = fieldW / 2;
+    playerY = fieldH - 72;
+    cpuX = fieldW / 2;
+    cpuY = 72;
+    _playerVx = 0;
+    _playerVy = 0;
+    _cpuVx = 0;
+    _cpuVy = 0;
+    _playerPointerId = null;
+    _opponentPointerId = null;
+    _playerControlUnlockAt = DateTime.now().add(_controlDelay);
 
-  void _resetPuck({bool towardPlayer = false}) {
-    puckX = fieldW / 2;
-    puckY = fieldH / 2;
-    final angle = towardPlayer
-        ? (pi / 4 + _random.nextDouble() * pi / 2)
-        : -(pi / 4 + _random.nextDouble() * pi / 2);
-    final speed = 3.0 + _random.nextDouble() * 2;
-    puckDx = cos(angle) * speed * (_random.nextBool() ? 1 : -1);
-    puckDy = sin(angle) * speed;
+    puckX = fieldW / 2 + (_random.nextDouble() - 0.5) * 30;
+    puckY = towardPlayerGoal ? fieldH * 0.32 : fieldH * 0.68;
+    final baseAngle = towardPlayerGoal
+        ? (pi / 2 + (_random.nextDouble() - 0.5) * 0.9)
+        : (-pi / 2 + (_random.nextDouble() - 0.5) * 0.9);
+    final speed = 3.8 + _random.nextDouble() * 1.6;
+    puckDx = cos(baseAngle) * speed;
+    puckDy = sin(baseAngle) * speed;
   }
 
   void _tick() {
     setState(() {
-      // Move puck
       puckX += puckDx;
       puckY += puckDy;
 
-      // Wall bounce (left/right)
       if (puckX - puckRadius < 0) {
         puckX = puckRadius;
         puckDx = puckDx.abs();
@@ -93,7 +118,6 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
         puckDx = -puckDx.abs();
       }
 
-      // Goal detection (top = player scores, bottom = CPU scores)
       final goalLeft = (fieldW - goalWidth) / 2;
       final goalRight = goalLeft + goalWidth;
 
@@ -102,7 +126,7 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
           playerScore++;
           flashText = _randomCheer();
           _checkWin();
-          _resetPuck(towardPlayer: false);
+          if (!gameOver) _resetRound(towardPlayerGoal: false);
         } else {
           puckY = puckRadius;
           puckDy = puckDy.abs();
@@ -114,33 +138,23 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
           cpuScore++;
           flashText = _randomTaunt();
           _checkWin();
-          _resetPuck(towardPlayer: true);
+          if (!gameOver) _resetRound(towardPlayerGoal: true);
         } else {
           puckY = fieldH - puckRadius;
           puckDy = -puckDy.abs();
         }
       }
 
-      // Paddle collisions
       _checkPaddleCollision(playerX, playerY, true);
       _checkPaddleCollision(cpuX, cpuY, false);
 
-      // CPU AI: track puck with some lag and wobble
-      if (puckY < fieldH / 2) {
-        // Puck in CPU half — actively track
-        final targetX = puckX + (_random.nextDouble() - 0.5) * 30;
-        cpuX += (targetX - cpuX) * 0.06;
-      } else {
-        // Return to center-ish
-        cpuX += (fieldW / 2 + (_random.nextDouble() - 0.5) * 40 - cpuX) * 0.03;
+      if (!_isTwoPlayerMode) {
+        _updateCpuPaddle();
       }
-      cpuX = cpuX.clamp(paddleRadius, fieldW - paddleRadius);
 
-      // Friction
       puckDx *= 0.998;
       puckDy *= 0.998;
 
-      // Minimum speed
       final speed = sqrt(puckDx * puckDx + puckDy * puckDy);
       if (speed < 1.5 && speed > 0.01) {
         final factor = 1.5 / speed;
@@ -148,7 +162,6 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
         puckDy *= factor;
       }
 
-      // Animate stars
       for (final s in _stars) {
         s.y += s.speed;
         if (s.y > fieldH) {
@@ -159,6 +172,42 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
     });
   }
 
+  void _updateCpuPaddle() {
+    final defensiveY = 78.0;
+    final attackY = fieldH * 0.28;
+    final puckMovingUp = puckDy < 0;
+    final shouldAttack = puckMovingUp || puckY < fieldH * 0.55;
+    final targetY = shouldAttack ? attackY : defensiveY;
+    final targetX = _predictPuckXAtY(targetY);
+
+    const maxStep = 5.6;
+    final dx = (targetX - cpuX).clamp(-maxStep, maxStep);
+    final dy = (targetY - cpuY).clamp(-maxStep, maxStep);
+
+    _cpuVx = dx;
+    _cpuVy = dy;
+    cpuX = (cpuX + dx).clamp(paddleRadius, fieldW - paddleRadius);
+    cpuY = (cpuY + dy).clamp(paddleRadius, fieldH / 2 - paddleRadius);
+  }
+
+  double _predictPuckXAtY(double targetY) {
+    if (puckDy.abs() < 0.01) return puckX;
+    var projectedX = puckX;
+    final travelTicks = ((targetY - puckY) / puckDy).abs().clamp(0, 160);
+    projectedX += puckDx * travelTicks;
+
+    final left = puckRadius;
+    final right = fieldW - puckRadius;
+    while (projectedX < left || projectedX > right) {
+      if (projectedX < left) {
+        projectedX = left + (left - projectedX);
+      } else if (projectedX > right) {
+        projectedX = right - (projectedX - right);
+      }
+    }
+    return projectedX.clamp(paddleRadius, fieldW - paddleRadius);
+  }
+
   void _checkPaddleCollision(double px, double py, bool isPlayer) {
     final dx = puckX - px;
     final dy = puckY - py;
@@ -166,14 +215,15 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
     final minDist = puckRadius + paddleRadius;
 
     if (dist < minDist && dist > 0) {
-      // Bounce angle based on hit position
       final angle = atan2(dy, dx);
       final speed = sqrt(puckDx * puckDx + puckDy * puckDy).clamp(3.0, 10.0);
-      final boost = isPlayer ? 1.15 : 1.05;
-      puckDx = cos(angle) * speed * boost;
-      puckDy = sin(angle) * speed * boost;
+      final boost = isPlayer ? 1.15 : 1.08;
+      final paddleVx = isPlayer ? _playerVx : _cpuVx;
+      final paddleVy = isPlayer ? _playerVy : _cpuVy;
 
-      // Push puck out of paddle
+      puckDx = cos(angle) * speed * boost + paddleVx * 0.45;
+      puckDy = sin(angle) * speed * boost + paddleVy * 0.45;
+
       puckX = px + cos(angle) * minDist;
       puckY = py + sin(angle) * minDist;
     }
@@ -184,6 +234,70 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
       gameOver = true;
       flashText = playerScore >= 5 ? 'YOU WIN!' : 'CPU WINS!';
     }
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (event.kind == PointerDeviceKind.mouse) return;
+    if (_playerPointerId == null) {
+      _playerPointerId = event.pointer;
+      if (_playerControlUnlocked) {
+        setState(() => _movePlayerTo(event.localPosition));
+      }
+      return;
+    }
+    if (_opponentPointerId == null && event.pointer != _playerPointerId) {
+      setState(() {
+        _opponentPointerId = event.pointer;
+        _moveOpponentTo(event.localPosition);
+      });
+    }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (gameOver) return;
+    setState(() {
+      if (event.pointer == _playerPointerId) {
+        if (_playerControlUnlocked) {
+          _movePlayerTo(event.localPosition);
+        }
+      } else if (event.pointer == _opponentPointerId) {
+        _moveOpponentTo(event.localPosition);
+      }
+    });
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    if (event.pointer == _playerPointerId) {
+      setState(() {
+        _playerPointerId = null;
+        _playerVx = 0;
+        _playerVy = 0;
+      });
+    } else if (event.pointer == _opponentPointerId) {
+      setState(() {
+        _opponentPointerId = null;
+        _cpuVx = 0;
+        _cpuVy = 0;
+      });
+    }
+  }
+
+  void _movePlayerTo(Offset position) {
+    final nextX = position.dx.clamp(paddleRadius, fieldW - paddleRadius);
+    final nextY = position.dy.clamp(fieldH / 2 + paddleRadius, fieldH - paddleRadius);
+    _playerVx = nextX - playerX;
+    _playerVy = nextY - playerY;
+    playerX = nextX;
+    playerY = nextY;
+  }
+
+  void _moveOpponentTo(Offset position) {
+    final nextX = position.dx.clamp(paddleRadius, fieldW - paddleRadius);
+    final nextY = position.dy.clamp(paddleRadius, fieldH / 2 - paddleRadius);
+    _cpuVx = nextX - cpuX;
+    _cpuVy = nextY - cpuY;
+    cpuX = nextX;
+    cpuY = nextY;
   }
 
   String _randomCheer() {
@@ -219,43 +333,56 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('$cpuScore',
-                style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.redAccent.shade100)),
-            Text('  SPACE HOCKEY  ',
-                style: TextStyle(
-                    fontSize: 16,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    letterSpacing: 2)),
-            Text('$playerScore',
-                style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.cyanAccent)),
+            Text(
+              '$cpuScore',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.cyanAccent.shade100,
+              ),
+            ),
+            Text(
+              '  SPACE HOCKEY  ',
+              style: TextStyle(
+                fontSize: 16,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                letterSpacing: 2,
+              ),
+            ),
+            Text(
+              '$playerScore',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
           ],
         ),
         centerTitle: true,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          final previousW = fieldW;
+          final previousH = fieldH;
           fieldW = constraints.maxWidth;
           fieldH = constraints.maxHeight;
 
-          // Ensure positions are initialized relative to field
+          if (!_layoutInitialized ||
+              (previousW != fieldW && previousW == 300) ||
+              (previousH != fieldH && previousH == 500)) {
+            _layoutInitialized = true;
+            _resetRound(towardPlayerGoal: false);
+          }
+
           if (playerY > fieldH - 40) playerY = fieldH - 60;
           if (cpuY < 40) cpuY = 60;
 
-          return GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                playerX = details.localPosition.dx
-                    .clamp(paddleRadius, fieldW - paddleRadius);
-                playerY = details.localPosition.dy
-                    .clamp(fieldH / 2 + paddleRadius, fieldH - paddleRadius);
-              });
-            },
+          return Listener(
+            onPointerDown: _handlePointerDown,
+            onPointerMove: _handlePointerMove,
+            onPointerUp: _handlePointerEnd,
+            onPointerCancel: _handlePointerEnd,
             child: CustomPaint(
               painter: _HockeyPainter(
                 fieldW: fieldW,
@@ -272,6 +399,8 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
                 stars: _stars,
                 flashText: flashText,
                 gameOver: gameOver,
+                playerControlLocked: !_playerControlUnlocked,
+                twoPlayerMode: _isTwoPlayerMode,
               ),
               size: Size(fieldW, fieldH),
             ),
@@ -286,7 +415,7 @@ class _SpaceHockeyGameState extends State<SpaceHockeyGame> {
                   cpuScore = 0;
                   gameOver = false;
                   flashText = null;
-                  _resetPuck();
+                  _resetRound(towardPlayerGoal: false);
                   _startLoop();
                 });
               },
@@ -313,13 +442,22 @@ class _Star {
 }
 
 class _HockeyPainter extends CustomPainter {
-  final double fieldW, fieldH;
-  final double puckX, puckY, puckRadius;
-  final double playerX, playerY, cpuX, cpuY, paddleRadius;
+  final double fieldW;
+  final double fieldH;
+  final double puckX;
+  final double puckY;
+  final double puckRadius;
+  final double playerX;
+  final double playerY;
+  final double cpuX;
+  final double cpuY;
+  final double paddleRadius;
   final double goalWidth;
   final List<_Star> stars;
   final String? flashText;
   final bool gameOver;
+  final bool playerControlLocked;
+  final bool twoPlayerMode;
 
   _HockeyPainter({
     required this.fieldW,
@@ -336,51 +474,46 @@ class _HockeyPainter extends CustomPainter {
     required this.stars,
     this.flashText,
     this.gameOver = false,
+    this.playerControlLocked = false,
+    this.twoPlayerMode = false,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Stars
     final starPaint = Paint()..color = Colors.white.withValues(alpha: 0.6);
     for (final s in stars) {
       canvas.drawCircle(Offset(s.x, s.y), s.size, starPaint);
     }
 
-    // Center line
     final linePaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.15)
       ..strokeWidth = 1;
-    canvas.drawLine(
-        Offset(0, fieldH / 2), Offset(fieldW, fieldH / 2), linePaint);
+    canvas.drawLine(Offset(0, fieldH / 2), Offset(fieldW, fieldH / 2), linePaint);
 
-    // Center circle
     canvas.drawCircle(
-        Offset(fieldW / 2, fieldH / 2),
-        40,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.1)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1);
+      Offset(fieldW / 2, fieldH / 2),
+      40,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
 
-    // Goals
     final goalLeft = (fieldW - goalWidth) / 2;
     final goalPaint = Paint()
       ..color = Colors.amber.withValues(alpha: 0.4)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
-    // Top goal
     canvas.drawLine(Offset(goalLeft, 0), Offset(goalLeft + goalWidth, 0), goalPaint);
-    // Bottom goal
     canvas.drawLine(
-        Offset(goalLeft, fieldH), Offset(goalLeft + goalWidth, fieldH), goalPaint);
+      Offset(goalLeft, fieldH),
+      Offset(goalLeft + goalWidth, fieldH),
+      goalPaint,
+    );
 
-    // CPU paddle (red glow)
-    _drawPaddle(canvas, cpuX, cpuY, Colors.redAccent);
+    _drawPaddle(canvas, cpuX, cpuY, Colors.cyanAccent);
+    _drawPaddle(canvas, playerX, playerY, Colors.redAccent);
 
-    // Player paddle (cyan glow)
-    _drawPaddle(canvas, playerX, playerY, Colors.cyanAccent);
-
-    // Puck (white with glow)
     canvas.drawCircle(
       Offset(puckX, puckY),
       puckRadius + 4,
@@ -391,7 +524,6 @@ class _HockeyPainter extends CustomPainter {
       puckRadius,
       Paint()..color = Colors.white,
     );
-    // UFO detail on puck
     canvas.drawCircle(
       Offset(puckX, puckY),
       puckRadius * 0.5,
@@ -401,7 +533,6 @@ class _HockeyPainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
 
-    // Flash text
     if (flashText != null) {
       final tp = TextPainter(
         text: TextSpan(
@@ -416,19 +547,37 @@ class _HockeyPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       );
       tp.layout();
-      tp.paint(
-          canvas, Offset((fieldW - tp.width) / 2, fieldH / 2 - tp.height / 2));
+      tp.paint(canvas, Offset((fieldW - tp.width) / 2, fieldH / 2 - tp.height / 2));
+    }
+
+    if (playerControlLocked || twoPlayerMode) {
+      final status = [
+        if (playerControlLocked) 'PLAYER ONLINE IN 1...',
+        if (twoPlayerMode) 'TWO PLAYER MODE',
+      ].join('   ');
+      final tp = TextPainter(
+        text: TextSpan(
+          text: status,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.75),
+            letterSpacing: 1.6,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout(maxWidth: fieldW - 24);
+      tp.paint(canvas, Offset((fieldW - tp.width) / 2, fieldH - tp.height - 14));
     }
   }
 
   void _drawPaddle(Canvas canvas, double x, double y, Color color) {
-    // Glow
     canvas.drawCircle(
       Offset(x, y),
       paddleRadius + 6,
       Paint()..color = color.withValues(alpha: 0.15),
     );
-    // Ring
     canvas.drawCircle(
       Offset(x, y),
       paddleRadius,
@@ -437,13 +586,11 @@ class _HockeyPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );
-    // Inner fill
     canvas.drawCircle(
       Offset(x, y),
       paddleRadius - 3,
       Paint()..color = color.withValues(alpha: 0.3),
     );
-    // Center dot (thruster)
     canvas.drawCircle(
       Offset(x, y),
       4,

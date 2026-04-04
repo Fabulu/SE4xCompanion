@@ -37,6 +37,24 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   _MapMode _mode = _MapMode.select;
+  bool _inspectorExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _inspectorExpanded = widget.state.selectedHex != null || widget.state.selectedFleetId != null;
+  }
+
+  @override
+  void didUpdateWidget(covariant MapPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final hadSelection =
+        oldWidget.state.selectedHex != null || oldWidget.state.selectedFleetId != null;
+    final hasSelection = widget.state.selectedHex != null || widget.state.selectedFleetId != null;
+    if (!hadSelection && hasSelection && !_inspectorExpanded) {
+      setState(() => _inspectorExpanded = true);
+    }
+  }
 
   GameMapState get _state => widget.state.hexes.isEmpty
       ? GameMapState.initial(layoutPreset: widget.state.layoutPreset)
@@ -86,6 +104,7 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _selectHex(HexCoord coord) {
+    setState(() => _inspectorExpanded = true);
     _apply(
       _state.copyWith(selectedHex: coord, clearSelectedFleetId: true),
       recordUndo: false,
@@ -95,6 +114,7 @@ class _MapPageState extends State<MapPage> {
   void _selectFleet(String fleetId) {
     final fleet = _state.fleetById(fleetId);
     if (fleet == null) return;
+    setState(() => _inspectorExpanded = true);
     _apply(
       _state.copyWith(
         selectedHex: fleet.coord,
@@ -331,71 +351,71 @@ class _MapPageState extends State<MapPage> {
           ),
         ),
         Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(12, 0, 6, 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0A1226),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: _MapCanvas(
-                      state: _state,
-                      productionWorlds: widget.productionWorlds,
-                      onHexTap: _onHexTapped,
-                      onFleetTap: _selectFleet,
-                      onFleetDrop: (fleetId, target) {
-                        _apply(
-                          _state.moveFleet(fleetId, target),
-                          description: 'Move Fleet',
-                        );
-                      },
-                      onViewportChanged: (zoom, panX, panY) {
-                        _apply(
-                          _state.copyWith(zoom: zoom, panX: panX, panY: panY),
-                          recordUndo: false,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(6, 0, 12, 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: selectedHex == null
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text(
-                              'Select a hex to edit terrain, ledger worlds, tokens, and fleets.',
-                            ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final sheetHeight = _inspectorExpanded
+                    ? math.max(280.0, math.min(constraints.maxHeight * 0.46, 560.0))
+                    : 76.0;
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0A1226),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: _MapCanvas(
+                            state: _state,
+                            productionWorlds: widget.productionWorlds,
+                            onHexTap: _onHexTapped,
+                            onFleetTap: _selectFleet,
+                            onFleetDrop: (fleetId, target) {
+                              _apply(
+                                _state.moveFleet(fleetId, target),
+                                description: 'Move Fleet',
+                              );
+                            },
+                            onViewportChanged: (zoom, panX, panY) {
+                              _apply(
+                                _state.copyWith(zoom: zoom, panX: panX, panY: panY),
+                                recordUndo: false,
+                              );
+                            },
                           ),
-                        )
-                      : _HexInspector(
-                          state: _state,
-                          hex: selectedHex,
-                          world: selectedWorld,
-                          fleets: fleetsOnHex,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        height: sheetHeight,
+                        child: _MapInspectorPanel(
+                          expanded: _inspectorExpanded,
+                          selectedHex: selectedHex,
+                          selectedWorld: selectedWorld,
+                          fleetsOnHex: fleetsOnHex,
                           selectedFleetId: selectedFleetId,
                           availableShips: availableShips,
+                          onToggleExpanded: () =>
+                              setState(() => _inspectorExpanded = !_inspectorExpanded),
                           onHexChanged: (hex) =>
                               _apply(_state.replaceHex(hex), description: 'Map Hex'),
-                          onPlaceWorld: () => _placeWorld(selectedHex),
-                          onClearWorld: () => _apply(
-                            _state.replaceHex(selectedHex.copyWith(clearWorldId: true)),
-                            description: 'Map World',
-                          ),
+                          onPlaceWorld: selectedHex == null ? null : () => _placeWorld(selectedHex),
+                          onClearWorld: selectedHex == null
+                              ? null
+                              : () => _apply(
+                                    _state.replaceHex(selectedHex.copyWith(clearWorldId: true)),
+                                    description: 'Map World',
+                                  ),
                           onFleetSelected: _selectFleet,
                           onFleetDeleted: (id) =>
                               _apply(_state.removeFleet(id), description: 'Map Fleet'),
@@ -406,9 +426,12 @@ class _MapPageState extends State<MapPage> {
                             description: 'Map Fleet',
                           ),
                         ),
-                ),
-              ),
-            ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -517,8 +540,8 @@ class _MapCanvasState extends State<_MapCanvas> {
 
     return InteractiveViewer(
       transformationController: _controller,
-      minScale: 0.4,
-      maxScale: 3.0,
+      minScale: 0.25,
+      maxScale: 4.0,
       constrained: false,
       onInteractionEnd: (_) => _emitViewport(),
       child: SizedBox(
@@ -640,7 +663,6 @@ class _MapCanvasState extends State<_MapCanvas> {
 }
 
 class _HexInspector extends StatelessWidget {
-  final GameMapState state;
   final MapHexState hex;
   final WorldState? world;
   final List<FleetStackState> fleets;
@@ -655,7 +677,7 @@ class _HexInspector extends StatelessWidget {
   final void Function(String fleetId, List<String> shipIds) onFleetShipsChanged;
 
   const _HexInspector({
-    required this.state,
+    super.key,
     required this.hex,
     required this.world,
     required this.fleets,
@@ -827,21 +849,29 @@ class _HexInspector extends StatelessWidget {
           else ...[
             const SizedBox(height: 8),
             Text('Assign Built Ships', style: Theme.of(context).textTheme.bodyMedium),
-            for (final counter in availableShips)
-              CheckboxListTile(
-                value: selectedFleet.shipCounterIds.contains(counter.id),
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(counter.id),
-                onChanged: (checked) {
-                  final ids = [...selectedFleet!.shipCounterIds];
-                  if (checked == true) {
-                    if (!ids.contains(counter.id)) ids.add(counter.id);
-                  } else {
-                    ids.remove(counter.id);
-                  }
-                  onFleetShipsChanged(selectedFleet.id, ids);
-                },
+            const SizedBox(height: 8),
+            if (availableShips.isEmpty)
+              const Text('No built ships are currently available.')
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final counter in availableShips)
+                    FilterChip(
+                      label: Text(counter.id),
+                      selected: selectedFleet.shipCounterIds.contains(counter.id),
+                      onSelected: (checked) {
+                        final ids = [...selectedFleet!.shipCounterIds];
+                        if (checked) {
+                          if (!ids.contains(counter.id)) ids.add(counter.id);
+                        } else {
+                          ids.remove(counter.id);
+                        }
+                        onFleetShipsChanged(selectedFleet.id, ids);
+                      },
+                    ),
+                ],
               ),
           ],
           const SizedBox(height: 8),
@@ -861,6 +891,137 @@ class _HexInspector extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _MapInspectorPanel extends StatelessWidget {
+  final bool expanded;
+  final MapHexState? selectedHex;
+  final WorldState? selectedWorld;
+  final List<FleetStackState> fleetsOnHex;
+  final String? selectedFleetId;
+  final List<ShipCounter> availableShips;
+  final VoidCallback onToggleExpanded;
+  final ValueChanged<MapHexState> onHexChanged;
+  final VoidCallback? onPlaceWorld;
+  final VoidCallback? onClearWorld;
+  final ValueChanged<String> onFleetSelected;
+  final ValueChanged<String> onFleetDeleted;
+  final ValueChanged<FleetStackState> onFleetChanged;
+  final void Function(String fleetId, List<String> shipIds) onFleetShipsChanged;
+
+  const _MapInspectorPanel({
+    required this.expanded,
+    required this.selectedHex,
+    required this.selectedWorld,
+    required this.fleetsOnHex,
+    required this.selectedFleetId,
+    required this.availableShips,
+    required this.onToggleExpanded,
+    required this.onHexChanged,
+    required this.onPlaceWorld,
+    required this.onClearWorld,
+    required this.onFleetSelected,
+    required this.onFleetDeleted,
+    required this.onFleetChanged,
+    required this.onFleetShipsChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hex = selectedHex;
+    final theme = Theme.of(context);
+    final shellColor = theme.colorScheme.surfaceContainerHighest;
+
+    return Material(
+      color: shellColor,
+      elevation: 10,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: expanded ? null : onToggleExpanded,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hex == null
+                          ? 'Select a hex to edit terrain, ledger worlds, tokens, and fleets.'
+                          : 'Hex ${hex.coord.id}${selectedFleetId == null ? '' : ' • Fleet selected'}',
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: expanded ? 'Collapse inspector' : 'Expand inspector',
+                    onPressed: onToggleExpanded,
+                    icon: Icon(expanded ? Icons.expand_more : Icons.expand_less),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: expanded
+                    ? hex == null
+                        ? const Center(
+                            key: ValueKey('empty'),
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text(
+                                'Tap a hex to inspect terrain, worlds, tokens, and fleets.',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        : _HexInspector(
+                            key: const ValueKey('inspector'),
+                            hex: hex,
+                            world: selectedWorld,
+                            fleets: fleetsOnHex,
+                            selectedFleetId: selectedFleetId,
+                            availableShips: availableShips,
+                            onHexChanged: onHexChanged,
+                            onPlaceWorld: onPlaceWorld!,
+                            onClearWorld: onClearWorld!,
+                            onFleetSelected: onFleetSelected,
+                            onFleetDeleted: onFleetDeleted,
+                            onFleetChanged: onFleetChanged,
+                            onFleetShipsChanged: onFleetShipsChanged,
+                          )
+                    : Center(
+                        key: const ValueKey('collapsed'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            hex == null
+                                ? 'Collapsed. Tap to expand.'
+                                : 'Selected ${hex.coord.id}. Tap to expand.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
