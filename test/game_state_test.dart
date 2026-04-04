@@ -34,6 +34,9 @@ void main() {
         turnNumber: 5,
         production: ProductionState(
           cpCarryOver: 15,
+          pipelineAssets: const [
+            PipelineAsset(id: 'pipeline-1', notes: 'north lane'),
+          ],
           worlds: [
             const WorldState(name: 'HW', isHomeworld: true, homeworldValue: 25),
           ],
@@ -70,6 +73,9 @@ void main() {
       expect(restored.config.enableLogistics, true);
       expect(restored.config.ownership.allGoodThings, true);
       expect(restored.production.cpCarryOver, 15);
+      expect(restored.production.pipelineAssets, hasLength(1));
+      expect(restored.production.pipelineAssets[0].id, 'pipeline-1');
+      expect(restored.production.pipelineAssets[0].notes, 'north lane');
       expect(restored.production.worlds.length, 1);
       expect(restored.production.worlds[0].homeworldValue, 25);
       expect(restored.production.techState.getLevel(TechId.attack), 2);
@@ -95,6 +101,39 @@ void main() {
       expect(restored.turnNumber, 2);
       expect(restored.mapState.hexes, isNotEmpty);
       expect(restored.mapState.layoutPreset, MapLayoutPreset.standard4p);
+    });
+
+    test('legacy map world names and pipeline counts migrate on load', () {
+      final restored = GameState.fromJson({
+        'turnNumber': 2,
+        'production': {
+          'worlds': [
+            {'name': 'Homeworld', 'isHomeworld': true, 'homeworldValue': 30},
+            {'name': 'Colony 1', 'growthMarkerLevel': 2},
+          ],
+        },
+        'mapState': {
+          'layoutPreset': 'standard4p',
+          'hexes': [
+            {
+              'coord': {'q': 0, 'r': 0},
+              'worldName': 'Homeworld',
+              'pipelines': 2,
+            },
+          ],
+        },
+      });
+
+      final placedHex = restored.mapState.hexAt(const HexCoord(0, 0));
+      expect(restored.production.worlds[0].id, isNotEmpty);
+      expect(restored.production.worlds[1].id, isNotEmpty);
+      expect(placedHex?.worldId, restored.production.worlds[0].id);
+      expect(placedHex?.pipelineIds, hasLength(2));
+      expect(restored.production.pipelineAssets, hasLength(2));
+      expect(
+        restored.production.pipelineAssets.map((asset) => asset.id).toSet(),
+        placedHex?.pipelineIds.toSet(),
+      );
     });
   });
 

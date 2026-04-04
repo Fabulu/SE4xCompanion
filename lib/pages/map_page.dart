@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../data/ship_definitions.dart';
 import '../models/map_state.dart';
+import '../models/production_state.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
 
@@ -13,10 +13,13 @@ typedef MapStateChanged = void Function(
   String? description,
 });
 
+enum _MapMode { select, fleet, enemy, pipeline }
+
 class MapPage extends StatefulWidget {
   final GameMapState state;
   final List<WorldState> productionWorlds;
   final List<ShipCounter> shipCounters;
+  final List<PipelineAsset> pipelineAssets;
   final MapStateChanged onChanged;
 
   const MapPage({
@@ -24,6 +27,7 @@ class MapPage extends StatefulWidget {
     required this.state,
     required this.productionWorlds,
     required this.shipCounters,
+    this.pipelineAssets = const [],
     required this.onChanged,
   });
 
@@ -32,15 +36,72 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  GameMapState get _state =>
-      widget.state.hexes.isEmpty ? GameMapState.initial(layoutPreset: widget.state.layoutPreset) : widget.state;
+  _MapMode _mode = _MapMode.select;
 
-  WorldState? _findWorld(String? name) {
-    if (name == null) return null;
+  GameMapState get _state => widget.state.hexes.isEmpty
+      ? GameMapState.initial(layoutPreset: widget.state.layoutPreset)
+      : widget.state;
+
+  String _worldId(WorldState world) => world.id.isNotEmpty ? world.id : world.name;
+
+  WorldState? _findWorld(String? worldId) {
+    if (worldId == null || worldId.isEmpty) return null;
     for (final world in widget.productionWorlds) {
-      if (world.name == name) return world;
+      if (_worldId(world) == worldId || world.name == worldId) return world;
     }
     return null;
+  }
+
+  List<WorldState> _availableWorlds({String? excludeHexId, String? includeWorldId}) {
+    final placed = _state.placedWorldIds(excludeHexId: excludeHexId);
+    return widget.productionWorlds.where((world) {
+      final id = _worldId(world);
+      return id == includeWorldId || !placed.contains(id);
+    }).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  List<ShipCounter> _availableShips({String? fleetId}) {
+    final currentFleet = fleetId == null ? null : _state.fleetById(fleetId);
+    final currentIds = currentFleet?.shipCounterIds.toSet() ?? const <String>{};
+    final assigned = _state.assignedFriendlyShipIds(excludeFleetId: fleetId);
+    return widget.shipCounters.where((counter) {
+      if (!counter.isBuilt) return false;
+      if (currentIds.contains(counter.id)) return true;
+      return !assigned.contains(counter.id);
+    }).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+  }
+
+  List<PipelineAsset> _availablePipelineAssets({String? excludeHexId}) {
+    final placed = _state.placedPipelineIds(excludeHexId: excludeHexId);
+    return widget.pipelineAssets
+        .where((asset) => !placed.contains(asset.id))
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+  }
+
+  void _apply(GameMapState next, {String? description, bool recordUndo = true}) {
+    widget.onChanged(next, description: description, recordUndo: recordUndo);
+  }
+
+  void _selectHex(HexCoord coord) {
+    _apply(
+      _state.copyWith(selectedHex: coord, clearSelectedFleetId: true),
+      recordUndo: false,
+    );
+  }
+
+  void _selectFleet(String fleetId) {
+    final fleet = _state.fleetById(fleetId);
+    if (fleet == null) return;
+    _apply(
+      _state.copyWith(
+        selectedHex: fleet.coord,
+        selectedFleetId: fleetId,
+      ),
+      recordUndo: false,
+    );
   }
 
   Future<void> _changePreset(MapLayoutPreset preset) async {
@@ -65,40 +126,29 @@ class _MapPageState extends State<MapPage> {
       );
       if (confirmed != true) return;
     }
-    widget.onChanged(GameMapState.initial(layoutPreset: preset), description: 'Map Layout');
-  }
-
-  Future<void> _placeWorld(MapHexState hex) async {
-    final placed = _state.hexes.map((h) => h.worldName).whereType<String>().toSet();
-    final options = widget.productionWorlds
-        .where((w) => w.name == hex.worldName || !placed.contains(w.name))
-        .toList();
-    if (options.isEmpty) return;
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Place Ledger World'),
-        children: [
-          for (final world in options)
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(world.name),
-              child: Text(world.name),
-            ),
-        ],
-      ),
+    _apply(
+      GameMapState.initial(layoutPreset: preset),
+      description: 'Map Layout',
     );
-    if (selected == null) return;
-    widget.onChanged(_state.replaceHex(hex.copyWith(worldName: selected)), description: 'Map World');
   }
 
   void _addFriendlyFleet(HexCoord coord) {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    widget.onChanged(
+    final availableShips = _availableShips();
+    if (availableShips.isEmpty) return;
+    final id = 'fleet-${DateTime.now().microsecondsSinceEpoch}';
+    _apply(
       _state.copyWith(
         fleets: [
           ..._state.fleets,
-          FleetStackState(id: id, coord: coord, owner: 'Player', label: 'Fleet'),
+          FleetStackState(
+            id: id,
+            coord: coord,
+            owner: 'Player',
+            label: 'Fleet',
+            shipCounterIds: [availableShips.first.id],
+          ),
         ],
+        selectedHex: coord,
         selectedFleetId: id,
       ),
       description: 'Fleet',
@@ -106,8 +156,8 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _addEnemyFleet(HexCoord coord) {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    widget.onChanged(
+    final id = 'enemy-${DateTime.now().microsecondsSinceEpoch}';
+    _apply(
       _state.copyWith(
         fleets: [
           ..._state.fleets,
@@ -121,16 +171,91 @@ class _MapPageState extends State<MapPage> {
             facedown: true,
           ),
         ],
+        selectedHex: coord,
         selectedFleetId: id,
       ),
       description: 'Enemy Fleet',
     );
   }
 
+  Future<void> _placeWorld(MapHexState hex) async {
+    final currentWorldId = hex.worldId;
+    final options = _availableWorlds(
+      excludeHexId: hex.coord.id,
+      includeWorldId: currentWorldId,
+    );
+    if (options.isEmpty) return;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Place Ledger World'),
+        children: [
+          for (final world in options)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(_worldId(world)),
+              child: Text(world.name),
+            ),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    _apply(
+      _state.replaceHex(hex.copyWith(worldId: selected)),
+      description: 'Map World',
+    );
+  }
+
+  void _togglePipelineAt(MapHexState hex) {
+    if (hex.pipelineIds.isNotEmpty) {
+      _apply(
+        _state.replaceHex(hex.copyWith(pipelineIds: const [])),
+        description: 'Pipeline',
+      );
+      return;
+    }
+    final available = _availablePipelineAssets(excludeHexId: hex.coord.id);
+    if (available.isEmpty) return;
+    _apply(
+      _state.replaceHex(hex.copyWith(pipelineIds: [available.first.id])),
+      description: 'Pipeline',
+    );
+  }
+
+  void _onHexTapped(HexCoord coord) {
+    final hex = _state.hexAt(coord);
+    if (hex == null) return;
+    switch (_mode) {
+      case _MapMode.select:
+        _selectHex(coord);
+      case _MapMode.fleet:
+        _selectHex(coord);
+        _addFriendlyFleet(coord);
+      case _MapMode.enemy:
+        _selectHex(coord);
+        _addEnemyFleet(coord);
+      case _MapMode.pipeline:
+        _selectHex(coord);
+        _togglePipelineAt(hex);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selectedHex = _state.selectedHex != null ? _state.hexAt(_state.selectedHex!) : null;
-    final fleets = selectedHex != null ? _state.fleetsAt(selectedHex.coord) : const <FleetStackState>[];
+    final selectedHex =
+        _state.selectedHex != null ? _state.hexAt(_state.selectedHex!) : null;
+    final selectedWorld = _findWorld(selectedHex?.worldId);
+    final selectedFleetId = _state.selectedFleetId;
+    final selectedFleet =
+        selectedFleetId == null ? null : _state.fleetById(selectedFleetId);
+    final fleetsOnHex =
+        selectedHex == null ? const <FleetStackState>[] : _state.fleetsAt(selectedHex.coord);
+    final availableWorlds = _availableWorlds(
+      excludeHexId: selectedHex?.coord.id,
+      includeWorldId: selectedHex?.worldId,
+    );
+    final availableShips = _availableShips(fleetId: selectedFleet?.id);
+    final availablePipelines =
+        _availablePipelineAssets(excludeHexId: selectedHex?.coord.id);
 
     return Column(
       children: [
@@ -147,9 +272,31 @@ class _MapPageState extends State<MapPage> {
                   if (value != null) _changePreset(value);
                 },
                 items: const [
-                  DropdownMenuItem(value: MapLayoutPreset.standard4p, child: Text('Standard 4P Map')),
-                  DropdownMenuItem(value: MapLayoutPreset.special5p, child: Text('Special 5P Map')),
+                  DropdownMenuItem(
+                    value: MapLayoutPreset.standard4p,
+                    child: Text('Standard 4P Map'),
+                  ),
+                  DropdownMenuItem(
+                    value: MapLayoutPreset.special5p,
+                    child: Text('Special 5P Map'),
+                  ),
                 ],
+              ),
+              for (final mode in _MapMode.values)
+                ChoiceChip(
+                  label: Text(switch (mode) {
+                    _MapMode.select => 'Select',
+                    _MapMode.fleet => 'Fleet',
+                    _MapMode.enemy => 'Enemy',
+                    _MapMode.pipeline => 'Pipeline',
+                  }),
+                  selected: _mode == mode,
+                  onSelected: (_) => setState(() => _mode = mode),
+                ),
+              FilledButton.tonalIcon(
+                onPressed: selectedHex == null ? null : () => _placeWorld(selectedHex),
+                icon: const Icon(Icons.public),
+                label: const Text('Place World'),
               ),
               FilledButton.tonalIcon(
                 onPressed: selectedHex == null ? null : () => _addFriendlyFleet(selectedHex.coord),
@@ -161,14 +308,26 @@ class _MapPageState extends State<MapPage> {
                 icon: const Icon(Icons.visibility_off),
                 label: const Text('Add Enemy'),
               ),
-              FilledButton.tonalIcon(
-                onPressed: selectedHex == null ? null : () => _placeWorld(selectedHex),
-                icon: const Icon(Icons.public),
-                label: const Text('Place World'),
-              ),
-              Text('${_state.hexes.length} hexes • ${_state.fleets.length} fleets'),
+              Text('${_state.hexes.length} hexes | ${_state.fleets.length} fleets'),
               if (selectedHex != null) Text('Selected ${selectedHex.coord.id}'),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _AssetPill(label: 'Worlds', value: availableWorlds.length),
+                  _AssetPill(label: 'Ships', value: availableShips.length),
+                  _AssetPill(label: 'Pipelines', value: availablePipelines.length),
+                ],
+              ),
+            ),
           ),
         ),
         Expanded(
@@ -188,15 +347,20 @@ class _MapPageState extends State<MapPage> {
                     child: _MapCanvas(
                       state: _state,
                       productionWorlds: widget.productionWorlds,
-                      shipCounters: widget.shipCounters,
-                      onHexTap: (coord) => widget.onChanged(
-                        _state.copyWith(selectedHex: coord, clearSelectedFleetId: true),
-                        recordUndo: false,
-                      ),
-                      onViewportChanged: (zoom, panX, panY) => widget.onChanged(
-                        _state.copyWith(zoom: zoom, panX: panX, panY: panY),
-                        recordUndo: false,
-                      ),
+                      onHexTap: _onHexTapped,
+                      onFleetTap: _selectFleet,
+                      onFleetDrop: (fleetId, target) {
+                        _apply(
+                          _state.moveFleet(fleetId, target),
+                          description: 'Move Fleet',
+                        );
+                      },
+                      onViewportChanged: (zoom, panX, panY) {
+                        _apply(
+                          _state.copyWith(zoom: zoom, panX: panX, panY: panY),
+                          recordUndo: false,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -213,37 +377,32 @@ class _MapPageState extends State<MapPage> {
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.all(24),
-                            child: Text('Select a hex to edit terrain, ledger worlds, tokens, and fleets.'),
+                            child: Text(
+                              'Select a hex to edit terrain, ledger worlds, tokens, and fleets.',
+                            ),
                           ),
                         )
                       : _HexInspector(
+                          state: _state,
                           hex: selectedHex,
-                          world: _findWorld(selectedHex.worldName),
-                          fleets: fleets,
-                          allFleets: _state.fleets,
-                          shipCounters: widget.shipCounters,
-                          selectedFleetId: _state.selectedFleetId,
+                          world: selectedWorld,
+                          fleets: fleetsOnHex,
+                          selectedFleetId: selectedFleetId,
+                          availableShips: availableShips,
                           onHexChanged: (hex) =>
-                              widget.onChanged(_state.replaceHex(hex), description: 'Map Hex'),
-                          onFleetSelected: (id) => widget.onChanged(
-                            _state.copyWith(selectedFleetId: id),
-                            recordUndo: false,
+                              _apply(_state.replaceHex(hex), description: 'Map Hex'),
+                          onPlaceWorld: () => _placeWorld(selectedHex),
+                          onClearWorld: () => _apply(
+                            _state.replaceHex(selectedHex.copyWith(clearWorldId: true)),
+                            description: 'Map World',
                           ),
-                          onFleetDeleted: (id) => widget.onChanged(
-                            _state.copyWith(
-                              fleets: _state.fleets.where((fleet) => fleet.id != id).toList(),
-                              clearSelectedFleetId: _state.selectedFleetId == id,
-                            ),
-                            description: 'Map Fleet',
-                          ),
-                          onFleetChanged: (updated) => widget.onChanged(
-                            _state.copyWith(
-                              fleets: [
-                                for (final fleet in _state.fleets)
-                                  if (fleet.id == updated.id) updated else fleet,
-                              ],
-                              selectedFleetId: updated.id,
-                            ),
+                          onFleetSelected: _selectFleet,
+                          onFleetDeleted: (id) =>
+                              _apply(_state.removeFleet(id), description: 'Map Fleet'),
+                          onFleetChanged: (fleet) =>
+                              _apply(_state.replaceFleet(fleet), description: 'Map Fleet'),
+                          onFleetShipsChanged: (fleetId, shipIds) => _apply(
+                            _state.assignFleetShips(fleetId, shipIds),
                             description: 'Map Fleet',
                           ),
                         ),
@@ -260,15 +419,17 @@ class _MapPageState extends State<MapPage> {
 class _MapCanvas extends StatefulWidget {
   final GameMapState state;
   final List<WorldState> productionWorlds;
-  final List<ShipCounter> shipCounters;
   final ValueChanged<HexCoord> onHexTap;
+  final ValueChanged<String> onFleetTap;
+  final void Function(String fleetId, HexCoord target) onFleetDrop;
   final void Function(double zoom, double panX, double panY) onViewportChanged;
 
   const _MapCanvas({
     required this.state,
     required this.productionWorlds,
-    required this.shipCounters,
     required this.onHexTap,
+    required this.onFleetTap,
+    required this.onFleetDrop,
     required this.onViewportChanged,
   });
 
@@ -303,6 +464,16 @@ class _MapCanvasState extends State<_MapCanvas> {
     super.dispose();
   }
 
+  String _worldId(WorldState world) => world.id.isNotEmpty ? world.id : world.name;
+
+  WorldState? _findWorld(String? worldId) {
+    if (worldId == null || worldId.isEmpty) return null;
+    for (final world in widget.productionWorlds) {
+      if (_worldId(world) == worldId || world.name == worldId) return world;
+    }
+    return null;
+  }
+
   void _syncFromState() {
     _syncing = true;
     _controller.value = Matrix4.identity()
@@ -333,8 +504,7 @@ class _MapCanvasState extends State<_MapCanvas> {
     for (final hex in widget.state.hexes) {
       final x = hexRadius * math.sqrt(3) * (hex.coord.q + hex.coord.r / 2);
       final y = hexRadius * 1.5 * hex.coord.r;
-      final offset = Offset(x, y);
-      positions[hex.coord.id] = offset;
+      positions[hex.coord.id] = Offset(x, y);
       minX = math.min(minX, x);
       maxX = math.max(maxX, x);
       minY = math.min(minY, y);
@@ -360,67 +530,103 @@ class _MapCanvasState extends State<_MapCanvas> {
               Builder(
                 builder: (context) {
                   final pos = positions[hex.coord.id]!;
-                  final world = _findWorld(hex.worldName);
+                  final world = _findWorld(hex.worldId);
                   final selected = widget.state.selectedHex == hex.coord;
-                  final fleets = widget.state.fleetsAt(hex.coord);
                   return Positioned(
                     left: pos.dx - minX + padding,
                     top: pos.dy - minY + padding,
-                    child: GestureDetector(
-                      key: ValueKey('hex-${hex.coord.id}'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => widget.onHexTap(hex.coord),
-                      child: CustomPaint(
-                        painter: _HexPainter(
-                          fillColor: _terrainColor(hex, world != null),
-                          borderColor: selected ? Colors.amber : Colors.white54,
-                          selected: selected,
-                        ),
-                        child: SizedBox(
-                          width: hexRadius * math.sqrt(3),
-                          height: hexRadius * 2,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  hex.label.isEmpty ? hex.coord.id : hex.label,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: hex.label.isEmpty ? 9 : 10,
-                                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    child: DragTarget<String>(
+                      onWillAcceptWithDetails: (_) => true,
+                      onAcceptWithDetails: (details) =>
+                          widget.onFleetDrop(details.data, hex.coord),
+                      builder: (context, candidateData, rejectedData) => GestureDetector(
+                        key: ValueKey('hex-${hex.coord.id}'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => widget.onHexTap(hex.coord),
+                        child: CustomPaint(
+                          painter: _HexPainter(
+                            fillColor: _terrainColor(hex, hasWorld: world != null),
+                            borderColor: selected ? Colors.amber : Colors.white54,
+                            selected: selected,
+                          ),
+                          child: SizedBox(
+                            width: hexRadius * math.sqrt(3),
+                            height: hexRadius * 2,
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        hex.label.isEmpty ? hex.coord.id : hex.label,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: hex.label.isEmpty ? 9 : 10,
+                                          fontWeight:
+                                              selected ? FontWeight.w700 : FontWeight.w500,
+                                        ),
+                                      ),
+                                      if (world != null)
+                                        Text(
+                                          _worldSummary(world),
+                                          style: const TextStyle(
+                                            color: Colors.lightGreenAccent,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      if (_tokenSummary(hex).isNotEmpty)
+                                        Text(
+                                          _tokenSummary(hex),
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 9,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                    ],
                                   ),
                                 ),
-                                if (world != null)
-                                  Text(
-                                    _worldSummary(world),
-                                    style: const TextStyle(
-                                      color: Colors.lightGreenAccent,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                if (_tokenSummary(hex).isNotEmpty)
-                                  Text(
-                                    _tokenSummary(hex),
-                                    style: const TextStyle(color: Colors.white70, fontSize: 9),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                if (fleets.isNotEmpty)
-                                  Text(
-                                    _fleetBadge(fleets),
-                                    style: const TextStyle(
-                                      color: Colors.cyanAccent,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            for (final fleet in widget.state.fleets)
+              Builder(
+                builder: (context) {
+                  final pos = positions[fleet.coord.id]!;
+                  final selected = widget.state.selectedFleetId == fleet.id;
+                  final marker = _FleetMarker(
+                    fleet: fleet,
+                    selected: selected,
+                    onTap: () => widget.onFleetTap(fleet.id),
+                  );
+                  return Positioned(
+                    left: pos.dx - minX + padding + 16,
+                    top: pos.dy - minY + padding + 16,
+                    child: Draggable<String>(
+                      data: fleet.id,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: _FleetMarker(
+                          fleet: fleet,
+                          selected: true,
+                          onTap: () {},
+                        ),
+                      ),
+                      childWhenDragging: Opacity(opacity: 0.3, child: marker),
+                      child: Container(
+                        key: ValueKey('fleet-${fleet.id}'),
+                        child: marker,
                       ),
                     ),
                   );
@@ -431,114 +637,58 @@ class _MapCanvasState extends State<_MapCanvas> {
       ),
     );
   }
-
-  WorldState? _findWorld(String? name) {
-    if (name == null) return null;
-    for (final world in widget.productionWorlds) {
-      if (world.name == name) return world;
-    }
-    return null;
-  }
-
-  static String _worldSummary(WorldState world) {
-    final value = world.isHomeworld ? world.homeworldValue : world.cpValue;
-    final facility = world.facility == null ? '' : ' ${_facilityLabel(world.facility!)}';
-    final blocked = world.isBlocked ? ' B' : '';
-    return world.isHomeworld ? 'HW $value$facility$blocked' : '$value$facility$blocked';
-  }
-
-  static String _facilityLabel(FacilityType facility) {
-    return switch (facility) {
-      FacilityType.industrial => 'IC',
-      FacilityType.research => 'RC',
-      FacilityType.logistics => 'LC',
-      FacilityType.temporal => 'TC',
-    };
-  }
-
-  static String _tokenSummary(MapHexState hex) {
-    final parts = <String>[];
-    if (hex.minerals > 0) parts.add('M${hex.minerals}');
-    if (hex.wrecks > 0) parts.add('W${hex.wrecks}');
-    if (hex.mines > 0) parts.add('Mi${hex.mines}');
-    if (hex.pipelines > 0) parts.add('P${hex.pipelines}');
-    if (hex.industryMarkers > 0) parts.add('I${hex.industryMarkers}');
-    if (hex.researchMarkers > 0) parts.add('R${hex.researchMarkers}');
-    return parts.join(' ');
-  }
-
-  static String _fleetBadge(List<FleetStackState> fleets) {
-    int enemyCount = 0;
-    int playerShips = 0;
-    for (final fleet in fleets) {
-      if (fleet.isEnemy) {
-        enemyCount++;
-      } else {
-        playerShips += fleet.shipCounterIds.length;
-      }
-    }
-    final parts = <String>[];
-    if (playerShips > 0) parts.add('${playerShips}P');
-    if (enemyCount > 0) parts.add('${enemyCount}E');
-    return parts.join(' ');
-  }
-
-  static Color _terrainColor(MapHexState hex, bool hasWorld) {
-    final base = switch (hex.terrain) {
-      HexTerrain.deepSpace => hex.explored ? const Color(0xFF101935) : const Color(0xFF05080F),
-      HexTerrain.asteroid => const Color(0xFF5A4A38),
-      HexTerrain.nebula => const Color(0xFF433164),
-      HexTerrain.blackHole => const Color(0xFF161616),
-      HexTerrain.supernova => const Color(0xFF7B2D1E),
-      HexTerrain.foldInSpace => const Color(0xFF16546B),
-    };
-    return hasWorld ? Color.alphaBlend(const Color(0x2500FF66), base) : base;
-  }
 }
 
 class _HexInspector extends StatelessWidget {
+  final GameMapState state;
   final MapHexState hex;
   final WorldState? world;
   final List<FleetStackState> fleets;
-  final List<FleetStackState> allFleets;
-  final List<ShipCounter> shipCounters;
   final String? selectedFleetId;
+  final List<ShipCounter> availableShips;
   final ValueChanged<MapHexState> onHexChanged;
+  final VoidCallback onPlaceWorld;
+  final VoidCallback onClearWorld;
   final ValueChanged<String> onFleetSelected;
   final ValueChanged<String> onFleetDeleted;
   final ValueChanged<FleetStackState> onFleetChanged;
+  final void Function(String fleetId, List<String> shipIds) onFleetShipsChanged;
 
   const _HexInspector({
+    required this.state,
     required this.hex,
     required this.world,
     required this.fleets,
-    required this.allFleets,
-    required this.shipCounters,
     required this.selectedFleetId,
+    required this.availableShips,
     required this.onHexChanged,
+    required this.onPlaceWorld,
+    required this.onClearWorld,
     required this.onFleetSelected,
     required this.onFleetDeleted,
     required this.onFleetChanged,
+    required this.onFleetShipsChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final currentWorld = world;
-    final selectedFleet = selectedFleetId == null
-        ? null
-        : fleets.cast<FleetStackState?>().firstWhere(
-              (fleet) => fleet?.id == selectedFleetId,
-              orElse: () => null,
-            );
-    final availableShips = _availableFriendlyShips(selectedFleet);
+    FleetStackState? selectedFleet;
+    if (selectedFleetId != null) {
+      for (final fleet in fleets) {
+        if (fleet.id == selectedFleetId) {
+          selectedFleet = fleet;
+          break;
+        }
+      }
+    }
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Hex ${hex.coord.id}', style: Theme.of(context).textTheme.titleLarge),
+        Text('Hex ${hex.coord.id}', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
-        TextFormField(
-          initialValue: hex.label,
+        TextField(
+          controller: TextEditingController(text: hex.label),
           decoration: const InputDecoration(labelText: 'Label'),
           onChanged: (value) => onHexChanged(hex.copyWith(label: value)),
         ),
@@ -548,33 +698,36 @@ class _HexInspector extends StatelessWidget {
           decoration: const InputDecoration(labelText: 'Terrain'),
           items: [
             for (final terrain in HexTerrain.values)
-              DropdownMenuItem(value: terrain, child: Text(_terrainLabel(terrain))),
+              DropdownMenuItem(
+                value: terrain,
+                child: Text(_terrainLabel(terrain)),
+              ),
           ],
           onChanged: (value) {
             if (value != null) onHexChanged(hex.copyWith(terrain: value));
           },
         ),
         SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Explored'),
           value: hex.explored,
+          title: const Text('Explored'),
+          contentPadding: EdgeInsets.zero,
           onChanged: (value) => onHexChanged(hex.copyWith(explored: value)),
         ),
-        if (currentWorld != null)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(currentWorld.name),
-            subtitle: Text(_MapCanvasState._worldSummary(currentWorld)),
-            trailing: TextButton(
-              onPressed: () => onHexChanged(hex.copyWith(clearWorldName: true)),
-              child: const Text('Remove'),
+        Card(
+          child: ListTile(
+            title: Text(world?.name ?? 'No world placed'),
+            subtitle: Text(world == null ? 'Static world placement from ledger' : 'Ledger-backed world'),
+            trailing: Wrap(
+              spacing: 8,
+              children: [
+                TextButton(onPressed: onPlaceWorld, child: const Text('Place')),
+                if (world != null)
+                  TextButton(onPressed: onClearWorld, child: const Text('Unplace')),
+              ],
             ),
-          )
-        else
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('No ledger world placed in this hex.'),
           ),
+        ),
+        const SizedBox(height: 8),
         _StepperRow(
           label: 'Minerals',
           value: hex.minerals,
@@ -591,195 +744,203 @@ class _HexInspector extends StatelessWidget {
           onChanged: (value) => onHexChanged(hex.copyWith(mines: value)),
         ),
         _StepperRow(
-          label: 'Pipelines',
-          value: hex.pipelines,
-          onChanged: (value) => onHexChanged(hex.copyWith(pipelines: value)),
-        ),
-        _StepperRow(
-          label: 'Industry markers',
+          label: 'Industry',
           value: hex.industryMarkers,
-          onChanged: (value) => onHexChanged(hex.copyWith(industryMarkers: value)),
+          onChanged: (value) =>
+              onHexChanged(hex.copyWith(industryMarkers: value)),
         ),
         _StepperRow(
-          label: 'Research markers',
+          label: 'Research',
           value: hex.researchMarkers,
-          onChanged: (value) => onHexChanged(hex.copyWith(researchMarkers: value)),
+          onChanged: (value) =>
+              onHexChanged(hex.copyWith(researchMarkers: value)),
         ),
-        TextFormField(
-          initialValue: hex.notes,
+        if (hex.pipelineIds.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('Pipelines: ${hex.pipelineIds.join(', ')}'),
+          ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: TextEditingController(text: hex.notes),
+          decoration: const InputDecoration(labelText: 'Notes'),
           maxLines: 2,
-          decoration: const InputDecoration(labelText: 'Hex notes'),
           onChanged: (value) => onHexChanged(hex.copyWith(notes: value)),
         ),
-        const SizedBox(height: 18),
-        Text('Fleets', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 16),
+        Text('Fleets', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         if (fleets.isEmpty)
-          const Text('No fleets in this hex.')
+          const Text('No fleets on this hex.')
         else
-          ...fleets.map(
-            (fleet) => Card(
-              child: ListTile(
-                selected: fleet.id == selectedFleetId,
-                title: Text(fleet.label.isEmpty ? 'Unnamed Fleet' : fleet.label),
-                subtitle: Text(_fleetSummary(fleet, shipCounters)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => onFleetDeleted(fleet.id),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final fleet in fleets)
+                ChoiceChip(
+                  label: Text(fleet.label.isEmpty ? fleet.id : fleet.label),
+                  selected: fleet.id == selectedFleetId,
+                  onSelected: (_) => onFleetSelected(fleet.id),
                 ),
-                onTap: () => onFleetSelected(fleet.id),
-              ),
-            ),
+            ],
           ),
         if (selectedFleet != null) ...[
-          const SizedBox(height: 10),
-          TextFormField(
-            initialValue: selectedFleet.owner,
-            decoration: const InputDecoration(labelText: 'Fleet owner'),
-            onChanged: (value) => onFleetChanged(selectedFleet.copyWith(owner: value)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: TextEditingController(text: selectedFleet.owner),
+            decoration: const InputDecoration(labelText: 'Owner'),
+            onChanged: (value) =>
+                onFleetChanged(selectedFleet!.copyWith(owner: value)),
           ),
-          const SizedBox(height: 10),
-          TextFormField(
-            initialValue: selectedFleet.label,
-            decoration: const InputDecoration(labelText: 'Fleet label'),
-            onChanged: (value) => onFleetChanged(selectedFleet.copyWith(label: value)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: TextEditingController(text: selectedFleet.label),
+            decoration: const InputDecoration(labelText: 'Fleet Name'),
+            onChanged: (value) =>
+                onFleetChanged(selectedFleet!.copyWith(label: value)),
           ),
           SwitchListTile(
+            value: selectedFleet.facedown,
+            title: const Text('Facedown'),
             contentPadding: EdgeInsets.zero,
-            title: const Text('Enemy / Manual Fleet'),
-            value: selectedFleet.isEnemy,
-            onChanged: (value) => onFleetChanged(
-              selectedFleet.copyWith(
-                isEnemy: value,
-                shipCounterIds: value ? const [] : selectedFleet.shipCounterIds,
-                composition: value ? selectedFleet.composition : const {},
-                owner: value ? 'Enemy' : selectedFleet.owner,
-                facedown: value || selectedFleet.facedown,
-              ),
-            ),
+            onChanged: (value) =>
+                onFleetChanged(selectedFleet!.copyWith(facedown: value)),
+          ),
+          SwitchListTile(
+            value: selectedFleet.inSupply,
+            title: const Text('In Supply'),
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) =>
+                onFleetChanged(selectedFleet!.copyWith(inSupply: value)),
           ),
           if (selectedFleet.isEnemy)
-            TextFormField(
-              initialValue: _formatComposition(selectedFleet.composition),
+            TextField(
+              controller: TextEditingController(
+                text: _formatComposition(selectedFleet.composition),
+              ),
               decoration: const InputDecoration(labelText: 'Composition'),
-              onChanged: (value) =>
-                  onFleetChanged(selectedFleet.copyWith(composition: _parseComposition(value))),
+              onChanged: (value) => onFleetChanged(
+                selectedFleet!.copyWith(composition: _parseComposition(value)),
+              ),
             )
           else ...[
-            Text('Assign Built Ships', style: Theme.of(context).textTheme.titleSmall),
-            if (availableShips.isEmpty && selectedFleet.shipCounterIds.isEmpty)
-              const Text('No unassigned built ships available.')
-            else
-              ...availableShips.map(
-                (counter) => CheckboxListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(_shipLabel(counter)),
-                  value: selectedFleet.shipCounterIds.contains(_counterId(counter)),
-                  onChanged: (checked) {
-                    final ids = List<String>.from(selectedFleet.shipCounterIds);
-                    final id = _counterId(counter);
-                    if (checked == true && !ids.contains(id)) ids.add(id);
-                    if (checked != true) ids.remove(id);
-                    onFleetChanged(selectedFleet.copyWith(shipCounterIds: ids));
-                  },
-                ),
+            const SizedBox(height: 8),
+            Text('Assign Built Ships', style: Theme.of(context).textTheme.bodyMedium),
+            for (final counter in availableShips)
+              CheckboxListTile(
+                value: selectedFleet.shipCounterIds.contains(counter.id),
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(counter.id),
+                onChanged: (checked) {
+                  final ids = [...selectedFleet!.shipCounterIds];
+                  if (checked == true) {
+                    if (!ids.contains(counter.id)) ids.add(counter.id);
+                  } else {
+                    ids.remove(counter.id);
+                  }
+                  onFleetShipsChanged(selectedFleet.id, ids);
+                },
               ),
           ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Facedown'),
-            value: selectedFleet.facedown,
-            onChanged: (value) => onFleetChanged(selectedFleet.copyWith(facedown: value)),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('In Supply'),
-            value: selectedFleet.inSupply,
-            onChanged: (value) => onFleetChanged(selectedFleet.copyWith(inSupply: value)),
-          ),
-          TextFormField(
-            initialValue: selectedFleet.notes,
+          const SizedBox(height: 8),
+          TextField(
+            controller: TextEditingController(text: selectedFleet.notes),
+            decoration: const InputDecoration(labelText: 'Fleet Notes'),
             maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Fleet notes'),
-            onChanged: (value) => onFleetChanged(selectedFleet.copyWith(notes: value)),
+            onChanged: (value) =>
+                onFleetChanged(selectedFleet!.copyWith(notes: value)),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => onFleetDeleted(selectedFleet!.id),
+              child: const Text('Delete Fleet'),
+            ),
           ),
         ],
       ],
     );
   }
+}
 
-  List<ShipCounter> _availableFriendlyShips(FleetStackState? selectedFleet) {
-    final assignedElsewhere = <String>{};
-    for (final fleet in allFleets) {
-      if (fleet.isEnemy) continue;
-      if (selectedFleet != null && fleet.id == selectedFleet.id) continue;
-      assignedElsewhere.addAll(fleet.shipCounterIds);
-    }
-    return shipCounters
-        .where((counter) => counter.isBuilt)
-        .where((counter) => !assignedElsewhere.contains(_counterId(counter)))
-        .toList();
+Map<String, int> _parseComposition(String value) {
+  final composition = <String, int>{};
+  for (final part in value.split(',')) {
+    final trimmed = part.trim();
+    if (trimmed.isEmpty) continue;
+    final pieces = trimmed.split(':');
+    final key = pieces.first.trim();
+    final count = pieces.length > 1 ? int.tryParse(pieces[1].trim()) ?? 1 : 1;
+    composition[key] = count;
   }
+  return composition;
+}
 
-  static String _terrainLabel(HexTerrain terrain) {
-    return switch (terrain) {
-      HexTerrain.deepSpace => 'Deep Space',
-      HexTerrain.asteroid => 'Asteroid',
-      HexTerrain.nebula => 'Nebula',
-      HexTerrain.blackHole => 'Black Hole',
-      HexTerrain.supernova => 'Supernova',
-      HexTerrain.foldInSpace => 'Fold in Space',
-    };
+String _formatComposition(Map<String, int> composition) {
+  return composition.entries.map((entry) => '${entry.key}:${entry.value}').join(', ');
+}
+
+class _FleetMarker extends StatelessWidget {
+  final FleetStackState fleet;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FleetMarker({
+    required this.fleet,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = fleet.isEnemy ? Colors.redAccent : Colors.cyanAccent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? Colors.amber : color,
+            width: selected ? 2 : 1.2,
+          ),
+        ),
+        child: Text(
+          fleet.label.isEmpty ? fleet.owner : fleet.label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
+}
 
-  static String _fleetSummary(FleetStackState fleet, List<ShipCounter> shipCounters) {
-    final parts = <String>[
-      if (fleet.owner.isNotEmpty) fleet.owner,
-      fleet.isEnemy ? _formatComposition(fleet.composition) : _friendlyComposition(fleet, shipCounters),
-      fleet.facedown ? 'Facedown' : 'Faceup',
-      fleet.inSupply ? 'In Supply' : 'Out of Supply',
-    ];
-    return parts.where((part) => part.isNotEmpty).join(' • ');
+class _AssetPill extends StatelessWidget {
+  final String label;
+  final int value;
+
+  const _AssetPill({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text('$label: $value'),
+    );
   }
-
-  static String _friendlyComposition(FleetStackState fleet, List<ShipCounter> shipCounters) {
-    final counts = <String, int>{};
-    final byId = {for (final counter in shipCounters) _counterId(counter): counter};
-    for (final id in fleet.shipCounterIds) {
-      final counter = byId[id];
-      if (counter == null) continue;
-      final label = _shipAbbrev(counter.type);
-      counts[label] = (counts[label] ?? 0) + 1;
-    }
-    return _formatComposition(counts);
-  }
-
-  static String _formatComposition(Map<String, int> composition) {
-    if (composition.isEmpty) return '';
-    final keys = composition.keys.toList()..sort();
-    return keys.map((key) => '${composition[key]} $key').join(', ');
-  }
-
-  static Map<String, int> _parseComposition(String text) {
-    final result = <String, int>{};
-    for (final rawPart in text.split(',')) {
-      final part = rawPart.trim();
-      if (part.isEmpty) continue;
-      final match = RegExp(r'^(\d+)\s+(.+)$').firstMatch(part);
-      if (match == null) continue;
-      final count = int.tryParse(match.group(1) ?? '');
-      final label = (match.group(2) ?? '').trim();
-      if (count == null || count <= 0 || label.isEmpty) continue;
-      result[label] = count;
-    }
-    return result;
-  }
-
-  static String _counterId(ShipCounter counter) => '${counter.type.name}:${counter.number}';
-  static String _shipLabel(ShipCounter counter) => '${_shipAbbrev(counter.type)} #${counter.number}';
-  static String _shipAbbrev(ShipType type) =>
-      kShipDefinitions[type]?.abbreviation ?? type.name.toUpperCase();
 }
 
 class _StepperRow extends StatelessWidget {
@@ -799,13 +960,13 @@ class _StepperRow extends StatelessWidget {
       children: [
         Expanded(child: Text(label)),
         IconButton(
-          onPressed: value > 0 ? () => onChanged((value - 1).clamp(0, 99)) : null,
-          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: value > 0 ? () => onChanged(value - 1) : null,
+          icon: const Icon(Icons.remove),
         ),
         Text('$value'),
         IconButton(
-          onPressed: value < 99 ? () => onChanged((value + 1).clamp(0, 99)) : null,
-          icon: const Icon(Icons.add_circle_outline),
+          onPressed: () => onChanged(value + 1),
+          icon: const Icon(Icons.add),
         ),
       ],
     );
@@ -825,21 +986,24 @@ class _HexPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.5, 0)
-      ..lineTo(size.width, size.height * 0.25)
-      ..lineTo(size.width, size.height * 0.75)
-      ..lineTo(size.width * 0.5, size.height)
-      ..lineTo(0, size.height * 0.75)
-      ..lineTo(0, size.height * 0.25)
-      ..close();
+    final path = Path();
+    final w = size.width;
+    final h = size.height;
+    path.moveTo(w * 0.5, 0);
+    path.lineTo(w, h * 0.25);
+    path.lineTo(w, h * 0.75);
+    path.lineTo(w * 0.5, h);
+    path.lineTo(0, h * 0.75);
+    path.lineTo(0, h * 0.25);
+    path.close();
+
     canvas.drawPath(path, Paint()..color = fillColor);
     canvas.drawPath(
       path,
       Paint()
         ..color = borderColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = selected ? 2.2 : 1.0,
+        ..strokeWidth = selected ? 2.5 : 1.2,
     );
   }
 
@@ -850,3 +1014,40 @@ class _HexPainter extends CustomPainter {
         oldDelegate.selected != selected;
   }
 }
+
+Color _terrainColor(MapHexState hex, {required bool hasWorld}) {
+  if (hasWorld) return const Color(0xFF1E4F2B);
+  return switch (hex.terrain) {
+    HexTerrain.deepSpace => const Color(0xFF14213D),
+    HexTerrain.asteroid => const Color(0xFF4A4E69),
+    HexTerrain.nebula => const Color(0xFF3A506B),
+    HexTerrain.blackHole => const Color(0xFF111111),
+    HexTerrain.supernova => const Color(0xFF7F1D1D),
+    HexTerrain.foldInSpace => const Color(0xFF5A189A),
+  };
+}
+
+String _worldSummary(WorldState world) {
+  if (world.isHomeworld) return '${world.name} HW';
+  return world.name;
+}
+
+String _tokenSummary(MapHexState hex) {
+  final parts = <String>[];
+  if (hex.minerals > 0) parts.add('M${hex.minerals}');
+  if (hex.wrecks > 0) parts.add('W${hex.wrecks}');
+  if (hex.mines > 0) parts.add('Mi${hex.mines}');
+  if (hex.pipelineIds.isNotEmpty) parts.add('P${hex.pipelineIds.length}');
+  if (hex.industryMarkers > 0) parts.add('I${hex.industryMarkers}');
+  if (hex.researchMarkers > 0) parts.add('R${hex.researchMarkers}');
+  return parts.join(' ');
+}
+
+String _terrainLabel(HexTerrain terrain) => switch (terrain) {
+      HexTerrain.deepSpace => 'Deep Space',
+      HexTerrain.asteroid => 'Asteroid',
+      HexTerrain.nebula => 'Nebula',
+      HexTerrain.blackHole => 'Black Hole',
+      HexTerrain.supernova => 'Supernova',
+      HexTerrain.foldInSpace => 'Fold in Space',
+    };

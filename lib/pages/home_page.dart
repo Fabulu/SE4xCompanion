@@ -152,7 +152,7 @@ class _HomePageState extends State<HomePage>
       config: const GameConfig(),
       turnNumber: 1,
       production: const ProductionState(
-        worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
+        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
       ),
       mapState: GameMapState.initial(),
       shipCounters: createAllCounters(),
@@ -197,7 +197,7 @@ class _HomePageState extends State<HomePage>
       config: config,
       turnNumber: 1,
       production: ProductionState(
-        worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: hwValue)],
+        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: hwValue)],
         techState: startTech,
       ),
       mapState: GameMapState.initial(),
@@ -318,7 +318,9 @@ class _HomePageState extends State<HomePage>
   // ---------------------------------------------------------------------------
 
   void _onProductionChanged(ProductionState production) {
-    final nextState = _syncedMapState(_gameState.copyWith(production: production));
+    final nextState = _syncedMapState(
+      _gameState.copyWith(production: production.ensureWorldIds()),
+    );
     _updateGameState(nextState, 'Production');
   }
 
@@ -359,54 +361,26 @@ class _HomePageState extends State<HomePage>
   }
 
   GameState _syncedMapState(GameState state) {
-    final validWorldNames = state.production.worlds.map((world) => world.name).toSet();
+    final normalizedProduction = state.production.ensureWorldIds();
+    final validWorldIds =
+        normalizedProduction.worlds.map((world) => world.id).toSet();
     final validShipIds = state.shipCounters
         .where((counter) => counter.isBuilt)
-        .map(_shipCounterId)
+        .map((counter) => counter.id)
+        .toSet();
+    final validPipelineIds =
+        normalizedProduction.pipelineAssets.map((asset) => asset.id)
         .toSet();
 
-    final nextHexes = [
-      for (final hex in state.mapState.hexes)
-        if (hex.worldName != null && !validWorldNames.contains(hex.worldName))
-          hex.copyWith(clearWorldName: true)
-        else
-          hex,
-    ];
-
-    final nextFleets = <FleetStackState>[];
-    for (final fleet in state.mapState.fleets) {
-      if (fleet.isEnemy) {
-        nextFleets.add(fleet);
-        continue;
-      }
-      final shipCounterIds = fleet.shipCounterIds
-          .where(validShipIds.contains)
-          .toList();
-      if (shipCounterIds.isEmpty) continue;
-      nextFleets.add(
-        fleet.copyWith(
-          shipCounterIds: shipCounterIds,
-          composition: const {},
-        ),
-      );
-    }
-
-    final selectedFleetId = nextFleets.any((fleet) => fleet.id == state.mapState.selectedFleetId)
-        ? state.mapState.selectedFleetId
-        : null;
-
     return state.copyWith(
-      mapState: state.mapState.copyWith(
-        hexes: nextHexes,
-        fleets: nextFleets,
-        selectedFleetId: selectedFleetId,
-        clearSelectedFleetId: selectedFleetId == null,
+      production: normalizedProduction,
+      mapState: state.mapState.sanitizeAgainstLedger(
+        validWorldIds: validWorldIds,
+        validShipIds: validShipIds,
+        validPipelineIds: validPipelineIds,
       ),
     );
   }
-
-  static String _shipCounterId(ShipCounter counter) =>
-      '${counter.type.name}:${counter.number}';
 
   void _onEndTurn() {
     final prod = _gameState.production;
@@ -730,7 +704,7 @@ class _HomePageState extends State<HomePage>
       config: _gameState.config,
       turnNumber: 1,
       production: const ProductionState(
-        worlds: [WorldState(name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
+        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
       ),
       mapState: GameMapState.initial(),
       shipCounters: createAllCounters(),
@@ -868,6 +842,7 @@ class _HomePageState extends State<HomePage>
               : _gameState.mapState,
           productionWorlds: _gameState.production.worlds,
           shipCounters: _gameState.shipCounters,
+          pipelineAssets: _gameState.production.pipelineAssets,
           onChanged: _onMapChanged,
         ),
       _TabId.shipTech => ShipTechPage(

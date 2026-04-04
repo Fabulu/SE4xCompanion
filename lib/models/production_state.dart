@@ -51,6 +51,35 @@ class ShipPurchase {
   }
 }
 
+class PipelineAsset {
+  final String id;
+  final String notes;
+
+  const PipelineAsset({
+    required this.id,
+    this.notes = '',
+  });
+
+  PipelineAsset copyWith({
+    String? id,
+    String? notes,
+  }) =>
+      PipelineAsset(
+        id: id ?? this.id,
+        notes: notes ?? this.notes,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'notes': notes,
+      };
+
+  factory PipelineAsset.fromJson(Map<String, dynamic> json) => PipelineAsset(
+        id: json['id'] as String? ?? '',
+        notes: json['notes'] as String? ?? '',
+      );
+}
+
 class ProductionState {
   // --- CP ledger (user-editable) ---
   final int cpCarryOver;
@@ -74,6 +103,7 @@ class ProductionState {
 
   // --- Ship purchases ---
   final List<ShipPurchase> shipPurchases;
+  final List<PipelineAsset> pipelineAssets;
 
   // --- Empire state ---
   final List<WorldState> worlds;
@@ -101,6 +131,7 @@ class ProductionState {
     this.tpCarryOver = 0,
     this.tpSpending = 0,
     this.shipPurchases = const [],
+    this.pipelineAssets = const [],
     this.worlds = const [],
     this.techState = const TechState(),
     this.pendingTechPurchases = const {},
@@ -207,6 +238,44 @@ class ProductionState {
     return worlds
         .where((w) => !w.isBlocked)
         .fold(0, (sum, w) => sum + w.pipelineIncome * mult);
+  }
+
+  int get nextPipelineOrdinal {
+    var maxOrdinal = 0;
+    for (final asset in pipelineAssets) {
+      final match = RegExp(r'^pipeline-(\d+)$').firstMatch(asset.id);
+      if (match == null) continue;
+      final ordinal = int.tryParse(match.group(1) ?? '');
+      if (ordinal != null && ordinal > maxOrdinal) {
+        maxOrdinal = ordinal;
+      }
+    }
+    return maxOrdinal + 1;
+  }
+
+  ProductionState ensureWorldIds() {
+    var changed = false;
+    final seenIds = <String>{};
+    var nextGeneratedId = 1;
+    final nextWorlds = [
+      for (final world in worlds)
+        () {
+          var nextWorld = world;
+          var id = nextWorld.id;
+          if (id.isEmpty || seenIds.contains(id)) {
+            changed = true;
+            while (seenIds.contains('world-$nextGeneratedId')) {
+              nextGeneratedId++;
+            }
+            id = 'world-$nextGeneratedId';
+            nextGeneratedId++;
+            nextWorld = nextWorld.copyWith(id: id);
+          }
+          seenIds.add(id);
+          return nextWorld;
+        }(),
+    ];
+    return changed ? copyWith(worlds: nextWorlds) : this;
   }
 
   // ---------------------------------------------------------------------------
@@ -560,6 +629,18 @@ class ProductionState {
       );
     }).toList();
 
+    final newPipelineAssets = List<PipelineAsset>.from(pipelineAssets);
+    final pipelinePurchase = shipPurchases
+        .where((purchase) => purchase.type == ShipType.msPipeline)
+        .fold<int>(0, (sum, purchase) => sum + purchase.quantity);
+    if (pipelinePurchase > 0) {
+      var nextOrdinal = nextPipelineOrdinal;
+      for (int i = 0; i < pipelinePurchase; i++) {
+        newPipelineAssets.add(PipelineAsset(id: 'pipeline-$nextOrdinal'));
+        nextOrdinal++;
+      }
+    }
+
     return ProductionState(
       cpCarryOver: cpRemain,
       rpCarryOver: rpRemain,
@@ -574,6 +655,7 @@ class ProductionState {
       techSpendingRp: 0,
       tpSpending: 0,
       shipPurchases: const [],
+      pipelineAssets: newPipelineAssets,
       worlds: newWorlds,
       techState: newTech,
       pendingTechPurchases: const {},
@@ -601,6 +683,7 @@ class ProductionState {
     int? tpCarryOver,
     int? tpSpending,
     List<ShipPurchase>? shipPurchases,
+    List<PipelineAsset>? pipelineAssets,
     List<WorldState>? worlds,
     TechState? techState,
     Map<TechId, int>? pendingTechPurchases,
@@ -624,6 +707,7 @@ class ProductionState {
         tpCarryOver: tpCarryOver ?? this.tpCarryOver,
         tpSpending: tpSpending ?? this.tpSpending,
         shipPurchases: shipPurchases ?? this.shipPurchases,
+        pipelineAssets: pipelineAssets ?? this.pipelineAssets,
         worlds: worlds ?? this.worlds,
         techState: techState ?? this.techState,
         pendingTechPurchases:
@@ -648,6 +732,7 @@ class ProductionState {
         'tpCarryOver': tpCarryOver,
         'tpSpending': tpSpending,
         'shipPurchases': shipPurchases.map((p) => p.toJson()).toList(),
+        'pipelineAssets': pipelineAssets.map((p) => p.toJson()).toList(),
         'worlds': worlds.map((w) => w.toJson()).toList(),
         'techState': techState.toJson(),
         'pendingTechPurchases':
@@ -691,6 +776,11 @@ class ProductionState {
                   (p) => ShipPurchase.fromJson(p as Map<String, dynamic>))
               .toList() ??
           const [],
+      pipelineAssets: (json['pipelineAssets'] as List?)
+              ?.map(
+                  (p) => PipelineAsset.fromJson(p as Map<String, dynamic>))
+              .toList() ??
+          const [],
       worlds: (json['worlds'] as List?)
               ?.map(
                   (w) => WorldState.fromJson(w as Map<String, dynamic>))
@@ -707,7 +797,7 @@ class ProductionState {
               .whereType<TechId>()
               .toList() ??
           const [],
-    );
+    ).ensureWorldIds();
   }
 
   static TechId? _techIdFromName(String name) {

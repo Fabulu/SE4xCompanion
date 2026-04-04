@@ -615,6 +615,87 @@ void main() {
       expect(restored.techState.getLevel(TechId.attack), 2);
       expect(restored.pendingTechPurchases[TechId.defense], 1);
     });
+
+    test('pipeline assets round-trip through JSON', () {
+      final ps = ProductionState(
+        pipelineAssets: const [
+          PipelineAsset(id: 'pipeline-1', notes: 'front line'),
+          PipelineAsset(id: 'pipeline-2'),
+        ],
+      );
+
+      final json = ps.toJson();
+      final restored = ProductionState.fromJson(json);
+
+      expect(restored.pipelineAssets, hasLength(2));
+      expect(restored.pipelineAssets[0].id, 'pipeline-1');
+      expect(restored.pipelineAssets[0].notes, 'front line');
+      expect(restored.pipelineAssets[1].id, 'pipeline-2');
+    });
+  });
+
+  group('Pipeline inventory', () {
+    test('end turn converts MS Pipeline purchases into ledger assets', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        pipelineAssets: const [PipelineAsset(id: 'pipeline-1')],
+        shipPurchases: const [
+          ShipPurchase(type: ShipType.msPipeline, quantity: 2),
+        ],
+      );
+
+      final next = ps.prepareForNextTurn(baseConfig, []);
+
+      expect(next.shipPurchases, isEmpty);
+      expect(next.pipelineAssets.map((asset) => asset.id), [
+        'pipeline-1',
+        'pipeline-2',
+        'pipeline-3',
+      ]);
+    });
+
+    test('manual ledger adjustments preserve inventory identity', () {
+      final ps = ProductionState(
+        pipelineAssets: const [
+          PipelineAsset(id: 'pipeline-1'),
+          PipelineAsset(id: 'pipeline-2'),
+        ],
+      );
+
+      final added = ps.copyWith(
+        pipelineAssets: [
+          ...ps.pipelineAssets,
+          const PipelineAsset(id: 'pipeline-3', notes: 'reserve'),
+        ],
+      );
+      expect(added.pipelineAssets, hasLength(3));
+      expect(added.pipelineAssets.last.notes, 'reserve');
+
+      final removed = added.copyWith(
+        pipelineAssets: [
+          for (final asset in added.pipelineAssets)
+            if (asset.id != 'pipeline-2') asset,
+        ],
+      );
+      expect(removed.pipelineAssets.map((asset) => asset.id), [
+        'pipeline-1',
+        'pipeline-3',
+      ]);
+    });
+
+    test('ensureWorldIds assigns unique ids to legacy worlds', () {
+      final ps = ProductionState(
+        worlds: const [
+          WorldState(name: 'Homeworld', isHomeworld: true),
+          WorldState(name: 'Colony 1'),
+          WorldState(name: 'Colony 2'),
+        ],
+      ).ensureWorldIds();
+
+      final ids = ps.worlds.map((world) => world.id).toList();
+      expect(ids.every((id) => id.isNotEmpty), true);
+      expect(ids.toSet(), hasLength(3));
+    });
   });
 
   group('Unpredictable Research', () {

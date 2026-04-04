@@ -106,45 +106,73 @@ class GameState {
       if (type != null) abilities[type] = e.value as int;
     }
 
+    final production = json['production'] != null
+        ? ProductionState.fromJson(json['production'] as Map<String, dynamic>)
+        : const ProductionState();
+    final rawMapState = json['mapState'] != null
+        ? GameMapState.fromJson(json['mapState'] as Map<String, dynamic>)
+        : GameMapState.initial();
+    final legacyPipelineIds = {
+      for (final hex in rawMapState.hexes) ...hex.pipelineIds,
+    };
+    final normalizedProduction = production.pipelineAssets.isEmpty &&
+            legacyPipelineIds.isNotEmpty
+        ? production.copyWith(
+            pipelineAssets: [
+              for (final id in legacyPipelineIds) PipelineAsset(id: id),
+            ],
+          )
+        : production;
+    final shipCounters = (json['shipCounters'] as List?)
+            ?.map((c) => ShipCounter.fromJson(c as Map<String, dynamic>))
+            .toList() ??
+        const <ShipCounter>[];
+    final worldIdByName = {
+      for (final world in normalizedProduction.worlds) world.name: world.id,
+    };
+    final validWorldIds =
+        normalizedProduction.worlds.map((world) => world.id).toSet();
+    final validShipIds = shipCounters
+        .where((counter) => counter.isBuilt)
+        .map((counter) => counter.id)
+        .toSet();
+    final validPipelineIds =
+        normalizedProduction.pipelineAssets.map((asset) => asset.id).toSet();
+    final mapState = rawMapState
+        .migrateLegacyWorldNames(worldIdByName)
+        .sanitizeAgainstLedger(
+          validWorldIds: validWorldIds,
+          validShipIds: validShipIds,
+          validPipelineIds: validPipelineIds,
+        );
+
     return GameState(
-        config: json['config'] != null
-            ? GameConfig.fromJson(json['config'] as Map<String, dynamic>)
-            : const GameConfig(),
-        turnNumber: json['turnNumber'] as int? ?? 1,
-        production: json['production'] != null
-            ? ProductionState.fromJson(
-                json['production'] as Map<String, dynamic>)
-            : const ProductionState(),
-        shipCounters: (json['shipCounters'] as List?)
-                ?.map((c) =>
-                    ShipCounter.fromJson(c as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        alienPlayers: (json['alienPlayers'] as List?)
-                ?.map((a) =>
-                    AlienPlayer.fromJson(a as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        turnSummaries: (json['turnSummaries'] as List?)
-                ?.map((s) =>
-                    TurnSummary.fromJson(s as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        activeModifiers: (json['activeModifiers'] as List?)
-                ?.map((m) =>
-                    GameModifier.fromJson(m as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        shipSpecialAbilities: abilities,
-        victoryPoints: json['victoryPoints'] as int? ?? 0,
-        replicatorState: json['replicatorState'] != null
-            ? ReplicatorState.fromJson(
-                json['replicatorState'] as Map<String, dynamic>)
-            : null,
-        mapState: json['mapState'] != null
-            ? GameMapState.fromJson(json['mapState'] as Map<String, dynamic>)
-            : GameMapState.initial(),
-      );
+      config: json['config'] != null
+          ? GameConfig.fromJson(json['config'] as Map<String, dynamic>)
+          : const GameConfig(),
+      turnNumber: json['turnNumber'] as int? ?? 1,
+      production: normalizedProduction,
+      shipCounters: shipCounters,
+      alienPlayers: (json['alienPlayers'] as List?)
+              ?.map((a) => AlienPlayer.fromJson(a as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      turnSummaries: (json['turnSummaries'] as List?)
+              ?.map((s) => TurnSummary.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      activeModifiers: (json['activeModifiers'] as List?)
+              ?.map((m) => GameModifier.fromJson(m as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      shipSpecialAbilities: abilities,
+      victoryPoints: json['victoryPoints'] as int? ?? 0,
+      replicatorState: json['replicatorState'] != null
+          ? ReplicatorState.fromJson(
+              json['replicatorState'] as Map<String, dynamic>)
+          : null,
+      mapState: mapState,
+    );
   }
 
   static ShipType? _shipTypeFromName(String name) {

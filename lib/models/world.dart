@@ -6,6 +6,7 @@ enum FacilityType { industrial, research, logistics, temporal }
 const List<int> kColonyGrowthCp = [0, 1, 3, 5];
 
 class WorldState {
+  final String id;
   final String name;
   final bool isHomeworld;
   final int homeworldValue; // 30 default, damaged: 25/20/15/10/5
@@ -16,6 +17,7 @@ class WorldState {
   final int pipelineIncome;
 
   const WorldState({
+    this.id = '',
     required this.name,
     this.isHomeworld = false,
     this.homeworldValue = 30,
@@ -61,6 +63,7 @@ class WorldState {
   }
 
   WorldState copyWith({
+    String? id,
     String? name,
     bool? isHomeworld,
     int? homeworldValue,
@@ -72,6 +75,7 @@ class WorldState {
     int? pipelineIncome,
   }) =>
       WorldState(
+        id: id ?? this.id,
         name: name ?? this.name,
         isHomeworld: isHomeworld ?? this.isHomeworld,
         homeworldValue: homeworldValue ?? this.homeworldValue,
@@ -83,6 +87,7 @@ class WorldState {
       );
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'name': name,
         'isHomeworld': isHomeworld,
         'homeworldValue': homeworldValue,
@@ -94,6 +99,7 @@ class WorldState {
       };
 
   factory WorldState.fromJson(Map<String, dynamic> json) => WorldState(
+        id: json['id'] as String? ?? '',
         name: json['name'] as String? ?? '',
         isHomeworld: json['isHomeworld'] as bool? ?? false,
         homeworldValue: json['homeworldValue'] as int? ?? 30,
@@ -103,6 +109,11 @@ class WorldState {
         mineralIncome: json['mineralIncome'] as int? ?? 0,
         pipelineIncome: json['pipelineIncome'] as int? ?? 0,
       );
+
+  static String createId() =>
+      'world-${DateTime.now().microsecondsSinceEpoch}';
+
+  WorldState ensureId() => id.isNotEmpty ? this : copyWith(id: createId());
 
   static FacilityType? _facilityFromName(String? name) {
     if (name == null) return null;

@@ -50,28 +50,30 @@ class MapHexState {
   final HexTerrain terrain;
   final bool explored;
   final String label;
-  final String? worldName;
+  final String? worldId;
   final int minerals;
   final int wrecks;
   final int mines;
-  final int pipelines;
+  final List<String> pipelineIds;
   final int industryMarkers;
   final int researchMarkers;
   final String notes;
+  final String? legacyWorldName;
 
   const MapHexState({
     required this.coord,
     this.terrain = HexTerrain.deepSpace,
     this.explored = false,
     this.label = '',
-    this.worldName,
+    this.worldId,
     this.minerals = 0,
     this.wrecks = 0,
     this.mines = 0,
-    this.pipelines = 0,
+    this.pipelineIds = const [],
     this.industryMarkers = 0,
     this.researchMarkers = 0,
     this.notes = '',
+    this.legacyWorldName,
   });
 
   MapHexState copyWith({
@@ -79,12 +81,12 @@ class MapHexState {
     HexTerrain? terrain,
     bool? explored,
     String? label,
-    String? worldName,
-    bool clearWorldName = false,
+    String? worldId,
+    bool clearWorldId = false,
     int? minerals,
     int? wrecks,
     int? mines,
-    int? pipelines,
+    List<String>? pipelineIds,
     int? industryMarkers,
     int? researchMarkers,
     String? notes,
@@ -94,14 +96,15 @@ class MapHexState {
         terrain: terrain ?? this.terrain,
         explored: explored ?? this.explored,
         label: label ?? this.label,
-        worldName: clearWorldName ? null : (worldName ?? this.worldName),
+        worldId: clearWorldId ? null : (worldId ?? this.worldId),
         minerals: minerals ?? this.minerals,
         wrecks: wrecks ?? this.wrecks,
         mines: mines ?? this.mines,
-        pipelines: pipelines ?? this.pipelines,
+        pipelineIds: pipelineIds ?? this.pipelineIds,
         industryMarkers: industryMarkers ?? this.industryMarkers,
         researchMarkers: researchMarkers ?? this.researchMarkers,
         notes: notes ?? this.notes,
+        legacyWorldName: null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -109,32 +112,48 @@ class MapHexState {
         'terrain': terrain.name,
         'explored': explored,
         'label': label,
-        'worldName': worldName,
+        'worldId': worldId,
         'minerals': minerals,
         'wrecks': wrecks,
         'mines': mines,
-        'pipelines': pipelines,
+        'pipelineIds': pipelineIds,
         'industryMarkers': industryMarkers,
         'researchMarkers': researchMarkers,
         'notes': notes,
       };
 
-  factory MapHexState.fromJson(Map<String, dynamic> json) => MapHexState(
-        coord: HexCoord.fromJson(
-          json['coord'] as Map<String, dynamic>? ?? const <String, dynamic>{},
-        ),
-        terrain: _terrainFromName(json['terrain'] as String?),
-        explored: json['explored'] as bool? ?? false,
-        label: json['label'] as String? ?? '',
-        worldName: json['worldName'] as String?,
-        minerals: json['minerals'] as int? ?? 0,
-        wrecks: json['wrecks'] as int? ?? 0,
-        mines: json['mines'] as int? ?? 0,
-        pipelines: json['pipelines'] as int? ?? 0,
-        industryMarkers: json['industryMarkers'] as int? ?? 0,
-        researchMarkers: json['researchMarkers'] as int? ?? 0,
-        notes: json['notes'] as String? ?? '',
-      );
+  factory MapHexState.fromJson(Map<String, dynamic> json) {
+    final coord = HexCoord.fromJson(
+      json['coord'] as Map<String, dynamic>? ?? const <String, dynamic>{},
+    );
+    final storedPipelineIds = (json['pipelineIds'] as List?)
+        ?.map((id) => id as String)
+        .toList();
+    final legacyPipelineCount = json['pipelines'] as int? ?? 0;
+    final pipelineIds = storedPipelineIds ??
+        [
+          for (int i = 0; i < legacyPipelineCount; i++)
+            'legacy-pipeline-${coord.id}-${i + 1}',
+        ];
+
+    return MapHexState(
+      coord: coord,
+      terrain: _terrainFromName(json['terrain'] as String?),
+      explored: json['explored'] as bool? ?? false,
+      label: json['label'] as String? ?? '',
+      worldId: json['worldId'] as String?,
+      minerals: json['minerals'] as int? ?? 0,
+      wrecks: json['wrecks'] as int? ?? 0,
+      mines: json['mines'] as int? ?? 0,
+      pipelineIds: pipelineIds,
+      industryMarkers: json['industryMarkers'] as int? ?? 0,
+      researchMarkers: json['researchMarkers'] as int? ?? 0,
+      notes: json['notes'] as String? ?? '',
+      legacyWorldName: json['worldId'] == null
+          ? json['worldName'] as String?
+          : null,
+    );
+  }
 
   static HexTerrain _terrainFromName(String? name) {
     if (name == null) return HexTerrain.deepSpace;
@@ -170,6 +189,10 @@ class FleetStackState {
     this.notes = '',
   });
 
+  bool get isFriendly => !isEnemy;
+
+  bool containsShipId(String shipId) => shipCounterIds.contains(shipId);
+
   FleetStackState copyWith({
     String? id,
     String? owner,
@@ -194,6 +217,8 @@ class FleetStackState {
         inSupply: inSupply ?? this.inSupply,
         notes: notes ?? this.notes,
       );
+
+  FleetStackState movedTo(HexCoord coord) => copyWith(coord: coord);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -281,19 +306,19 @@ class GameMapState {
   }
 
   bool get hasAnyPlacedWorld =>
-      hexes.any((hex) => hex.worldName != null && hex.worldName!.isNotEmpty);
+      hexes.any((hex) => hex.worldId != null && hex.worldId!.isNotEmpty);
 
   bool get hasAnyMeaningfulContent =>
       fleets.isNotEmpty ||
       hexes.any((hex) =>
-          hex.worldName != null ||
+          hex.worldId != null ||
           hex.label.isNotEmpty ||
           hex.explored ||
           hex.terrain != HexTerrain.deepSpace ||
           hex.minerals > 0 ||
           hex.wrecks > 0 ||
           hex.mines > 0 ||
-          hex.pipelines > 0 ||
+          hex.pipelineIds.isNotEmpty ||
           hex.industryMarkers > 0 ||
           hex.researchMarkers > 0 ||
           hex.notes.isNotEmpty);
@@ -311,6 +336,178 @@ class GameMapState {
           hex,
     ];
     return copyWith(hexes: nextHexes);
+  }
+
+  GameMapState replaceFleet(FleetStackState updated) => copyWith(
+        fleets: [
+          for (final fleet in fleets)
+            if (fleet.id == updated.id) updated else fleet,
+        ],
+      );
+
+  GameMapState removeFleet(String fleetId) => copyWith(
+        fleets: fleets.where((fleet) => fleet.id != fleetId).toList(),
+        clearSelectedFleetId: selectedFleetId == fleetId,
+      );
+
+  GameMapState moveFleet(String fleetId, HexCoord coord) {
+    final fleet = fleetById(fleetId);
+    if (fleet == null) return this;
+    return replaceFleet(fleet.movedTo(coord));
+  }
+
+  String? fleetIdForShip(String shipId) {
+    for (final fleet in fleets) {
+      if (fleet.isEnemy) continue;
+      if (fleet.containsShipId(shipId)) return fleet.id;
+    }
+    return null;
+  }
+
+  Set<String> assignedFriendlyShipIds({String? excludeFleetId}) {
+    final ids = <String>{};
+    for (final fleet in fleets) {
+      if (fleet.isEnemy || fleet.id == excludeFleetId) continue;
+      ids.addAll(fleet.shipCounterIds);
+    }
+    return ids;
+  }
+
+  Set<String> placedWorldIds({String? excludeHexId}) {
+    final ids = <String>{};
+    for (final hex in hexes) {
+      if (hex.coord.id == excludeHexId) continue;
+      final worldId = hex.worldId;
+      if (worldId != null && worldId.isNotEmpty) {
+        ids.add(worldId);
+      }
+    }
+    return ids;
+  }
+
+  Set<String> placedPipelineIds({String? excludeHexId}) {
+    final ids = <String>{};
+    for (final hex in hexes) {
+      if (hex.coord.id == excludeHexId) continue;
+      ids.addAll(hex.pipelineIds);
+    }
+    return ids;
+  }
+
+  GameMapState assignFleetShips(String fleetId, List<String> shipIds) {
+    final assignedElsewhere = assignedFriendlyShipIds(excludeFleetId: fleetId);
+    final nextIds = <String>[];
+    for (final shipId in shipIds) {
+      if (assignedElsewhere.contains(shipId) || nextIds.contains(shipId)) {
+        continue;
+      }
+      nextIds.add(shipId);
+    }
+    final fleet = fleetById(fleetId);
+    if (fleet == null) return this;
+    return replaceFleet(
+      fleet.copyWith(
+        shipCounterIds: nextIds,
+        composition: const {},
+      ),
+    );
+  }
+
+  GameMapState migrateLegacyWorldNames(Map<String, String> worldIdByName) {
+    var changed = false;
+    final nextHexes = [
+      for (final hex in hexes)
+        if (hex.worldId == null &&
+            hex.legacyWorldName != null &&
+            worldIdByName.containsKey(hex.legacyWorldName))
+          () {
+            changed = true;
+            return hex.copyWith(worldId: worldIdByName[hex.legacyWorldName]);
+          }()
+        else
+          hex,
+    ];
+    return changed ? copyWith(hexes: nextHexes) : this;
+  }
+
+  GameMapState sanitizeAgainstLedger({
+    required Set<String> validWorldIds,
+    required Set<String> validShipIds,
+    required Set<String> validPipelineIds,
+  }) {
+    final seenWorldIds = <String>{};
+    final seenPipelineIds = <String>{};
+    final nextHexes = <MapHexState>[];
+    for (final hex in hexes) {
+      final worldId = hex.worldId;
+      final normalizedWorldId = worldId != null &&
+              worldId.isNotEmpty &&
+              validWorldIds.contains(worldId) &&
+              !seenWorldIds.contains(worldId)
+          ? worldId
+          : null;
+      if (normalizedWorldId != null) {
+        seenWorldIds.add(normalizedWorldId);
+      }
+
+      final pipelineIds = <String>[];
+      for (final id in hex.pipelineIds) {
+        if (!validPipelineIds.contains(id) ||
+            seenPipelineIds.contains(id) ||
+            pipelineIds.contains(id)) {
+          continue;
+        }
+        seenPipelineIds.add(id);
+        pipelineIds.add(id);
+      }
+
+      nextHexes.add(
+        hex.copyWith(
+          worldId: normalizedWorldId,
+          clearWorldId: normalizedWorldId == null,
+          pipelineIds: pipelineIds,
+        ),
+      );
+    }
+
+    final seenShipIds = <String>{};
+    final nextFleets = <FleetStackState>[];
+    for (final fleet in fleets) {
+      if (fleet.isEnemy) {
+        nextFleets.add(fleet);
+        continue;
+      }
+      final nextShipIds = <String>[];
+      for (final shipId in fleet.shipCounterIds) {
+        if (!validShipIds.contains(shipId) ||
+            seenShipIds.contains(shipId) ||
+            nextShipIds.contains(shipId)) {
+          continue;
+        }
+        seenShipIds.add(shipId);
+        nextShipIds.add(shipId);
+      }
+      if (nextShipIds.isEmpty) {
+        continue;
+      }
+      nextFleets.add(
+        fleet.copyWith(
+          shipCounterIds: nextShipIds,
+          composition: const {},
+        ),
+      );
+    }
+
+    final selectedFleetId = nextFleets.any((fleet) => fleet.id == this.selectedFleetId)
+        ? this.selectedFleetId
+        : null;
+
+    return copyWith(
+      hexes: nextHexes,
+      fleets: nextFleets,
+      selectedFleetId: selectedFleetId,
+      clearSelectedFleetId: selectedFleetId == null,
+    );
   }
 
   GameMapState copyWith({

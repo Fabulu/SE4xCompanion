@@ -63,8 +63,9 @@ void main() {
         target.copyWith(
           explored: true,
           label: 'Home',
-          worldName: 'Homeworld',
+          worldId: 'world-home',
           minerals: 2,
+          pipelineIds: const ['pipeline-1'],
           terrain: HexTerrain.asteroid,
         ),
       );
@@ -72,9 +73,84 @@ void main() {
       final restored = updated.hexAt(target.coord);
       expect(restored?.explored, true);
       expect(restored?.label, 'Home');
-      expect(restored?.worldName, 'Homeworld');
+      expect(restored?.worldId, 'world-home');
       expect(restored?.minerals, 2);
+      expect(restored?.pipelineIds, ['pipeline-1']);
       expect(restored?.terrain, HexTerrain.asteroid);
     });
+
+    test('sanitizeAgainstLedger deduplicates worlds, ships, and pipelines', () {
+      final state = GameMapState.initial().copyWith(
+        hexes: [
+          stateHex(const HexCoord(0, 0), worldId: 'world-1', pipelineIds: const ['pipe-1']),
+          stateHex(const HexCoord(1, 0), worldId: 'world-1', pipelineIds: const ['pipe-1', 'pipe-2']),
+        ],
+        fleets: const [
+          FleetStackState(
+            id: 'fleet-1',
+            owner: 'Blue',
+            coord: HexCoord(0, 0),
+            shipCounterIds: ['dd:1', 'ca:1'],
+          ),
+          FleetStackState(
+            id: 'fleet-2',
+            owner: 'Blue',
+            coord: HexCoord(1, 0),
+            shipCounterIds: ['dd:1'],
+          ),
+        ],
+      );
+
+      final sanitized = state.sanitizeAgainstLedger(
+        validWorldIds: {'world-1'},
+        validShipIds: {'dd:1'},
+        validPipelineIds: {'pipe-1'},
+      );
+
+      expect(sanitized.hexAt(const HexCoord(0, 0))?.worldId, 'world-1');
+      expect(sanitized.hexAt(const HexCoord(1, 0))?.worldId, isNull);
+      expect(sanitized.hexAt(const HexCoord(0, 0))?.pipelineIds, ['pipe-1']);
+      expect(sanitized.hexAt(const HexCoord(1, 0))?.pipelineIds, isEmpty);
+      expect(sanitized.fleetById('fleet-1')?.shipCounterIds, ['dd:1']);
+      expect(sanitized.fleetById('fleet-2'), isNull);
+    });
+
+    test('sanitizeAgainstLedger prunes removed ledger assets', () {
+      final state = GameMapState.initial().copyWith(
+        hexes: [
+          stateHex(const HexCoord(0, 0), worldId: 'world-1', pipelineIds: const ['pipe-1']),
+        ],
+        fleets: const [
+          FleetStackState(
+            id: 'fleet-1',
+            owner: 'Blue',
+            coord: HexCoord(0, 0),
+            shipCounterIds: ['dd:1'],
+          ),
+        ],
+      );
+
+      final sanitized = state.sanitizeAgainstLedger(
+        validWorldIds: const {},
+        validShipIds: const {},
+        validPipelineIds: const {},
+      );
+
+      expect(sanitized.hexAt(const HexCoord(0, 0))?.worldId, isNull);
+      expect(sanitized.hexAt(const HexCoord(0, 0))?.pipelineIds, isEmpty);
+      expect(sanitized.fleets, isEmpty);
+    });
   });
+}
+
+MapHexState stateHex(
+  HexCoord coord, {
+  String? worldId,
+  List<String> pipelineIds = const [],
+}) {
+  return MapHexState(
+    coord: coord,
+    worldId: worldId,
+    pipelineIds: pipelineIds,
+  );
 }

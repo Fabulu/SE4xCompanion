@@ -614,6 +614,11 @@ class _ProductionPageState extends State<ProductionPage>
 
         const SizedBox(height: 16),
 
+        // Pipeline inventory
+        _buildPipelineSection(context),
+
+        const SizedBox(height: 16),
+
         // Worlds
         _buildWorldsSection(context),
 
@@ -1760,6 +1765,97 @@ class _ProductionPageState extends State<ProductionPage>
   // Worlds section (Problem 1 - redesigned)
   // ===========================================================================
 
+  Widget _buildPipelineSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final assets = production.pipelineAssets;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SectionHeader(
+          title: 'PIPELINES',
+          subtitle: assets.isNotEmpty ? '${assets.length} assets' : null,
+        ),
+        const SizedBox(height: 4),
+        if (assets.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Text(
+              'No ledger pipeline assets yet.',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          )
+        else
+          for (int i = 0; i < assets.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Pipeline ${i + 1}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      assets[i].id,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        iconSize: 20,
+                        icon: Icon(
+                          Icons.close,
+                          color: theme.colorScheme.error.withValues(alpha: 0.6),
+                        ),
+                        onPressed: () => _removePipelineAsset(i),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _addPipelineAsset,
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('Add Pipeline', style: TextStyle(fontSize: 15)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: const Size(0, 44),
+              tapTargetSize: MaterialTapTargetSize.padded,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildWorldsSection(BuildContext context) {
     final theme = Theme.of(context);
     final worlds = production.worlds;
@@ -2056,7 +2152,10 @@ class _ProductionPageState extends State<ProductionPage>
         production.worlds.where((w) => !w.isHomeworld).toList();
     final nextNum = colonies.length + 1;
     final updated = List<WorldState>.from(production.worlds)
-      ..add(WorldState(name: 'Colony $nextNum'));
+      ..add(WorldState(
+        id: 'world-${production.worlds.length + 1}',
+        name: 'Colony $nextNum',
+      ));
     widget.onProductionChanged(production.copyWith(worlds: updated));
   }
 
@@ -2064,6 +2163,23 @@ class _ProductionPageState extends State<ProductionPage>
     if (production.worlds[index].isHomeworld) return;
     final updated = List<WorldState>.from(production.worlds)..removeAt(index);
     widget.onProductionChanged(production.copyWith(worlds: updated));
+  }
+
+  void _addPipelineAsset() {
+    final nextOrdinal = production.nextPipelineOrdinal;
+    final updated = List<PipelineAsset>.from(production.pipelineAssets)
+      ..add(PipelineAsset(id: 'pipeline-$nextOrdinal'));
+    widget.onProductionChanged(
+      production.copyWith(pipelineAssets: updated),
+    );
+  }
+
+  void _removePipelineAsset(int index) {
+    final updated = List<PipelineAsset>.from(production.pipelineAssets)
+      ..removeAt(index);
+    widget.onProductionChanged(
+      production.copyWith(pipelineAssets: updated),
+    );
   }
 
   // ===========================================================================

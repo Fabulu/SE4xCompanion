@@ -139,6 +139,19 @@ void main() {
   });
 
   group('WorldState JSON round-trip', () {
+    test('id round-trips when present', () {
+      const w = WorldState(
+        id: 'world-1',
+        name: 'Home',
+        isHomeworld: true,
+        homeworldValue: 25,
+      );
+      final json = w.toJson();
+      final restored = WorldState.fromJson(json);
+      expect(restored.id, 'world-1');
+      expect(restored.name, 'Home');
+    });
+
     test('homeworld round-trips', () {
       const w = WorldState(
           name: 'Home', isHomeworld: true, homeworldValue: 25);
@@ -166,6 +179,16 @@ void main() {
       expect(restored.mineralIncome, 3);
       expect(restored.pipelineIncome, 2);
       expect(restored.isBlocked, true);
+    });
+
+    test('ensureId assigns a stable id when missing', () {
+      const w = WorldState(name: 'Gamma');
+      final ensured = w.ensureId();
+      expect(ensured.id, isNotEmpty);
+      expect(ensured.name, 'Gamma');
+
+      final again = ensured.ensureId();
+      expect(again.id, ensured.id);
     });
 
     test('null facility round-trips as null', () {

@@ -31,6 +31,8 @@ class ShipCounter {
     this.notes = '',
   });
 
+  String get id => '${type.name}:$number';
+
   /// Create a counter with tech levels stamped from the current empire tech
   /// state. Hull size limits on attack/defense are respected:
   /// - Hull 1 ships cap at Attack/Defense 1 (except raiders which get full)
