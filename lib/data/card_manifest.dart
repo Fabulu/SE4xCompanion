@@ -3,6 +3,12 @@
 
 import 'empire_advantages.dart';
 
+enum CardSupportStatus {
+  supported,
+  partial,
+  referenceOnly,
+}
+
 class CardEntry {
   final int number;
   final String name;
@@ -10,6 +16,7 @@ class CardEntry {
   final String description;
   final String? revealCondition;
   final String? cpValue;
+  final CardSupportStatus supportStatus;
 
   const CardEntry({
     required this.number,
@@ -18,7 +25,58 @@ class CardEntry {
     required this.description,
     this.revealCondition,
     this.cpValue,
+    this.supportStatus = CardSupportStatus.referenceOnly,
   });
+}
+
+int _compareCardEntries(CardEntry a, CardEntry b) {
+  final nameCompare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  if (nameCompare != 0) {
+    return nameCompare;
+  }
+  return a.number.compareTo(b.number);
+}
+
+List<CardEntry> _sortedCards(List<CardEntry> cards) {
+  final sorted = List<CardEntry>.from(cards);
+  sorted.sort(_compareCardEntries);
+  return sorted;
+}
+
+List<CardEntry> _buildReferenceCards(
+  String type,
+  List<(int, String)> cards, {
+  String description = 'Reference only. See the physical card for the full effect.',
+}) {
+  return _sortedCards([
+    for (final card in cards)
+      CardEntry(
+        number: card.$1,
+        name: card.$2,
+        type: type,
+        description: description,
+      ),
+  ]);
+}
+
+const _typeOrder = <String, int>{
+  'alienTech': 0,
+  'crew': 1,
+  'empire': 2,
+  'replicatorEmpire': 3,
+  'mission': 4,
+  'planetAttribute': 5,
+  'resource': 6,
+  'scenarioModifier': 7,
+};
+
+int _compareCatalogOrder(CardEntry a, CardEntry b) {
+  final typeCompare =
+      (_typeOrder[a.type] ?? 999).compareTo(_typeOrder[b.type] ?? 999);
+  if (typeCompare != 0) {
+    return typeCompare;
+  }
+  return _compareCardEntries(a, b);
 }
 
 // ── Alien Technology Cards ──
@@ -232,14 +290,14 @@ const List<CardEntry> kAlienTechCards = [
     name: 'On Board Workshop',
     type: 'alienTech',
     description:
-        'Your ships may repair 1 Hull Point of damage per turn if they do not move or attack.',
+        'Each CV, BV, and Titan may build one Fighter during the Economic Phase as long as there is room to store it. During a Movement Turn, one Fighter may be refitted on the carrying ship.',
   ),
   CardEntry(
     number: 57,
     name: 'Superhighway',
     type: 'alienTech',
     description:
-        'Your MS Pipelines allow ships to move 2 extra hexes along the pipeline chain instead of 1.',
+        'Each ship that spends its entire move on an MS Pipeline chain may move two extra hexes instead of one.',
   ),
   CardEntry(
     number: 180,
@@ -313,153 +371,185 @@ const List<CardEntry> kAlienTechCards = [
   ),
 ];
 
-// ── Crew Cards ──
+// Crew Cards
 
-const List<CardEntry> kCrewCards = [
-  CardEntry(
-    number: 101,
-    name: 'Ace Pilot',
-    type: 'crew',
-    description: 'Assign to a ship. That ship gets +1 Attack Strength.',
-  ),
-  CardEntry(
-    number: 102,
-    name: 'Veteran Engineer',
-    type: 'crew',
-    description: 'Assign to a ship. That ship gets +1 Hull Point.',
-  ),
-  CardEntry(
-    number: 103,
-    name: 'Tactical Officer',
-    type: 'crew',
-    description: 'Assign to a fleet. That fleet gets +1 Tactics.',
-  ),
-  CardEntry(
-    number: 104,
-    name: 'Navigator',
-    type: 'crew',
-    description: 'Assign to a fleet. That fleet gets +1 Movement.',
-  ),
-  CardEntry(
-    number: 105,
-    name: 'Marine Commander',
-    type: 'crew',
-    description:
-        'Assign to a ship with boarding capability. That ship gets +1 to boarding attack rolls.',
-  ),
-  CardEntry(
-    number: 106,
-    name: 'Science Officer',
-    type: 'crew',
-    description:
-        'Assign to a fleet. That fleet gets +1 Scanner level for detection purposes.',
-  ),
-  CardEntry(
-    number: 107,
-    name: 'Damage Control Officer',
-    type: 'crew',
-    description:
-        'Assign to a ship. That ship may repair 1 Hull Point at the end of each combat round.',
-  ),
-  CardEntry(
-    number: 108,
-    name: 'Legendary Captain',
-    type: 'crew',
-    description:
-        'Assign to a ship. That ship gets +1 Attack, +1 Defense. Other friendly ships in the hex pass morale checks automatically.',
-  ),
-];
+final List<CardEntry> kCrewCards = _buildReferenceCards('crew', [
+  for (var n = 245; n <= 246; n++) (n, 'Admiral of the Navy'),
+  for (var n = 249; n <= 250; n++) (n, 'Admiral'),
+  (200, 'Agent Smith'),
+  (202, 'Alexa'),
+  (266, 'Marine Commander'),
+  (201, 'Ash'),
+  for (var n = 216; n <= 217; n++) (n, 'Asteroid Navigator'),
+  for (var n = 273; n <= 274; n++) (n, 'Astrometrics Officer'),
+  (261, 'CAG'),
+  for (var n = 234; n <= 235; n++) (n, 'Captain'),
+  for (var n = 270; n <= 271; n++) (n, 'Chief Engineer'),
+  for (var n = 251; n <= 252; n++) (n, 'Commander'),
+  (265, 'Commodore'),
+  (197, 'Data'),
+  (262, 'Deck Crew Chief'),
+  for (var n = 224; n <= 225; n++) (n, 'Defender'),
+  for (var n = 206; n <= 207; n++) (n, 'Damage Control Officer'),
+  for (var n = 214; n <= 215; n++) (n, 'Engineer'),
+  for (var n = 208; n <= 209; n++) (n, 'Ensign Expendable'),
+  for (var n = 247; n <= 248; n++) (n, 'Fleet Admiral'),
+  for (var n = 230; n <= 231; n++) (n, 'First Officer'),
+  for (var n = 254; n <= 255; n++) (n, 'General Staff'),
+  (204, 'Governor'),
+  for (var n = 263; n <= 264; n++) (n, 'Gunnery Officer'),
+  (194, 'Hal 10K'),
+  for (var n = 238; n <= 239; n++) (n, 'Heavy Weapons Officer'),
+  for (var n = 220; n <= 221; n++) (n, 'Helmsmen'),
+  for (var n = 210; n <= 213; n++) (n, 'Hero'),
+  (193, 'Hive Queen'),
+  (242, 'Marine Captain'),
+  (267, 'Marine Lieutenant'),
+  (192, 'Mycroft'),
+  for (var n = 218; n <= 219; n++) (n, 'Nebula Navigator'),
+  (256, 'Ordnance Technician/ECCM Officer'),
+  for (var n = 275; n <= 276; n++) (n, 'Operations Officer'),
+  (272, 'Patrol Leader'),
+  for (var n = 243; n <= 244; n++) (n, 'Planetary Admiral'),
+  (199, 'Quorra'),
+  (253, 'Rear Admiral'),
+  (195, 'ROMmie'),
+  for (var n = 240; n <= 241; n++) (n, 'Science Officer'),
+  (205, 'Security Officer'),
+  (198, 'Skynet'),
+  (203, 'Sonny'),
+  for (var n = 268; n <= 269; n++) (n, 'Special Warfare Technician'),
+  for (var n = 228; n <= 229; n++) (n, 'Strategist'),
+  for (var n = 222; n <= 223; n++) (n, 'Supply Officer'),
+  for (var n = 258; n <= 260; n++) (n, 'Squadron Leader'),
+  for (var n = 232; n <= 233; n++) (n, 'Tactical Officer'),
+  for (var n = 226; n <= 227; n++) (n, 'Tactician'),
+  (257, 'Warrant Officer/ECCM Specialist'),
+  (236, 'Weapons Officer'),
+  (196, 'WOPR'),
+]);
 
-// ── Resource Cards ──
+// Resource Cards
 
-const List<CardEntry> kResourceCards = [
-  CardEntry(
-    number: 201,
-    name: 'Salvage Operation',
-    type: 'resource',
-    description: 'Gain 5 CP immediately. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 202,
-    name: 'Trade Agreement',
-    type: 'resource',
-    description:
-        'Gain 3 CP per Economic Phase for the rest of the game while conditions are met. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 203,
-    name: 'Mineral Discovery',
-    type: 'resource',
-    description: 'Gain 10 CP immediately. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 204,
-    name: 'Emergency Reserves',
-    type: 'resource',
-    description: 'Gain 8 CP immediately. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 205,
-    name: 'Refugee Fleet',
-    type: 'resource',
-    description:
-        'Gain 2 free Destroyers placed at your Home Colony. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 206,
-    name: 'Ancient Artifact',
-    type: 'resource',
-    description:
-        'Gain one free technology level of your choice. Refer to the physical card for full details.',
-  ),
-];
+final List<CardEntry> kResourceCards = _buildReferenceCards('resource', [
+  (85, 'Activate Space Monstrosity'),
+  (90, 'Alien Reinforcements'),
+  (93, 'Amazing Diplomats'),
+  (108, 'Collateral Damage'),
+  (69, 'Concealed Minefield (Cancel Card)'),
+  (106, 'Coup'),
+  for (var n = 91; n <= 92; n++) (n, 'Deep Cover Operative'),
+  (76, 'Defending Familiar Terrain'),
+  (170, 'Defending Familiar Terrain (Duplicate - See Card 76)'),
+  (79, 'Discover Member of Ancient Race'),
+  for (var n = 94; n <= 95; n++) (n, 'Forced System Shutdown'),
+  for (var n = 70; n <= 73; n++) (n, 'Heroic Ships'),
+  for (var n = 74; n <= 75; n++) (n, 'Heroic Ground Unit'),
+  (104, 'Hidden Power'),
+  (173, 'Hidden Power (Duplicate - See Card 104)'),
+  (109, 'Minerals +5/-3'),
+  (171, 'Minerals +5/-3 (Duplicate - See Card 109)'),
+  (84, 'Missed Rendezvous'),
+  (80, 'Overload Weapons'),
+  (103, 'Overconfidence'),
+  for (var n = 98; n <= 99; n++) (n, 'Planetary Bombardment'),
+  (102, 'Play Dead'),
+  (179, 'Population +/-'),
+  (89, 'Provide Cover'),
+  (172, 'Privateers'),
+  (78, 'Quick Study'),
+  (66, 'Red Squadron (Cancel Card)'),
+  (77, 'Research Breakthrough'),
+  (107, 'Retreat When Engaged'),
+  (105, 'Sanctions'),
+  (67, 'Sensor Blind Spot (Cancel Card)'),
+  (68, 'Self Destruct (Cancel Card)'),
+  for (var n = 96; n <= 97; n++) (n, 'Smuggler\'s Route'),
+  (110, 'Splash Damage'),
+  (86, 'Spawn Doomsday Machine'),
+  for (var n = 87; n <= 88; n++) (n, 'Spy on Board'),
+  (81, 'Unconventional Boarding'),
+  for (var n = 100; n <= 101; n++) (n, 'Update Your Charts'),
+  for (var n = 174; n <= 175; n++) (n, 'Virus'),
+  for (var n = 82; n <= 83; n++) (n, 'Xeno-Archeology'),
+  for (var n = 176; n <= 178; n++) (n, 'Sabotage'),
+]);
 
-// ── Scenario Modifier Cards ──
+// Mission Cards
 
-const List<CardEntry> kScenarioModifierCards = [
-  CardEntry(
-    number: 301,
-    name: 'Galactic Arms Race',
-    type: 'scenarioModifier',
-    description:
-        'All players gain +5 CP per Economic Phase. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 302,
-    name: 'Subspace Disruption',
-    type: 'scenarioModifier',
-    description:
-        'All Movement technology is capped at level 3 for the entire game. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 303,
-    name: 'Ancient Ruins Everywhere',
-    type: 'scenarioModifier',
-    description:
-        'Each newly explored planet also yields one Alien Technology card draw. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 304,
-    name: 'Hostile Galaxy',
-    type: 'scenarioModifier',
-    description:
-        'All NPA encounters have +1 Attack and +1 Defense. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 305,
-    name: 'Economic Boom',
-    type: 'scenarioModifier',
-    description:
-        'All colonies produce +1 CP per Economic Phase. Refer to the physical card for full details.',
-  ),
-  CardEntry(
-    number: 306,
-    name: 'Dark Age',
-    type: 'scenarioModifier',
-    description:
-        'Tech costs are increased by 25% for all players. Refer to the physical card for full details.',
-  ),
-];
+final List<CardEntry> kMissionCards = _buildReferenceCards('mission', [
+  (155, 'Arena'),
+  (165, 'Asteroid Strike'),
+  (153, 'Balance of Terror'),
+  (154, 'Creature from Below'),
+  (169, 'Defend an Outpost'),
+  (164, 'Dimensional Anomaly'),
+  (156, 'Difficult Planet Survey'),
+  (160, 'Distress Call'),
+  (157, 'Easy Planet Survey'),
+  (152, 'Journey to Babel'),
+  (163, 'New FTL Test'),
+  (162, 'Police State'),
+  (161, 'Quell Riots'),
+  (158, 'Scientific Survey'),
+  (168, 'Sins of the Father'),
+  (159, 'Stellar Anomaly Investigation'),
+  (167, 'Survivors'),
+  (151, 'Time Travel Slingshot'),
+  (166, 'Urgent Deep Space Survey'),
+  (150, 'Where No Man Has Gone Before'),
+]);
+
+// Scenario Modifier Cards
+
+final List<CardEntry> kScenarioModifierCards = _buildReferenceCards(
+  'scenarioModifier',
+  [
+    (118, 'Advanced Navigation'),
+    (130, 'Advanced Bases'),
+    (127, 'Advanced Destroyers'),
+    (121, 'A Way Through'),
+    (128, 'Battlecarrier Universica'),
+    (122, 'Better Homes'),
+    (144, 'Bloody Combat'),
+    (125, 'Big Ships and Tractor Beams'),
+    (126, 'Big Ships and Shield Projectors'),
+    (111, 'Carthage'),
+    (124, 'Close Quarters'),
+    (136, 'Doomsday Machines'),
+    (115, 'Expert Empires'),
+    (114, 'Extinct Alien Empire'),
+    (119, 'Expensive Ships'),
+    (145, 'Experienced Crew'),
+    (112, 'Fruitful'),
+    (278, 'Hardy Empires'),
+    (138, 'Heavy Terrain'),
+    (123, 'Improved Colony Ships'),
+    (134, 'Ion Cannons'),
+    (142, 'Know the Weakness'),
+    (146, 'Life is Complicated'),
+    (149, 'Low Maintenance'),
+    (116, 'No Sensor Lock Possible'),
+    (143, 'No Temporal Prime Directive'),
+    (120, 'Planetary Gates'),
+    (129, 'Raiders'),
+    (280, 'Recon Ships'),
+    (147, 'Rich Minerals'),
+    (139, 'Safer Space'),
+    (279, 'Second Salvo'),
+    (140, 'Smart Scientists'),
+    (137, 'Space Amoebas'),
+    (133, 'Stealth Transports'),
+    (148, 'Technology Head Start'),
+    (117, 'Thick Asteroids'),
+    (132, 'Tough Shipyards'),
+    (131, 'Tough Planets'),
+    (141, 'Trained Defenders'),
+    (135, 'We Need the White'),
+    (277, 'Weak NPAs'),
+    (113, 'Worth the Effort'),
+  ],
+);
 
 // ── Deep Space Planet Attributes ──
 
@@ -720,29 +810,28 @@ const List<CardEntry> kPlanetAttributes = [
 
 // ── Combined Card Manifest ──
 
-final List<CardEntry> kAllCards = [
-  // Empire Advantage cards generated from kEmpireAdvantages
-  for (final ea in kEmpireAdvantages)
-    CardEntry(
-      number: ea.cardNumber,
-      name: ea.name,
-      type: ea.isReplicator ? 'replicatorEmpire' : 'empire',
-      description: ea.description,
-      revealCondition: ea.revealCondition,
-    ),
-
-  // Alien Technology Cards
-  ...kAlienTechCards,
-
-  // Crew Cards
-  ...kCrewCards,
-
-  // Resource Cards
-  ...kResourceCards,
-
-  // Deep Space Planet Attributes
-  ...kPlanetAttributes,
-
-  // Scenario Modifier Cards
-  ...kScenarioModifierCards,
-];
+final List<CardEntry> kAllCards = (() {
+  final cards = <CardEntry>[
+    for (final ea in kEmpireAdvantages)
+      CardEntry(
+        number: ea.cardNumber,
+        name: ea.name,
+        type: ea.isReplicator ? 'replicatorEmpire' : 'empire',
+        description: ea.description,
+        revealCondition: ea.revealCondition,
+        supportStatus: switch (ea.supportStatus) {
+          'implemented' => CardSupportStatus.supported,
+          'partial' => CardSupportStatus.partial,
+          _ => CardSupportStatus.referenceOnly,
+        },
+      ),
+    ...kAlienTechCards,
+    ...kCrewCards,
+    ...kMissionCards,
+    ...kPlanetAttributes,
+    ...kResourceCards,
+    ...kScenarioModifierCards,
+  ];
+  cards.sort(_compareCatalogOrder);
+  return cards;
+})();

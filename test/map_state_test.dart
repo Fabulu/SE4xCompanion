@@ -3,17 +3,29 @@ import 'package:se4x/models/map_state.dart';
 
 void main() {
   group('GameMapState', () {
-    test('default layouts are non-empty and distinct', () {
-      final standard4p =
-          GameMapState.defaultHexesFor(MapLayoutPreset.standard4p);
-      final special5p =
-          GameMapState.defaultHexesFor(MapLayoutPreset.special5p);
+    test('standard4p is a 12x12 staggered rectangle', () {
+      final hexes = GameMapState.defaultHexesFor(MapLayoutPreset.standard4p);
 
-      expect(standard4p, isNotEmpty);
-      expect(special5p, isNotEmpty);
+      expect(hexes, hasLength(144));
+      const expectedStarts = [3, 3, 2, 2, 1, 1, 0, 0, -1, -1, -2, -2];
+      for (var rowIndex = 0; rowIndex < 12; rowIndex++) {
+        final r = rowIndex - 6;
+        final row = _rowQs(hexes, r);
+        expect(row, hasLength(12));
+        final expectedStart = expectedStarts[rowIndex];
+        expect(row.first, expectedStart);
+        expect(row.last, expectedStart + 11);
+      }
+    });
+
+    test('special5p matches the provided 18-row 214-hex layout', () {
+      final hexes = GameMapState.defaultHexesFor(MapLayoutPreset.special5p);
+
+      expect(hexes, hasLength(214));
       expect(
-        standard4p.map((hex) => hex.coord.id).toSet(),
-        isNot(equals(special5p.map((hex) => hex.coord.id).toSet())),
+        GameMapState(layoutPreset: MapLayoutPreset.special5p, hexes: hexes)
+            .rowLengths,
+        [3, 5, 8, 10, 12, 14, 15, 16, 16, 15, 15, 14, 13, 12, 13, 12, 11, 10],
       );
     });
 
@@ -153,4 +165,10 @@ MapHexState stateHex(
     worldId: worldId,
     pipelineIds: pipelineIds,
   );
+}
+
+List<int> _rowQs(List<MapHexState> hexes, int r) {
+  final row = hexes.where((hex) => hex.coord.r == r).map((hex) => hex.coord.q).toList();
+  row.sort();
+  return row;
 }

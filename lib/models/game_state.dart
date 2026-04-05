@@ -115,12 +115,10 @@ class GameState {
     final legacyPipelineIds = {
       for (final hex in rawMapState.hexes) ...hex.pipelineIds,
     };
-    final normalizedProduction = production.pipelineAssets.isEmpty &&
+    final normalizedProduction = production.pipelineConnectedColonies == 0 &&
             legacyPipelineIds.isNotEmpty
         ? production.copyWith(
-            pipelineAssets: [
-              for (final id in legacyPipelineIds) PipelineAsset(id: id),
-            ],
+            pipelineConnectedColonies: legacyPipelineIds.length,
           )
         : production;
     final shipCounters = (json['shipCounters'] as List?)
@@ -136,8 +134,7 @@ class GameState {
         .where((counter) => counter.isBuilt)
         .map((counter) => counter.id)
         .toSet();
-    final validPipelineIds =
-        normalizedProduction.pipelineAssets.map((asset) => asset.id).toSet();
+    final validPipelineIds = normalizedProduction.pipelineAssetIds.toSet();
     final mapState = rawMapState
         .migrateLegacyWorldNames(worldIdByName)
         .sanitizeAgainstLedger(

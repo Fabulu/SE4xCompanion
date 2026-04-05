@@ -149,11 +149,14 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
         width: 340,
         height: 480,
         child: SingleChildScrollView(
-          child: _step == 0
-              ? _buildStep0(theme)
-              : _step == 1
-                  ? _buildStep1(theme)
-                  : _buildStep2(theme),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _step == 0
+                ? _buildStep0(theme)
+                : _step == 1
+                    ? _buildStep1(theme)
+                    : _buildStep2(theme),
+          ),
         ),
       ),
       actions: [

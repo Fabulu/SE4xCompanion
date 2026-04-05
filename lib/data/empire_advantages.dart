@@ -1,4 +1,8 @@
 // Empire Advantage card definitions from the SE4X Card Manifest.
+//
+// The app only encodes mechanical fields for effects that fit the current
+// bookkeeping/state model honestly. Everything else is kept as reference text
+// and surfaced via supportStatus / implementationNote.
 
 import 'tech_costs.dart';
 import '../data/ship_definitions.dart';
@@ -8,15 +12,19 @@ class EmpireAdvantage {
   final String name;
   final String description;
   final String revealCondition;
+  final String supportStatus;
+  final String? implementationNote;
   final int hullSizeModifier;
   final int maintenancePercent;
   final Map<TechId, int> startingTechOverrides;
   final Map<ShipType, int> costModifiers;
+  final int globalBuildCostModifier;
   final List<TechId> blockedTechs;
   final Map<TechId, int> maxTechLevels;
   final Map<TechId, int> techLevelBonuses;
   final int colonyShipCostModifier;
   final double techCostMultiplier;
+  final bool roundTechCostsUp;
   final int cpPerUnitBuilt;
   final bool isReplicator;
 
@@ -25,432 +33,369 @@ class EmpireAdvantage {
     required this.name,
     required this.description,
     required this.revealCondition,
+    this.supportStatus = 'referenceOnly',
+    this.implementationNote,
     this.hullSizeModifier = 0,
     this.maintenancePercent = 100,
     this.startingTechOverrides = const {},
     this.costModifiers = const {},
+    this.globalBuildCostModifier = 0,
     this.blockedTechs = const [],
     this.maxTechLevels = const {},
     this.techLevelBonuses = const {},
     this.colonyShipCostModifier = 0,
     this.techCostMultiplier = 1.0,
+    this.roundTechCostsUp = false,
     this.cpPerUnitBuilt = 0,
     this.isReplicator = false,
   });
 }
 
 const List<EmpireAdvantage> kEmpireAdvantages = [
-  // ── Normal Empire Advantages ──
-
   EmpireAdvantage(
     cardNumber: 31,
     name: 'Fearless Race',
-    description: '''Your ships never have to make morale checks. In addition, your ships always fight to the death and can never retreat from combat. Your Flagships and Unique Ships gain +1 to their hull size.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''All of this race's combat-capable ships and Shipyards fire as A-Class ships in the first round of combat only, except Boarding Ships and Ground Units. Their Missiles hit as C-Class in the first round. They cannot retreat from combat until after round 3.''',
+    revealCondition: 'Reveal when first entering any combat, including Aliens.',
   ),
-
   EmpireAdvantage(
     cardNumber: 32,
     name: 'Warrior Race',
-    description: '''All of your ships get +1 to their Attack Strength. This is in addition to any Attack tech you have purchased. This bonus does not count against the hull size limit for Attack tech.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''All non-Boarding Ship units get +1 Attack Strength when attacking and -1 Attack Strength when defending. This does not apply to bombardment or ground troops.''',
+    revealCondition: 'Reveal when first entering any combat, including Aliens.',
   ),
-
   EmpireAdvantage(
     cardNumber: 33,
     name: 'Celestial Knights',
-    description: '''All of your ships get +1 to their Defense Strength. This is in addition to any Defense tech you have purchased. This bonus does not count against the hull size limit for Defense tech.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''Once per space battle, after the first round, this race may declare a charge. Its eligible units then fire twice that round, but all enemy units gain +1 Attack Strength in later rounds and the charging ships may not retreat in the following round.''',
+    revealCondition: 'Reveal when a charge is declared for the first time.',
   ),
-
   EmpireAdvantage(
     cardNumber: 34,
     name: 'Giant Race',
-    description: '''All of your ships are +1 hull size larger than normal. This means Destroyers are hull size 2, Cruisers are hull size 3, etc. The larger hull size also increases the Attack and Defense tech that can be mounted on each ship. Ships cost +2 CP more to build (this also applies to Colony Ships).''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''The Hull Size of all units except Ground Units and Missiles is increased by one. This affects construction capacity, damage to destroy, mounted technology, maintenance, boarding parties, and similar Hull Size rules. Giant Race may not research Fighters or gain them by other means.''',
+    revealCondition: 'Reveal when first entering any combat, including Aliens.',
+    supportStatus: 'implemented',
+    implementationNote:
+        'Hull size changes and the fighter restriction are enforced. Other Hull-Size-driven side effects flow through the existing ship model.',
     hullSizeModifier: 1,
-    costModifiers: {
-      ShipType.dd: 2,
-      ShipType.ca: 2,
-      ShipType.bc: 2,
-      ShipType.bb: 2,
-      ShipType.dn: 2,
-      ShipType.tn: 2,
-      ShipType.scout: 2,
-      ShipType.raider: 2,
-      ShipType.cv: 2,
-      ShipType.bv: 2,
-      ShipType.sw: 2,
-      ShipType.bdMb: 2,
-      ShipType.transport: 2,
-      ShipType.fighter: 2,
-    },
-    colonyShipCostModifier: 2,
+    blockedTechs: [TechId.fighters],
   ),
-
   EmpireAdvantage(
     cardNumber: 35,
     name: 'Industrious Race',
-    description: '''Your Home Colony produces 5 extra CPs per turn. All other colonies produce 1 extra CP per turn.''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''When this race researches Terraforming 1, it may colonize Asteroids as if they were Barren Planets. Asteroid terrain effects remain, Titans may not destroy Asteroids, and other players may not attack Asteroid Colonies with Ground Units.''',
+    revealCondition: 'Reveal when an asteroid is colonized for the first time.',
   ),
-
   EmpireAdvantage(
     cardNumber: 36,
     name: 'Ancient Race',
-    description: '''You start the game with Attack 1 and Defense 1 tech already purchased for free. You also start with Ship Size 2 (Cruisers) already purchased.''',
-    revealCondition: 'Reveal during setup or any Economic Phase.',
-    startingTechOverrides: {
-      TechId.attack: 1,
-      TechId.defense: 1,
-      TechId.shipSize: 2,
-    },
+    description:
+        '''At the start of the game, this race explores the area around its Homeworld, collects up to 3 revealed Minerals to the Homeworld, and may place up to 3 Colony Ships on revealed non-barren planets.''',
+    revealCondition: 'Reveal at the start of the game.',
   ),
-
   EmpireAdvantage(
     cardNumber: 37,
     name: 'Space Pilgrims',
-    description: '''Colony Ships cost 4 CPs instead of 8. You also start the game with Move 2 tech already purchased for free.''',
-    revealCondition: 'Reveal during setup or any Economic Phase.',
-    colonyShipCostModifier: -4,
-    startingTechOverrides: {
-      TechId.move: 2,
-    },
+    description:
+        '''This race ignores movement penalties in Nebulae and Asteroids, is never sucked into Black Holes, is never Lost in Space, and may use Black Hole Slingshot automatically without a destruction roll.''',
+    revealCondition:
+        'Reveal when entering a Black Hole or Lost in Space marker, or when ignoring Asteroid or Nebula movement penalties.',
   ),
-
   EmpireAdvantage(
     cardNumber: 38,
     name: 'Hive Mind',
-    description: '''You do not pay maintenance on any of your ships. However, you cannot use Fighters, Carriers, or Battle Carriers.''',
-    revealCondition: 'Reveal during any Economic Phase.',
-    maintenancePercent: 0,
-    blockedTechs: [TechId.fighters],
+    description:
+        '''Starting in round 2 of a battle, all of this race's units get +1 Defense Strength. Starting in round 4, they also get +1 Attack Strength. Starting in round 6, they also get +1 Hull Size. Comparable bonuses apply in ground combat.''',
+    revealCondition: 'Reveal when first entering any combat, including Aliens.',
   ),
-
   EmpireAdvantage(
     cardNumber: 39,
     name: 'Nano-technology',
-    description: '''All of your ships cost 1 CP less to build (to a minimum of 1). This does not apply to Colony Ships, Shipyards, Bases, Starbases, Decoys, Mines, or MS Pipelines.''',
-    revealCondition: 'Reveal during any Economic Phase.',
-    costModifiers: {
-      ShipType.dd: -1,
-      ShipType.ca: -1,
-      ShipType.bc: -1,
-      ShipType.bb: -1,
-      ShipType.dn: -1,
-      ShipType.tn: -1,
-      ShipType.scout: -1,
-      ShipType.raider: -1,
-      ShipType.cv: -1,
-      ShipType.bv: -1,
-      ShipType.sw: -1,
-      ShipType.bdMb: -1,
-      ShipType.transport: -1,
-      ShipType.fighter: -1,
-    },
+    description:
+        '''This race's units may instantly upgrade to the newest technology for free regardless of location. If they do so they must not move that turn.''',
+    revealCondition: 'Reveal at the end of the game.',
   ),
-
   EmpireAdvantage(
     cardNumber: 40,
     name: 'Quick Learners',
-    description: '''The first tech you buy each turn costs 50% less (rounded down). This discount applies to the total cost of the tech level, not just the next upgrade.''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''This race starts with Military Academy level 1 and rolls two dice, taking the best result, when checking whether a ship gains Experience. Other empires may never gain Military Academy technology from this race.''',
+    revealCondition: 'Reveal when rolling to see if a ship gains Experience.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The starting Military Academy level is applied. The altered experience-roll procedure is not automated.',
+    startingTechOverrides: {TechId.militaryAcad: 1},
   ),
-
   EmpireAdvantage(
     cardNumber: 41,
     name: 'Gifted Scientists',
-    description: '''All tech costs are reduced by one third (multiply by 0.67, rounded down). In addition, you receive 1 bonus CP each time you build a ship unit (not Colony Ships, Shipyards, Bases, or Decoys).''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''This race gets a 33% discount on all technology research, rounded up and applied before other discounts. However, every unit it builds costs 1 CP more.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'implemented',
+    implementationNote:
+        'Tech discounts and the +1 CP build surcharge are applied in the production ledger.',
     techCostMultiplier: 0.67,
-    cpPerUnitBuilt: 1,
+    roundTechCostsUp: true,
+    globalBuildCostModifier: 1,
   ),
-
   EmpireAdvantage(
     cardNumber: 42,
     name: 'Master Engineers',
-    description: '''Your Shipyard tech starts at level 2 (2 hull points capacity per Shipyard). In addition, Shipyards cost only 4 CPs to build instead of 6.''',
-    revealCondition: 'Reveal during setup or any Economic Phase.',
-    startingTechOverrides: {
-      TechId.shipYard: 2,
-    },
-    costModifiers: {
-      ShipType.shipyard: -2,
-    },
+    description:
+        '''This race starts with Move 2 and Fast 1 technologies. In addition, each full-strength colony may produce and retrofit ships as if it had one Shipyard present, which may be combined with real Shipyards.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The starting Movement level is applied. Colony-as-Shipyard capacity is not automated.',
+    startingTechOverrides: {TechId.move: 2},
   ),
-
   EmpireAdvantage(
     cardNumber: 43,
     name: 'Insectoids',
-    description: '''All of your ships are -1 hull size smaller than normal (to a minimum of 1). This means Cruisers are hull size 1, Battlecruisers are hull size 2, etc. The smaller hull size also decreases the Attack and Defense tech that can be mounted. However, all ships cost 2 CP less to build (to a minimum of 1). Colony Ships also cost 2 CP less.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''The Hull Size of all units except Ground Units and Missiles is decreased by one. This affects construction capacity, damage to destroy, technology limits, maintenance, boarding parties, and related Hull Size rules. Insectoids may not research Military Academies or Fighters.''',
+    revealCondition: 'Reveal when first entering any combat, including Aliens.',
+    supportStatus: 'implemented',
+    implementationNote:
+        'Hull size changes and blocked techs are enforced. Other Hull-Size-driven side effects flow through the existing ship model.',
     hullSizeModifier: -1,
-    costModifiers: {
-      ShipType.dd: -2,
-      ShipType.ca: -2,
-      ShipType.bc: -2,
-      ShipType.bb: -2,
-      ShipType.dn: -2,
-      ShipType.tn: -2,
-      ShipType.scout: -2,
-      ShipType.raider: -2,
-      ShipType.cv: -2,
-      ShipType.bv: -2,
-      ShipType.sw: -2,
-      ShipType.bdMb: -2,
-      ShipType.transport: -2,
-      ShipType.fighter: -2,
-    },
-    colonyShipCostModifier: -2,
     blockedTechs: [TechId.militaryAcad, TechId.fighters],
   ),
-
   EmpireAdvantage(
     cardNumber: 44,
     name: 'Immortals',
-    description: '''Your ships gain experience twice as fast. Ships that would normally need 2 hits to gain a level only need 1. Colony Ships cost +2 CPs more to build.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''Once per round of combat, this race may ignore one point of damage on one of its ships. Colony Ships cost 2 CP more. Immortals may not research Boarding or gain it by any means.''',
+    revealCondition: 'Reveal when they first choose to ignore 1 hit in combat.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The Colony Ship surcharge and Boarding restriction are enforced. Combat damage negation is not automated.',
     colonyShipCostModifier: 2,
     blockedTechs: [TechId.boarding],
   ),
-
   EmpireAdvantage(
     cardNumber: 45,
     name: 'Expert Tacticians',
-    description: '''You start the game with Tactics 1 already purchased for free. In addition, when you purchase Tactics tech, you get one level higher than what you paid for (e.g., paying for Tactics 1 gives you Tactics 2).''',
-    revealCondition: 'Reveal at the start of any combat.',
-    startingTechOverrides: {
-      TechId.tactics: 1,
-    },
-    techLevelBonuses: {TechId.tactics: 1},
+    description:
+        '''This race gets the Fleet Size Bonus at one more combat-capable ship than the opponent instead of 2:1, and opponents do not get the Fleet Size Bonus unless they outnumber it by 3:1.''',
+    revealCondition:
+        'Reveal when they first choose to use their improved Fleet Size Bonuses in combat.',
   ),
-
   EmpireAdvantage(
     cardNumber: 46,
     name: 'Horsemen of the Plains',
-    description: '''You start the game with Move 2 tech already purchased for free. Your ships always move at least 2 hexes per turn regardless of supply status.''',
-    revealCondition: 'Reveal during any Movement Phase.',
-    startingTechOverrides: {
-      TechId.move: 2,
-    },
+    description:
+        '''A ship of this race may retreat at the end of a combat round even if it fired during that round. In addition, all of this player''s ships get +2 Attack Strength when firing on a planet.''',
+    revealCondition: 'Reveal when they first use one of their abilities.',
   ),
-
   EmpireAdvantage(
     cardNumber: 47,
     name: 'And We Still Carry Swords',
-    description: '''You start the game with Ground 2 (Space Marines) and Boarding 1 already purchased for free. Your Boarding Ships get +1 to their boarding attack rolls.''',
-    revealCondition: 'Reveal at the start of any combat.',
-    startingTechOverrides: {
-      TechId.ground: 2,
-      TechId.boarding: 1,
-    },
+    description:
+        '''This race starts with Ground Combat 2. All of its boarding attacks get +1 Attack Strength, all boarding attacks against it get -1 Attack Strength, and all of its Ground Units, including Militia, get +1 Attack and Defense Strength.''',
+    revealCondition:
+        'Reveal when engaging in boarding attack or ground invasion for the first time.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The starting Ground Combat level is applied. Boarding and ground-combat bonuses are not automated.',
+    startingTechOverrides: {TechId.ground: 2},
   ),
-
   EmpireAdvantage(
     cardNumber: 48,
     name: 'Amazing Diplomats',
-    description: '''Once per game, you may cancel one attack against one of your colonies or fleets. The attacking player must retreat. You may also look at any one face-down counter at any time (once per turn).''',
-    revealCondition: 'Reveal when an enemy attacks one of your colonies or fleets.',
+    description:
+        '''Non-Player Aliens do not attack this race. It may move through and stack with them, and may colonize alien planets as if the aliens were not there.''',
+    revealCondition:
+        'Reveal when entering an NPA hex for the first time or if Aggressive NPA would attack them.',
   ),
-
   EmpireAdvantage(
     cardNumber: 49,
     name: 'Traders',
-    description: '''MS Pipelines cost only 1 CP to build instead of 3. You start with one free MS Pipeline already placed adjacent to your Home Colony. Connected colonies produce +2 CPs instead of the normal +1 CP.''',
-    revealCondition: 'Reveal during any Economic Phase.',
-    costModifiers: {
-      ShipType.msPipeline: -2,
-    },
+    description:
+        '''This empire gets one extra CP for each colony connected by an MS Pipeline.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'partial',
+    implementationNote:
+        'Pipeline income is ledger-based, so the app applies the Traders bonus as a multiplier to tracked pipeline income.',
   ),
-
   EmpireAdvantage(
     cardNumber: 50,
     name: 'Cloaking Geniuses',
-    description: '''You start the game with Cloaking 1 already purchased for free. Your cloaked Raiders cannot be detected by Scanners unless the enemy Scanner level is 2 higher than your Cloaking level (instead of the normal 1 higher). Raiders cost 2 CP less to build.''',
-    revealCondition: 'Reveal during any Movement Phase.',
-    startingTechOverrides: {
-      TechId.cloaking: 1,
-    },
-    costModifiers: {
-      ShipType.raider: -2,
-    },
+    description:
+        '''After researching Cloaking 1, all of this empire''s Scouts and Destroyers also gain Cloaking. After Cloaking 2, its Cruisers also gain Cloaking. Captured ships retain this ability and existing ships must be retrofitted normally.''',
+    revealCondition:
+        'Reveal when a cloaked Scout, Destroyer, or Cruiser is encountered in combat or moves through an enemy ship.',
   ),
-
   EmpireAdvantage(
     cardNumber: 51,
     name: 'Star Wolves',
-    description: '''You start the game with Exploration 1 already purchased for free. Your Scouts get +1 Attack Strength. Scouts cost 1 CP less to build.''',
-    revealCondition: 'Reveal at the start of any combat.',
-    startingTechOverrides: {
-      TechId.exploration: 1,
-    },
-    costModifiers: {
-      ShipType.scout: -1,
-    },
+    description:
+        '''This empire''s Scouts, Destroyers, and Fighters get +1 Attack Strength when firing on a unit with Hull Size 2 or greater. Its Destroyers cost 1 less to build.''',
+    revealCondition: 'Reveal when they first use their ability.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The Destroyer cost reduction is applied. Combat bonuses are not automated.',
+    costModifiers: {ShipType.dd: -1},
   ),
-
   EmpireAdvantage(
     cardNumber: 52,
     name: 'Power to the People',
-    description: '''Your Home Colony starts with a free Shipyard and a free Base. In addition, Bases cost only 8 CPs to build instead of 12.''',
-    revealCondition: 'Reveal during setup or any Economic Phase.',
-    costModifiers: {
-      ShipType.base: -4,
-    },
+    description:
+        '''Mines, Colony Ships, Miners, and MS Pipelines are automatically and instantly upgraded to the player''s current Movement technology.''',
+    revealCondition:
+        'Reveal when a Miner, Colony Ship, MS Pipeline, or revealed Mine moves faster than normal for the first time.',
   ),
-
   EmpireAdvantage(
     cardNumber: 53,
     name: 'House of Speed',
-    description: '''You start the game with Move 3 tech already purchased for free. However, you cannot purchase Ship Size tech above level 3.''',
-    revealCondition: 'Reveal during any Movement Phase.',
-    startingTechOverrides: {
-      TechId.move: 3,
-    },
-    maxTechLevels: {TechId.shipSize: 3},
+    description:
+        '''This race starts with Movement 7 technology. Opponents get +2 Attack Strength when firing at its ships, and it may never research Cloaking or gain it by any other means.''',
+    revealCondition:
+        'Reveal the first time a ship moves more than 1 hex in a turn or the first time its ships are in combat.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The starting Movement level and Cloaking restriction are enforced. The combat vulnerability is not automated.',
+    startingTechOverrides: {TechId.move: 7},
+    blockedTechs: [TechId.cloaking],
   ),
-
   EmpireAdvantage(
     cardNumber: 54,
     name: 'Powerful Psychics',
-    description: '''At the start of each combat round, you may choose one enemy ship. That ship cannot fire this round. This ability works once per combat round, not once per game.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''This race starts with Exploration 1 and may reveal all face-down Groups adjacent to one of its ships with Exploration technology.''',
+    revealCondition: 'Reveal the first time a stack is inspected.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The starting Exploration level is applied. Psychic stack inspection is not automated.',
+    startingTechOverrides: {TechId.exploration: 1},
   ),
-
   EmpireAdvantage(
     cardNumber: 55,
     name: 'Shape Shifters',
-    description: '''Your Decoys are not revealed until combat actually begins (enemy must enter the hex and fight). In addition, the first time each Decoy is "destroyed" in combat, it is replaced with a free Destroyer instead.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''This empire may place Decoys in any hex with a friendly combat ship as well as in colony hexes, gets two free Decoys each Economic Phase, and may once per game retreat as if it had played Resource Card #107.''',
+    revealCondition: 'Reveal when a non-Decoy effect of this card is used.',
   ),
-
-  EmpireAdvantage(
-    cardNumber: 56,
-    name: 'On Board Workshop',
-    description: '''Each CV, BV, and Titan may build one Fighter during the Economic Phase as long as there is room to store it (includes just-researched Fighter tech). The Fighter costs the same as if produced at a Shipyard. Unique ships cannot do this, but Alternate Empire BBs and DNs can. During a Movement Turn, one Fighter may be refitted and the carrying ship may move if the Fighter accompanies it the entire phase.''',
-    revealCondition: 'Reveal when a CV/BV/Titan is present in combat.',
-  ),
-
-  EmpireAdvantage(
-    cardNumber: 57,
-    name: 'Superhighway',
-    description: '''Each ship that spends its entire move on an MS Pipeline chain may move two extra hexes instead of one. "Freie Fahrt für freie Bürger" — free roads for free citizens.''',
-    revealCondition: 'Reveal the first time it is used.',
-  ),
-
   EmpireAdvantage(
     cardNumber: 58,
     name: 'On the Move',
-    description: '''You start the game with Move 2 already purchased for free. Your Colony Ships move 2 hexes per turn instead of 1.''',
-    revealCondition: 'Reveal during setup or any Movement Phase.',
-    startingTechOverrides: {
-      TechId.move: 2,
-    },
+    description:
+        '''Shipyards and all types of Bases have Move 1 and may attack and explore. They may not retreat from combat and can never be upgraded to a higher Movement technology.''',
+    revealCondition:
+        'Reveal the first time a revealed Shipyard or Base moves, is revealed away from a Colony, or is in battle.',
   ),
-
   EmpireAdvantage(
     cardNumber: 59,
     name: 'Longbowmen',
-    description: '''You start the game with Point Defense 1 and Mine Sweep 1 already purchased for free. Your Scouts get +1 Attack Strength vs Fighters (stacks with Point Defense bonus).''',
-    revealCondition: 'Reveal at the start of any combat.',
-    startingTechOverrides: {
-      TechId.pointDefense: 1,
-      TechId.mineSweep: 1,
-    },
+    description:
+        '''The Weapon Class of this race''s Scouts, Destroyers, Cruisers, Battlecruisers, Flagship, Missiles, and nullified Raiders improves by one letter in eligible battles. A-Class ships gain no further benefit.''',
+    revealCondition:
+        'Reveal when first entering combat, including Aliens, with one of the affected ships.',
   ),
-
   EmpireAdvantage(
     cardNumber: 187,
     name: 'War Sun',
-    description: '''You may build one War Sun. The War Sun is hull size 5, A-class weapon, costs 30 CPs, and has 2 attacks per combat round. It cannot retreat. If destroyed, it cannot be rebuilt. The War Sun does not require any tech prerequisites.''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''Once during the game, this empire gains a free Titan at its Homeworld. It uses the player''s current tech, needs no Shipyard to place, pays no maintenance while at a friendly Colony during Econ, and may not enter Deep Space until Ship Size 6 is researched. Alternate Empires may use this as their only Titan.''',
+    revealCondition: 'Reveal when any of their Titan counters are revealed.',
+    implementationNote:
+        'The official one-time free Titan effect is not automated. The older custom War Sun unit is no longer exposed through the production UI.',
   ),
-
   EmpireAdvantage(
     cardNumber: 188,
     name: 'Salvage Experts',
-    description: '''After each combat, for every 2 enemy ships you destroyed, you gain 1 free CP that must be spent immediately on ship construction or saved as CP carry-over. You also start with Mine Sweep 1 for free.''',
-    revealCondition: 'Reveal at the start of any combat.',
-    startingTechOverrides: {
-      TechId.mineSweep: 1,
-    },
+    description:
+        '''When this race wins a space battle, it may salvage one friendly destroyed combat ship from the battle. If none of its ships were destroyed but the enemy lost at least one combat ship, this empire gains 3 CP.''',
+    revealCondition: 'Reveal when first entering combat, including Aliens.',
   ),
-
   EmpireAdvantage(
     cardNumber: 189,
     name: 'Berserker Genome',
-    description: '''All of your ships get +1 Attack Strength but -1 Defense Strength. Your ships never retreat and always fight to the death. Ground combat units also get +1 Attack.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''At the end of every combat round of space combat in which this race loses a unit, it may make a special attack for each unit destroyed. These bonus attacks hit on 1 plus the destroyed unit''s Hull Size and do one damage.''',
+    revealCondition: 'Reveal when first used.',
   ),
-
   EmpireAdvantage(
     cardNumber: 190,
     name: 'Robot Race',
-    description: '''Your ships only pay 50% maintenance (rounded up). However, you cannot use Boarding Ships. You start with Security Forces 1 for free.''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''All maintenance for this race is halved. Add up all maintenance costs, including reductions from alien technology cards and experience, divide in half, and round down.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'implemented',
+    implementationNote: 'Maintenance is halved in the production ledger.',
     maintenancePercent: 50,
-    startingTechOverrides: {
-      TechId.securityForces: 1,
-    },
-    blockedTechs: [TechId.boarding],
   ),
-
   EmpireAdvantage(
     cardNumber: 191,
     name: 'Masters of the Gates',
-    description: '''You start the game with 2 free MS Pipelines placed adjacent to your Home Colony. Your MS Pipelines also function as warp points: your ships may move instantly between any two connected MS Pipeline hexes as part of normal movement.''',
-    revealCondition: 'Reveal during any Movement Phase.',
+    description:
+        '''All Cruisers have Warp Gates without requiring any research and at no extra cost.''',
+    revealCondition:
+        'Reveal the first time a Warp Gate is used or a Cruiser is in combat.',
   ),
 
-  // ── Replicator Empire Advantages ──
-
+  // Replicator Empire Advantages
   EmpireAdvantage(
     cardNumber: 60,
     name: 'Fast Replicators',
-    description: '''Replicator ships move +1 hex per turn beyond their normal movement rate. Replicator Colony Ships also move +1 hex per turn.''',
-    revealCondition: 'Reveal during any Movement Phase.',
+    description:
+        '''Replicators start with Move 2 technology. Future Movement levels cost 15 CP instead of 20.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'partial',
+    implementationNote:
+        'Replicator tracker setup uses the higher starting movement and reduced move-tech cost.',
     isReplicator: true,
   ),
-
   EmpireAdvantage(
     cardNumber: 61,
     name: 'Green Replicators',
-    description: '''Replicator colonies produce +5 CPs per turn each. Replicator maintenance costs are reduced by 50%.''',
-    revealCondition: 'Reveal during any Economic Phase.',
+    description:
+        '''Replicator Colonies do not begin to deplete until Economic Phase 13.''',
+    revealCondition: 'Reveal at the start of Economic Phase 10.',
     isReplicator: true,
-    maintenancePercent: 50,
   ),
-
   EmpireAdvantage(
     cardNumber: 62,
     name: 'Improved Gunnery',
-    description: '''All Replicator ships get +1 to their Attack Strength. This is in addition to any Attack tech the Replicators have. This bonus does not count against hull size limits.''',
-    revealCondition: 'Reveal at the start of any combat.',
+    description:
+        '''The Replicator Flagship and all Type XIII and Type XV ships are equipped with Second Salvo. At 4 RP, all Replicator ships gain +1 Tactics and Type V ships gain +1 Attack.''',
+    revealCondition:
+        'Reveal when entering combat with an affected ship or when a higher Tactics level is revealed.',
     isReplicator: true,
   ),
-
   EmpireAdvantage(
     cardNumber: 63,
     name: 'Warp Gates',
-    description: '''Replicator ships may move instantly from any Replicator colony to any other Replicator colony once per turn, in addition to normal movement.''',
-    revealCondition: 'Reveal during any Movement Phase.',
+    description:
+        '''Replicator Explore Ships and the Flagship are equipped with Warp Gates. Explore ships still have Hull Size 2, but only take one hull to produce.''',
+    revealCondition:
+        'Reveal the first time a Warp Gate is used or an equipped ship is in combat.',
     isReplicator: true,
   ),
-
   EmpireAdvantage(
     cardNumber: 64,
     name: 'Advanced Research',
-    description: '''Replicator tech costs are reduced by 25%. The Replicator player also starts with one free tech level of their choice at the beginning of the game.''',
-    revealCondition: 'Reveal during setup or any Economic Phase.',
+    description:
+        '''Replicators begin the game with one extra RP. Buying RP costs only 25 CP instead of 30.''',
+    revealCondition: 'Reveal at the end of the game.',
+    supportStatus: 'partial',
+    implementationNote:
+        'The tracker can represent the extra starting RP, but not a full Replicator RP-purchase engine.',
     isReplicator: true,
-    techCostMultiplier: 0.75,
   ),
-
   EmpireAdvantage(
     cardNumber: 65,
     name: 'Replicator Capitol',
-    description: '''The Replicator Home Colony is hull size 5 (like a Starbase) and gets 2 attacks per round in combat. It cannot be destroyed by normal bombardment; it must be assaulted with ground troops.''',
-    revealCondition: 'Reveal at the start of any combat at the Replicator Home Colony.',
+    description:
+        '''The Replicator Homeworld may produce an additional Hull every odd Economic Phase, in addition to any other increases. The Replicators also start with 10 extra CP.''',
+    revealCondition: 'Reveal at the end of the game.',
     isReplicator: true,
   ),
 ];

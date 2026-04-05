@@ -149,12 +149,10 @@ bool canBuildShip(
       if (effectiveLevel(TechId.advancedCon) < 2) return false;
       return shipCounters.any((c) => c.type == ShipType.base && c.isBuilt);
 
-    // War Sun: requires War Sun EA (#187), max 1 ever, no tech prereqs
+    // The printed War Sun Empire Advantage grants a one-time free Titan and is
+    // not modeled as a buildable unit in the ledger.
     case ShipType.warSun:
-      if (config.selectedEmpireAdvantage != 187) return false;
-      final alreadyHaveWs =
-          existingPurchases.any((p) => p.type == ShipType.warSun);
-      return !alreadyHaveWs;
+      return false;
 
     // Always available: Colony Ships, Miners, MS Pipelines, Shipyards,
     // Decoys, Scouts, DSN
@@ -184,6 +182,7 @@ class ProductionPage extends StatefulWidget {
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
   final ValueChanged<GameState>? onGameStateOverride;
+  final ValueChanged<String>? onLocateShip;
 
   const ProductionPage({
     super.key,
@@ -197,6 +196,7 @@ class ProductionPage extends StatefulWidget {
     required this.onEndTurn,
     this.onRuleTap,
     this.onGameStateOverride,
+    this.onLocateShip,
   });
 
   @override
@@ -374,7 +374,7 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   /// Cost to buy the next level of a tech (from its effective level).
-  /// Applies EA techCostMultiplier and Quick Learners first-tech discount.
+  /// Applies EA and scenario tech cost modifiers.
   int? _nextCost(TechId id) {
     final table =
         config.useFacilitiesCosts ? kFacilitiesTechCosts : kBaseTechCosts;
@@ -385,17 +385,12 @@ class _ProductionPageState extends State<ProductionPage>
     final ea = config.empireAdvantage;
     int cost = baseCost;
     if (ea != null && ea.techCostMultiplier != 1.0) {
-      cost = (cost * ea.techCostMultiplier).floor();
+      final adjusted = cost * ea.techCostMultiplier;
+      cost = ea.roundTechCostsUp ? adjusted.ceil() : adjusted.floor();
     }
     // Scenario tech cost multiplier
     if (config.techCostMultiplier != 1.0) {
       cost = (cost * config.techCostMultiplier).ceil();
-    }
-    // Quick Learners (#40): 50% off if this would be the first tech this turn
-    if (ea?.cardNumber == 40) {
-      final order = production.techPurchaseOrder;
-      final isFirst = order.isEmpty || order.first == id;
-      if (isFirst) cost = (cost * 0.5).floor();
     }
     return cost;
   }
@@ -438,11 +433,23 @@ class _ProductionPageState extends State<ProductionPage>
     final newLevel = _effectiveLevel(id) + 1;
     final pending = Map<TechId, int>.from(production.pendingTechPurchases);
     pending[id] = newLevel;
-    // Track purchase order for Quick Learners discount
     final order = List<TechId>.from(production.techPurchaseOrder);
     if (!order.contains(id)) order.add(id);
     widget.onProductionChanged(
         production.copyWith(pendingTechPurchases: pending, techPurchaseOrder: order));
+  }
+
+  /// Grants a free tech level bump, representing a Space Wreck tech-roll
+  /// (rule 6.8.1). No CP/RP is spent. Bumps the committed techState level by 1;
+  /// does not interact with pending purchases.
+  void _applyWreckUpgrade(TechId id) {
+    final fm = config.useFacilitiesCosts;
+    final committedLevel = production.techState.getLevel(id, facilitiesMode: fm);
+    final maxLevel = _maxLevel(id);
+    if (committedLevel >= maxLevel) return;
+    final newTechState =
+        production.techState.setLevel(id, committedLevel + 1);
+    widget.onProductionChanged(production.copyWith(techState: newTechState));
   }
 
   void _undoTech(TechId id) {
@@ -1182,6 +1189,17 @@ class _ProductionPageState extends State<ProductionPage>
               ),
             ),
           ),
+          if (widget.onLocateShip != null) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.my_location, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Locate built ${def.name.toLowerCase()}s',
+              onPressed: () => _showBuiltShipsByTypeDialog(context, type),
+            ),
+          ],
           const SizedBox(width: 12),
           Text(
             '($maintText)',
@@ -1189,6 +1207,52 @@ class _ProductionPageState extends State<ProductionPage>
               fontSize: 13,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBuiltShipsByTypeDialog(BuildContext context, ShipType type) async {
+    final ships = shipCounters
+        .where((counter) => counter.isBuilt && counter.type == type)
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    if (ships.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${kShipDefinitions[type]!.name} Counters'),
+        content: SizedBox(
+          width: 420,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: ships.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final counter = ships[index];
+              return ListTile(
+                dense: true,
+                title: Text(counter.id),
+                trailing: IconButton(
+                  icon: const Icon(Icons.my_location),
+                  tooltip: 'Locate on Map',
+                  onPressed: widget.onLocateShip == null
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          widget.onLocateShip!(counter.id);
+                        },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -1266,6 +1330,8 @@ class _ProductionPageState extends State<ProductionPage>
           techName: _techDisplayNames[id] ?? id.name,
           facilitiesMode: config.useFacilitiesCosts,
           currentLevel: displayLevel,
+          maxLevel: maxLevel,
+          onApplyWreckUpgrade: () => _applyWreckUpgrade(id),
         ),
       ),
     );
@@ -1316,6 +1382,8 @@ class _ProductionPageState extends State<ProductionPage>
                   techName: name,
                   facilitiesMode: config.useFacilitiesCosts,
                   currentLevel: displayLevel,
+                  maxLevel: maxLevel,
+                  onApplyWreckUpgrade: () => _applyWreckUpgrade(id),
                 ),
               ),
               const SizedBox(width: 4),
@@ -1362,6 +1430,8 @@ class _ProductionPageState extends State<ProductionPage>
                 techName: name,
                 facilitiesMode: config.useFacilitiesCosts,
                 currentLevel: displayLevel,
+                maxLevel: maxLevel,
+                onApplyWreckUpgrade: () => _applyWreckUpgrade(id),
               ),
             ),
             const SizedBox(width: 4),
@@ -1767,8 +1837,10 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildPipelineSection(BuildContext context) {
     final theme = Theme.of(context);
-    final assets = production.pipelineAssets;
+    final connected = production.pipelineConnectedColonies;
     final traders = config.empireAdvantage?.cardNumber == 49;
+    final multiplier = traders ? 2 : 1;
+    final income = connected * multiplier;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1776,7 +1848,7 @@ class _ProductionPageState extends State<ProductionPage>
       children: [
         SectionHeader(
           title: 'PIPELINES',
-          subtitle: assets.isNotEmpty ? '${assets.length} assets' : null,
+          subtitle: connected > 0 ? '$connected connected' : null,
         ),
         const SizedBox(height: 4),
         Row(
@@ -1784,7 +1856,7 @@ class _ProductionPageState extends State<ProductionPage>
           children: [
             Expanded(
               child: Text(
-                'Track connected MS Pipeline income here. Enter the base CP each pipeline is currently producing. ${traders ? 'Traders doubles the total automatically.' : 'The total feeds the Economic Phase ledger.'}',
+                'Enter the number of colonies currently connected to your pipeline trade network. Each gives +1 CP${traders ? ' (x2 for Traders)' : ''}. A colony counts only once per Economic Phase regardless of how many pipelines touch it (rule 13.2.2).',
                 style: TextStyle(
                   fontSize: 13,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -1796,104 +1868,46 @@ class _ProductionPageState extends State<ProductionPage>
               onPressed: () => _showInlineHelp(
                 context,
                 'Pipelines',
-                'Add pipeline assets as you build them. In each pipeline row, enter the base CP that connected pipeline is currently producing. The Economic Phase total uses these values. If you are using the Traders Empire Advantage, the app doubles the final pipeline CP automatically. Map placement is tracked separately in the Map tab.',
+                'Enter the number of colonies currently connected to your pipeline trade network. Each connected colony gives +1 CP (or +2 CP with the Traders Empire Advantage). Per rule 13.2.2, each colony counts only once per Economic Phase no matter how many pipelines connect to it. Map placement of pipeline tokens is tracked separately in the Map tab.',
               ),
               icon: const Icon(Icons.info_outline, size: 18),
               visualDensity: VisualDensity.compact,
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        if (assets.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-            child: Text(
-              'No ledger pipeline assets yet.',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          )
-        else
-          for (int i = 0; i < assets.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 10,
-                        runSpacing: 6,
-                        children: [
-                          Text(
-                            'Pipeline ${i + 1}',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          Text(
-                            assets[i].id,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontFamily: 'monospace',
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                            ),
-                          ),
-                          _LabeledWorldControl(
-                            label: 'Connected CP',
-                            helpText:
-                                'Enter the base CP this connected pipeline contributes right now. Leave it at 0 if the asset is not connected or not producing yet.',
-                            child: NumberInput(
-                              value: assets[i].income,
-                              onChanged: (v) => _updatePipelineAsset(
-                                i,
-                                (asset) => asset.copyWith(income: v),
-                              ),
-                              min: 0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 20,
-                        icon: Icon(
-                          Icons.close,
-                          color: theme.colorScheme.error.withValues(alpha: 0.6),
-                        ),
-                        onPressed: () => _removePipelineAsset(i),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _addPipelineAsset,
-            icon: const Icon(Icons.add, size: 20),
-            label: const Text('Add Pipeline', style: TextStyle(fontSize: 15)),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: const Size(0, 44),
-              tapTargetSize: MaterialTapTargetSize.padded,
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 16,
+              runSpacing: 6,
+              children: [
+                _LabeledWorldControl(
+                  label: 'Connected Colonies',
+                  helpText:
+                      'Count of colonies connected to the pipeline trade network. Each counts once per Economic Phase (rule 13.2.2).',
+                  child: NumberInput(
+                    value: connected,
+                    onChanged: _updatePipelineConnectedColonies,
+                    min: 0,
+                  ),
+                ),
+                Text(
+                  'Pipeline income: $income CP${traders ? ' ($connected x 2)' : ''}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -2110,13 +2124,13 @@ class _ProductionPageState extends State<ProductionPage>
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _LabeledWorldControl(
-                  label: 'Minerals',
+                  label: 'Staged Minerals',
                   helpText:
-                      'Mineral income is the CP produced by mineral finds associated with this colony during the Economic Phase.',
+                      'Mineral marker CP deposited on this colony by Mining Ships, awaiting collection. Cleared each Economic Phase (rule 7.2). Blockaded colonies defer collection until the blockade lifts (7.1.2).',
                   child: NumberInput(
-                    value: world.mineralIncome,
+                    value: world.stagedMineralCp,
                     onChanged: (v) =>
-                        _updateWorld(index, (w) => w.copyWith(mineralIncome: v)),
+                        _updateWorld(index, (w) => w.copyWith(stagedMineralCp: v)),
                     min: 0,
                   ),
                 ),
@@ -2197,30 +2211,11 @@ class _ProductionPageState extends State<ProductionPage>
     widget.onProductionChanged(production.copyWith(worlds: updated));
   }
 
-  void _addPipelineAsset() {
-    final nextOrdinal = production.nextPipelineOrdinal;
-    final updated = List<PipelineAsset>.from(production.pipelineAssets)
-      ..add(PipelineAsset(id: 'pipeline-$nextOrdinal'));
+  void _updatePipelineConnectedColonies(int value) {
+    final clamped = value < 0 ? 0 : value;
     widget.onProductionChanged(
-      production.copyWith(pipelineAssets: updated),
+      production.copyWith(pipelineConnectedColonies: clamped),
     );
-  }
-
-  void _removePipelineAsset(int index) {
-    final updated = List<PipelineAsset>.from(production.pipelineAssets)
-      ..removeAt(index);
-    widget.onProductionChanged(
-      production.copyWith(pipelineAssets: updated),
-    );
-  }
-
-  void _updatePipelineAsset(
-    int index,
-    PipelineAsset Function(PipelineAsset) mutate,
-  ) {
-    final updated = List<PipelineAsset>.from(production.pipelineAssets);
-    updated[index] = mutate(updated[index]);
-    widget.onProductionChanged(production.copyWith(pipelineAssets: updated));
   }
 
   // ===========================================================================

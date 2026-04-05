@@ -11,6 +11,8 @@ void showTechDetailDialog(
   required String techName,
   required bool facilitiesMode,
   required int currentLevel,
+  int? maxLevel,
+  VoidCallback? onApplyWreckUpgrade,
 }) {
   final table = facilitiesMode ? kFacilitiesTechCosts : kBaseTechCosts;
   final entry = table[techId];
@@ -130,6 +132,16 @@ void showTechDetailDialog(
           ],
         ),
         actions: [
+          if (onApplyWreckUpgrade != null &&
+              maxLevel != null &&
+              currentLevel < maxLevel)
+            TextButton(
+              onPressed: () {
+                onApplyWreckUpgrade();
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Apply as Space Wreck upgrade (free)'),
+            ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),

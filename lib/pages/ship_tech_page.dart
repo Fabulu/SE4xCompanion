@@ -25,6 +25,7 @@ class ShipTechPage extends StatelessWidget {
   final ValueChanged<List<ShipCounter>> onCountersChanged;
   final ValueChanged<int>? onUpgradeCostIncurred;
   final void Function(String sectionId)? onRuleTap;
+  final ValueChanged<String>? onLocateShip;
 
   const ShipTechPage({
     super.key,
@@ -37,6 +38,7 @@ class ShipTechPage extends StatelessWidget {
     required this.onCountersChanged,
     this.onUpgradeCostIncurred,
     this.onRuleTap,
+    this.onLocateShip,
   });
 
   /// Ordered ship types for display, matching the physical sheet layout.
@@ -132,11 +134,6 @@ class ShipTechPage extends StatelessWidget {
 
     // Transport always shown (needed for ground combat)
     visible.add(ShipType.transport);
-
-    // War Sun: show only if War Sun EA (#187) is selected
-    if (config.selectedEmpireAdvantage == 187) {
-      visible.add(ShipType.warSun);
-    }
 
     // Alternate empire: hide Titans, CVs, BVs (rule 24.1.1)
     if (config.enableAlternateEmpire) {
@@ -434,6 +431,9 @@ class ShipTechPage extends StatelessWidget {
                     template.type,
                     template.counterNumber,
                   )
+              : null,
+          onLocate: isBuilt && counter != null && onLocateShip != null
+              ? () => onLocateShip!(counter.id)
               : null,
         ));
       }

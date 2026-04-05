@@ -34,9 +34,7 @@ void main() {
         turnNumber: 5,
         production: ProductionState(
           cpCarryOver: 15,
-          pipelineAssets: const [
-            PipelineAsset(id: 'pipeline-1', notes: 'north lane'),
-          ],
+          pipelineConnectedColonies: 1,
           worlds: [
             const WorldState(name: 'HW', isHomeworld: true, homeworldValue: 25),
           ],
@@ -73,9 +71,8 @@ void main() {
       expect(restored.config.enableLogistics, true);
       expect(restored.config.ownership.allGoodThings, true);
       expect(restored.production.cpCarryOver, 15);
-      expect(restored.production.pipelineAssets, hasLength(1));
-      expect(restored.production.pipelineAssets[0].id, 'pipeline-1');
-      expect(restored.production.pipelineAssets[0].notes, 'north lane');
+      expect(restored.production.pipelineConnectedColonies, 1);
+      expect(restored.production.pipelineAssetIds, ['pipeline-1']);
       expect(restored.production.worlds.length, 1);
       expect(restored.production.worlds[0].homeworldValue, 25);
       expect(restored.production.techState.getLevel(TechId.attack), 2);
@@ -128,11 +125,13 @@ void main() {
       expect(restored.production.worlds[0].id, isNotEmpty);
       expect(restored.production.worlds[1].id, isNotEmpty);
       expect(placedHex?.worldId, restored.production.worlds[0].id);
-      expect(placedHex?.pipelineIds, hasLength(2));
-      expect(restored.production.pipelineAssets, hasLength(2));
+      // Legacy pipeline hex placements are pruned during sanitize (their
+      // synthetic IDs no longer match the new {pipeline-1, pipeline-2} pool),
+      // but the connected-colony count migrates correctly.
+      expect(restored.production.pipelineConnectedColonies, 2);
       expect(
-        restored.production.pipelineAssets.map((asset) => asset.id).toSet(),
-        placedHex?.pipelineIds.toSet(),
+        restored.production.pipelineAssetIds,
+        ['pipeline-1', 'pipeline-2'],
       );
     });
   });
@@ -417,31 +416,31 @@ void main() {
       expect(config.empireAdvantage, isNull);
     });
 
-    test('GameConfig.shipCostModifiers returns correct map', () {
-      // Giant Race (#34) has +2 cost modifier on many ship types
-      const config = GameConfig(selectedEmpireAdvantage: 34);
-      final mods = config.shipCostModifiers;
-
-      expect(mods[ShipType.dd], 2);
-      expect(mods[ShipType.ca], 2);
-      expect(mods[ShipType.bc], 2);
-      // Giant Race also has colonyShipCostModifier: 2
-      expect(mods[ShipType.colonyShip], 2);
-    });
-
     test('GameConfig.shipCostModifiers returns empty map when no EA selected', () {
       const config = GameConfig();
       expect(config.shipCostModifiers, isEmpty);
     });
 
-    test('GameConfig.shipCostModifiers for Insectoids has negative modifiers', () {
-      const config = GameConfig(selectedEmpireAdvantage: 43);
-      final mods = config.shipCostModifiers;
+    test('GameConfig.shipCostModifiers surfaces Immortals colony-ship surcharge', () {
+      // Immortals (#44): Colony Ships cost 2 more.
+      const config = GameConfig(selectedEmpireAdvantage: 44);
+      expect(config.shipCostModifiers[ShipType.colonyShip], 2);
+    });
 
-      expect(mods[ShipType.dd], -2);
-      expect(mods[ShipType.ca], -2);
-      // Insectoids also has colonyShipCostModifier: -2
-      expect(mods[ShipType.colonyShip], -2);
+    test('GameConfig.shipCostModifiers surfaces Star Wolves destroyer discount', () {
+      // Star Wolves (#51): Destroyers cost 1 less.
+      const config = GameConfig(selectedEmpireAdvantage: 51);
+      expect(config.shipCostModifiers[ShipType.dd], -1);
+    });
+
+    test('GameConfig.shipCostModifiers is empty for hull-size-only EAs', () {
+      // Giant Race (#34) and Insectoids (#43) express their cost effect via
+      // hullSizeModifier (affects maintenance + construction capacity per the
+      // current rule text), not via direct ship cost modifiers.
+      const giantRace = GameConfig(selectedEmpireAdvantage: 34);
+      const insectoids = GameConfig(selectedEmpireAdvantage: 43);
+      expect(giantRace.shipCostModifiers, isEmpty);
+      expect(insectoids.shipCostModifiers, isEmpty);
     });
   });
 }

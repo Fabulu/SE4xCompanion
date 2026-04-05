@@ -13,7 +13,7 @@ class WorldState {
   final int growthMarkerLevel; // 0..3
   final bool isBlocked;
   final FacilityType? facility;
-  final int mineralIncome;
+  final int stagedMineralCp;
   final int pipelineIncome;
 
   const WorldState({
@@ -24,7 +24,7 @@ class WorldState {
     this.growthMarkerLevel = 0,
     this.isBlocked = false,
     this.facility,
-    this.mineralIncome = 0,
+    this.stagedMineralCp = 0,
     this.pipelineIncome = 0,
   });
 
@@ -71,7 +71,7 @@ class WorldState {
     bool? isBlocked,
     FacilityType? facility,
     bool clearFacility = false,
-    int? mineralIncome,
+    int? stagedMineralCp,
     int? pipelineIncome,
   }) =>
       WorldState(
@@ -82,7 +82,7 @@ class WorldState {
         growthMarkerLevel: growthMarkerLevel ?? this.growthMarkerLevel,
         isBlocked: isBlocked ?? this.isBlocked,
         facility: clearFacility ? null : (facility ?? this.facility),
-        mineralIncome: mineralIncome ?? this.mineralIncome,
+        stagedMineralCp: stagedMineralCp ?? this.stagedMineralCp,
         pipelineIncome: pipelineIncome ?? this.pipelineIncome,
       );
 
@@ -94,7 +94,9 @@ class WorldState {
         'growthMarkerLevel': growthMarkerLevel,
         'isBlocked': isBlocked,
         'facility': facility?.name,
-        'mineralIncome': mineralIncome,
+        'stagedMineralCp': stagedMineralCp,
+        // Backward-compat alias for legacy saves
+        'mineralIncome': stagedMineralCp,
         'pipelineIncome': pipelineIncome,
       };
 
@@ -106,7 +108,8 @@ class WorldState {
         growthMarkerLevel: json['growthMarkerLevel'] as int? ?? 0,
         isBlocked: json['isBlocked'] as bool? ?? false,
         facility: _facilityFromName(json['facility'] as String?),
-        mineralIncome: json['mineralIncome'] as int? ?? 0,
+        stagedMineralCp:
+            json['stagedMineralCp'] as int? ?? json['mineralIncome'] as int? ?? 0,
         pipelineIncome: json['pipelineIncome'] as int? ?? 0,
       );
 

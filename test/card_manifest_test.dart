@@ -7,6 +7,7 @@ void main() {
     'replicatorEmpire',
     'alienTech',
     'crew',
+    'mission',
     'resource',
     'scenarioModifier',
     'planetAttribute',
@@ -32,6 +33,24 @@ void main() {
             reason:
                 'Card #${card.number} "${card.name}" has invalid type: ${card.type}');
       }
+    });
+
+    test('cards 56 and 57 are alien tech cards', () {
+      final card56 = kAllCards.firstWhere((card) => card.number == 56);
+      final card57 = kAllCards.firstWhere((card) => card.number == 57);
+
+      expect(card56.type, 'alienTech');
+      expect(card57.type, 'alienTech');
+      expect(card56.supportStatus, CardSupportStatus.referenceOnly);
+      expect(card57.supportStatus, CardSupportStatus.referenceOnly);
+    });
+
+    test('card entries carry support status metadata', () {
+      final statuses = kAllCards.map((card) => card.supportStatus).toSet();
+
+      expect(statuses.contains(CardSupportStatus.supported), true);
+      expect(statuses.contains(CardSupportStatus.partial), true);
+      expect(statuses.contains(CardSupportStatus.referenceOnly), true);
     });
 
     test('no duplicate card numbers within the same type', () {

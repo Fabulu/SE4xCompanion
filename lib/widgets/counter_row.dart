@@ -57,6 +57,7 @@ class CounterRow extends StatelessWidget {
   final VoidCallback? onBuild;
   final VoidCallback? onUpgrade;
   final VoidCallback? onDestroy;
+  final VoidCallback? onLocate;
   final int? upgradeCost;
 
   const CounterRow({
@@ -78,6 +79,7 @@ class CounterRow extends StatelessWidget {
     this.onBuild,
     this.onUpgrade,
     this.onDestroy,
+    this.onLocate,
     this.upgradeCost,
   });
 
@@ -204,6 +206,22 @@ class CounterRow extends StatelessWidget {
                       color: theme.colorScheme.error.withValues(alpha: 0.5),
                     ),
                     tooltip: 'Destroy / Scrap',
+                  ),
+                ),
+              if (onLocate != null)
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    onPressed: onLocate,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 18,
+                    icon: Icon(
+                      Icons.my_location,
+                      color: theme.colorScheme.primary,
+                    ),
+                    tooltip: 'Locate on Map',
                   ),
                 ),
             ],

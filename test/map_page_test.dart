@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:se4x/models/map_state.dart';
-import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/models/world.dart';
 import 'package:se4x/pages/map_page.dart';
 
 void main() {
-  testWidgets('map fills the tab width and the inspector expands when selection exists', (tester) async {
+  testWidgets('map fills the tab width and keeps the canvas visible without inline inspector', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -31,10 +30,7 @@ void main() {
               shipCounterIds: ['dd:1'],
             ),
           ],
-          pipelineAssets: const [
-            PipelineAsset(id: 'pipe-1'),
-            PipelineAsset(id: 'pipe-2'),
-          ],
+          pipelineAssetIds: const ['pipe-1', 'pipe-2'],
           placedPipelineIds: const {'pipe-1'},
           selectedHex: null,
         ),
@@ -46,22 +42,20 @@ void main() {
           ship(ShipType.dd, 1),
           ship(ShipType.ca, 2),
         ],
-        pipelineAssets: const [
-          PipelineAsset(id: 'pipe-1'),
-          PipelineAsset(id: 'pipe-2'),
-        ],
+        pipelineAssetIds: const ['pipe-1', 'pipe-2'],
       ),
     );
 
     final viewer = tester.getSize(find.byType(InteractiveViewer));
     expect(viewer.width, greaterThan(1700));
     expect(find.text('Worlds: 1'), findsOneWidget);
-    expect(find.text('Ships: 1'), findsOneWidget);
+    expect(find.text('Ships: 2'), findsOneWidget);
     expect(find.text('Pipelines: 1'), findsOneWidget);
-    expect(find.text('Collapsed. Tap to expand.'), findsOneWidget);
+    expect(find.text('Collapsed. Tap to expand.'), findsNothing);
+    expect(find.text('Terrain'), findsNothing);
   });
 
-  testWidgets('a preselected hex opens the inspector content immediately', (tester) async {
+  testWidgets('a selected hex only opens editing when Edit is pressed', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -86,6 +80,16 @@ void main() {
       ),
     );
 
+    expect(find.text('Terrain'), findsNothing);
+    expect(find.text('Label'), findsNothing);
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // Fleets surface first in the inspector; hex-detail fields sit below and
+    // may be outside the initial viewport when a fleet is selected.
+    await tester.scrollUntilVisible(find.text('Terrain'), 200,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('Terrain'), findsOneWidget);
     expect(find.text('Label'), findsOneWidget);
   });
@@ -151,6 +155,9 @@ void main() {
       ),
     );
 
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
     await tester.ensureVisible(find.text('Unplace'));
     await tester.tap(find.text('Unplace'));
     await tester.pumpAndSettle();
@@ -199,13 +206,13 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final state = baseState(
-      pipelineAssets: const [PipelineAsset(id: 'pipe-1')],
+      pipelineAssetIds: const ['pipe-1'],
       selectedHex: null,
     );
     await tester.pumpWidget(
       mapHarness(
         state,
-        pipelineAssets: const [PipelineAsset(id: 'pipe-1')],
+        pipelineAssetIds: const ['pipe-1'],
         onChanged: (value, {recordUndo = true, description}) => updated = value,
       ),
     );
@@ -221,7 +228,7 @@ void main() {
     await tester.pumpWidget(
       mapHarness(
         updated ?? state,
-        pipelineAssets: const [PipelineAsset(id: 'pipe-1')],
+        pipelineAssetIds: const ['pipe-1'],
         onChanged: (value, {recordUndo = true, description}) => updated = value,
       ),
     );
@@ -232,13 +239,53 @@ void main() {
 
     expect(updated?.hexAt(const HexCoord(0, 0))?.pipelineIds, isEmpty);
   });
+
+  testWidgets('ships pill opens inventory and shows assigned fleet location', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final counter = ship(ShipType.dd, 1);
+    final state = baseState(
+      shipCounters: [counter],
+      fleets: const [
+        FleetStackState(
+          id: 'fleet-1',
+          coord: HexCoord(2, 0),
+          shipCounterIds: ['dd:1'],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      mapHarness(
+        state,
+        shipCounters: [counter],
+      ),
+    );
+
+    await tester.tap(find.text('Ships: 1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Built Ships'), findsOneWidget);
+    expect(find.text('dd:1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('2,0'),
+      ),
+      findsOneWidget,
+    );
+  });
+
 }
 
 Widget mapHarness(
   GameMapState state, {
   List<WorldState> productionWorlds = const [],
   List<ShipCounter> shipCounters = const [],
-  List<PipelineAsset> pipelineAssets = const [],
+  List<String> pipelineAssetIds = const [],
+  String? focusShipId,
+  int focusRequestId = 0,
   MapStateChanged? onChanged,
 }) {
   return MaterialApp(
@@ -247,7 +294,9 @@ Widget mapHarness(
         state: state,
         productionWorlds: productionWorlds,
         shipCounters: shipCounters,
-        pipelineAssets: pipelineAssets,
+        pipelineAssetIds: pipelineAssetIds,
+        focusShipId: focusShipId,
+        focusRequestId: focusRequestId,
         onChanged: onChanged ?? (_, {recordUndo = true, description}) {},
       ),
     ),
@@ -259,7 +308,7 @@ GameMapState baseState({
   Set<String> placedWorldIds = const {},
   List<ShipCounter> shipCounters = const [],
   List<FleetStackState> fleets = const [],
-  List<PipelineAsset> pipelineAssets = const [],
+  List<String> pipelineAssetIds = const [],
   Set<String> placedPipelineIds = const {},
   HexCoord? selectedHex,
   String? selectedFleetId,

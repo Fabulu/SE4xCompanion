@@ -483,6 +483,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
     'replicatorEmpire': 'Replicator Empire Advantages',
     'alienTech': 'Alien Technology',
     'crew': 'Crew Cards',
+    'mission': 'Mission Cards',
     'resource': 'Resource Cards',
     'planetAttribute': 'Planet Attributes',
     'scenarioModifier': 'Scenario Modifiers',
@@ -561,6 +562,8 @@ class RulesReferencePageState extends State<RulesReferencePage> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 4),
+                _SupportStatusBadge(status: card.supportStatus),
                 const SizedBox(height: 2),
                 Text(
                   card.description,
@@ -750,6 +753,49 @@ class _PhaseHeader extends StatelessWidget {
               color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupportStatusBadge extends StatelessWidget {
+  final CardSupportStatus status;
+
+  const _SupportStatusBadge({
+    required this.status,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = switch (status) {
+      CardSupportStatus.supported => 'Supported',
+      CardSupportStatus.partial => 'Partial support',
+      CardSupportStatus.referenceOnly => 'Reference only',
+    };
+    final color = switch (status) {
+      CardSupportStatus.supported => Colors.green,
+      CardSupportStatus.partial => Colors.orange,
+      CardSupportStatus.referenceOnly => theme.colorScheme.outline,
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
       ),
     );

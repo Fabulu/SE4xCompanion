@@ -31,7 +31,7 @@ void main() {
         growthMarkerLevel: growth,
         facility: facility,
         isBlocked: blocked,
-        mineralIncome: mineral,
+        stagedMineralCp: mineral,
         pipelineIncome: pipeline,
       );
 
@@ -64,7 +64,7 @@ void main() {
   group('Base mode - Mineral and Pipeline', () {
     test('mineral CP sums across worlds', () {
       final ps = ProductionState(worlds: [
-        hw().copyWith(mineralIncome: 5),
+        hw().copyWith(stagedMineralCp: 5),
         colony(1, mineral: 3),
       ]);
       expect(ps.mineralCp(), 8);
@@ -535,10 +535,10 @@ void main() {
 
     test('resets mineral and pipeline income to 0', () {
       final ps = ProductionState(
-        worlds: [hw().copyWith(mineralIncome: 5, pipelineIncome: 3)],
+        worlds: [hw().copyWith(stagedMineralCp: 5, pipelineIncome: 3)],
       );
       final next = ps.prepareForNextTurn(baseConfig, []);
-      expect(next.worlds[0].mineralIncome, 0);
+      expect(next.worlds[0].stagedMineralCp, 0);
       expect(next.worlds[0].pipelineIncome, 0);
     });
   });
@@ -616,29 +616,34 @@ void main() {
       expect(restored.pendingTechPurchases[TechId.defense], 1);
     });
 
-    test('pipeline assets round-trip through JSON', () {
-      final ps = ProductionState(
-        pipelineAssets: const [
-          PipelineAsset(id: 'pipeline-1', notes: 'front line'),
-          PipelineAsset(id: 'pipeline-2'),
-        ],
-      );
+    test('pipelineConnectedColonies round-trips through JSON', () {
+      const ps = ProductionState(pipelineConnectedColonies: 2);
 
       final json = ps.toJson();
       final restored = ProductionState.fromJson(json);
 
-      expect(restored.pipelineAssets, hasLength(2));
-      expect(restored.pipelineAssets[0].id, 'pipeline-1');
-      expect(restored.pipelineAssets[0].notes, 'front line');
-      expect(restored.pipelineAssets[1].id, 'pipeline-2');
+      expect(restored.pipelineConnectedColonies, 2);
+      expect(restored.pipelineAssetIds, ['pipeline-1', 'pipeline-2']);
+    });
+
+    test('fromJson migrates legacy pipelineAssets length', () {
+      final restored = ProductionState.fromJson({
+        'pipelineAssets': [
+          {'id': 'pipeline-1', 'notes': '', 'income': 3},
+          {'id': 'pipeline-2', 'notes': '', 'income': 0},
+          {'id': 'pipeline-3', 'notes': '', 'income': 2},
+        ],
+      });
+
+      expect(restored.pipelineConnectedColonies, 3);
     });
   });
 
   group('Pipeline inventory', () {
-    test('end turn converts MS Pipeline purchases into ledger assets', () {
+    test('end turn increments pipelineConnectedColonies by MS Pipeline purchases', () {
       final ps = ProductionState(
         worlds: [hw()],
-        pipelineAssets: const [PipelineAsset(id: 'pipeline-1')],
+        pipelineConnectedColonies: 1,
         shipPurchases: const [
           ShipPurchase(type: ShipType.msPipeline, quantity: 2),
         ],
@@ -647,40 +652,18 @@ void main() {
       final next = ps.prepareForNextTurn(baseConfig, []);
 
       expect(next.shipPurchases, isEmpty);
-      expect(next.pipelineAssets.map((asset) => asset.id), [
-        'pipeline-1',
-        'pipeline-2',
-        'pipeline-3',
-      ]);
+      expect(next.pipelineConnectedColonies, 3);
     });
 
-    test('manual ledger adjustments preserve inventory identity', () {
-      final ps = ProductionState(
-        pipelineAssets: const [
-          PipelineAsset(id: 'pipeline-1'),
-          PipelineAsset(id: 'pipeline-2'),
-        ],
-      );
+    test('pipelineCp applies Traders x2 multiplier when active', () {
+      const ps = ProductionState(pipelineConnectedColonies: 4);
 
-      final added = ps.copyWith(
-        pipelineAssets: [
-          ...ps.pipelineAssets,
-          const PipelineAsset(id: 'pipeline-3', notes: 'reserve'),
-        ],
-      );
-      expect(added.pipelineAssets, hasLength(3));
-      expect(added.pipelineAssets.last.notes, 'reserve');
+      // Without Traders: 4 * 1 = 4
+      expect(ps.pipelineCp(const GameConfig()), 4);
 
-      final removed = added.copyWith(
-        pipelineAssets: [
-          for (final asset in added.pipelineAssets)
-            if (asset.id != 'pipeline-2') asset,
-        ],
-      );
-      expect(removed.pipelineAssets.map((asset) => asset.id), [
-        'pipeline-1',
-        'pipeline-3',
-      ]);
+      // With Traders Empire Advantage (card #49): 4 * 2 = 8
+      const traders = GameConfig(selectedEmpireAdvantage: 49);
+      expect(ps.pipelineCp(traders), 8);
     });
 
     test('ensureWorldIds assigns unique ids to legacy worlds', () {
@@ -969,41 +952,34 @@ void main() {
       expect(ps.maintenanceTotal(counters, robotRaceConfig), 4);
     });
 
-    test('Gifted Scientists tech cost multiplier: Attack 1 normally 20 CP, with 0.67 multiplier -> 13 CP', () {
+    test('Gifted Scientists tech cost multiplier: Attack 1 normally 20 CP, with 0.67 multiplier -> 14 CP', () {
       final ps = ProductionState(
         pendingTechPurchases: {TechId.attack: 1}, // base cost 20
       );
       // Normal: 20
       expect(ps.techSpendingCpDerived(baseConfig), 20);
-      // Gifted Scientists: floor(20 * 0.67) = floor(13.4) = 13
-      expect(ps.techSpendingCpDerived(giftedConfig), 13);
+      expect(ps.techSpendingCpDerived(giftedConfig), 14);
     });
 
     test('Star Wolves DD cost modifier: DD normally 6, with -1 -> 5', () {
-      // Star Wolves has costModifiers: {ShipType.scout: -1}
-      // Actually Star Wolves modifies scout, not DD. Let me use the correct ship.
-      final ps = ProductionState(
-        worlds: [hw()],
-        shipPurchases: [
-          const ShipPurchase(type: ShipType.scout, quantity: 1),
-        ],
-      );
-      // Scout base cost is 6, Star Wolves gives scout -1 = 5
-      expect(ps.shipPurchaseCost(starWolvesConfig), 5);
-      // Without EA: 6
-      expect(ps.shipPurchaseCost(baseConfig), 6);
-    });
-
-    test('Insectoids cost modifier: DD normally 6, with -2 -> 4', () {
       final ps = ProductionState(
         worlds: [hw()],
         shipPurchases: [
           const ShipPurchase(type: ShipType.dd, quantity: 1),
         ],
       );
-      // DD base cost is 6, Insectoids gives DD -2 = 4
-      expect(ps.shipPurchaseCost(insectoidsConfig), 4);
-      // Without EA: 6
+      expect(ps.shipPurchaseCost(starWolvesConfig), 5);
+      expect(ps.shipPurchaseCost(baseConfig), 6);
+    });
+
+    test('Insectoids has no ship cost modifier', () {
+      final ps = ProductionState(
+        worlds: [hw()],
+        shipPurchases: [
+          const ShipPurchase(type: ShipType.dd, quantity: 1),
+        ],
+      );
+      expect(ps.shipPurchaseCost(insectoidsConfig), 6);
       expect(ps.shipPurchaseCost(baseConfig), 6);
     });
 

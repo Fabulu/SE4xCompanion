@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:se4x/data/empire_advantages.dart';
+import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/data/tech_costs.dart';
 
 void main() {
@@ -16,6 +17,12 @@ void main() {
             reason: 'EA #${ea.cardNumber} has empty name');
         expect(ea.description.isNotEmpty, true,
             reason: 'EA #${ea.cardNumber} has empty description');
+        expect(
+          {'implemented', 'partial', 'referenceOnly'}
+              .contains(ea.supportStatus),
+          true,
+          reason: 'EA #${ea.cardNumber} has invalid supportStatus',
+        );
       }
     });
 
@@ -45,6 +52,8 @@ void main() {
           kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 34);
       expect(giantRace.name, 'Giant Race');
       expect(giantRace.hullSizeModifier, 1);
+      expect(giantRace.costModifiers, isEmpty);
+      expect(giantRace.colonyShipCostModifier, 0);
     });
 
     test(
@@ -56,6 +65,8 @@ void main() {
       expect(insectoids.hullSizeModifier, -1);
       expect(insectoids.blockedTechs, contains(TechId.fighters));
       expect(insectoids.blockedTechs, contains(TechId.militaryAcad));
+      expect(insectoids.costModifiers, isEmpty);
+      expect(insectoids.colonyShipCostModifier, 0);
     });
 
     test('Robot Race (#190) has maintenancePercent=50', () {
@@ -70,14 +81,17 @@ void main() {
           kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 41);
       expect(gifted.name, 'Gifted Scientists');
       expect(gifted.techCostMultiplier, closeTo(0.67, 0.001));
+      expect(gifted.roundTechCostsUp, true);
+      expect(gifted.globalBuildCostModifier, 1);
     });
 
-    test('House of Speed (#53) has startingTechOverrides containing move', () {
+    test('House of Speed (#53) starts with Move 7 and blocks Cloaking', () {
       final houseOfSpeed =
           kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 53);
       expect(houseOfSpeed.name, 'House of Speed');
-      expect(houseOfSpeed.startingTechOverrides, contains(TechId.move));
-      expect(houseOfSpeed.startingTechOverrides[TechId.move], 3);
+      expect(houseOfSpeed.startingTechOverrides[TechId.move], 7);
+      expect(houseOfSpeed.blockedTechs, contains(TechId.cloaking));
+      expect(houseOfSpeed.maxTechLevels, isEmpty);
     });
 
     test('Immortals (#44) has blockedTechs containing boarding', () {
@@ -85,6 +99,57 @@ void main() {
           kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 44);
       expect(immortals.name, 'Immortals');
       expect(immortals.blockedTechs, contains(TechId.boarding));
+    });
+
+    test('Expert Tacticians (#45) has no mechanical fields encoded', () {
+      final tacticians =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
+      expect(tacticians.startingTechOverrides, isEmpty);
+      expect(tacticians.techLevelBonuses, isEmpty);
+    });
+
+    test('Horsemen of the Plains (#46) has no starting tech override', () {
+      final horsemen =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 46);
+      expect(horsemen.startingTechOverrides, isEmpty);
+    });
+
+    test('And We Still Carry Swords (#47) only encodes Ground 2', () {
+      final swords =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 47);
+      expect(swords.startingTechOverrides[TechId.ground], 2);
+      expect(swords.startingTechOverrides.containsKey(TechId.boarding), isFalse);
+    });
+
+    test('Star Wolves (#51) only encodes the DD cost reduction', () {
+      final wolves =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 51);
+      expect(wolves.startingTechOverrides, isEmpty);
+      expect(wolves.costModifiers[ShipType.dd], -1);
+    });
+
+    test('Power to the People (#52) has no encoded mechanical fields', () {
+      final power =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 52);
+      expect(power.costModifiers, isEmpty);
+      expect(power.startingTechOverrides, isEmpty);
+    });
+
+    test('Powerful Psychics (#54) starts with Exploration 1', () {
+      final psychics =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 54);
+      expect(psychics.startingTechOverrides[TechId.exploration], 1);
+    });
+
+    test('cards 56 and 57 are not empire advantages', () {
+      expect(
+        kEmpireAdvantages.where((ea) => ea.cardNumber == 56),
+        isEmpty,
+      );
+      expect(
+        kEmpireAdvantages.where((ea) => ea.cardNumber == 57),
+        isEmpty,
+      );
     });
   });
 }

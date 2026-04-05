@@ -167,7 +167,7 @@ void main() {
         name: 'Alpha',
         growthMarkerLevel: 2,
         facility: FacilityType.research,
-        mineralIncome: 3,
+        stagedMineralCp: 3,
         pipelineIncome: 2,
         isBlocked: true,
       );
@@ -176,7 +176,7 @@ void main() {
       expect(restored.name, 'Alpha');
       expect(restored.growthMarkerLevel, 2);
       expect(restored.facility, FacilityType.research);
-      expect(restored.mineralIncome, 3);
+      expect(restored.stagedMineralCp, 3);
       expect(restored.pipelineIncome, 2);
       expect(restored.isBlocked, true);
     });
@@ -219,12 +219,12 @@ void main() {
       const w = WorldState(
         name: 'C',
         growthMarkerLevel: 2,
-        mineralIncome: 5,
+        stagedMineralCp: 5,
       );
       final updated = w.copyWith(growthMarkerLevel: 3);
       expect(updated.name, 'C');
       expect(updated.growthMarkerLevel, 3);
-      expect(updated.mineralIncome, 5);
+      expect(updated.stagedMineralCp, 5);
     });
   });
 }

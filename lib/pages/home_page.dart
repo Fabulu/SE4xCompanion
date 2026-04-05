@@ -54,6 +54,8 @@ class _HomePageState extends State<HomePage>
   String _activeGameId = '';
   bool _isLoading = true;
   int _currentTabIndex = 0;
+  String? _mapFocusShipId;
+  int _mapFocusRequestId = 0;
 
   List<_TabDef> get _visibleTabs {
     final tabs = <_TabDef>[
@@ -82,6 +84,24 @@ class _HomePageState extends State<HomePage>
     final tabs = _visibleTabs;
     final idx = tabs.indexWhere((t) => t.id == id);
     if (idx >= 0) setState(() => _currentTabIndex = idx);
+  }
+
+  void _locateShipOnMap(String shipId) {
+    final fleetId = _gameState.mapState.fleetIdForShip(shipId);
+    if (fleetId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$shipId is not currently placed on the map.')),
+      );
+      return;
+    }
+    final tabs = _visibleTabs;
+    final idx = tabs.indexWhere((t) => t.id == _TabId.map);
+    setState(() {
+      if (idx >= 0) _currentTabIndex = idx;
+      _mapFocusShipId = shipId;
+      _mapFocusRequestId += 1;
+    });
+    _turnWiggleController.forward(from: 0);
   }
 
   final _rulesKey = GlobalKey<RulesReferencePageState>();
@@ -361,9 +381,7 @@ class _HomePageState extends State<HomePage>
         .where((counter) => counter.isBuilt)
         .map((counter) => counter.id)
         .toSet();
-    final validPipelineIds =
-        normalizedProduction.pipelineAssets.map((asset) => asset.id)
-        .toSet();
+    final validPipelineIds = normalizedProduction.pipelineAssetIds.toSet();
 
     return state.copyWith(
       production: normalizedProduction,
@@ -823,6 +841,7 @@ class _HomePageState extends State<HomePage>
           onEndTurn: _onEndTurn,
           onRuleTap: _navigateToRule,
           onGameStateOverride: _onGameStateOverride,
+          onLocateShip: _locateShipOnMap,
         ),
       _TabId.map => MapPage(
           state: _gameState.mapState.hexes.isEmpty
@@ -830,7 +849,9 @@ class _HomePageState extends State<HomePage>
               : _gameState.mapState,
           productionWorlds: _gameState.production.worlds,
           shipCounters: _gameState.shipCounters,
-          pipelineAssets: _gameState.production.pipelineAssets,
+          pipelineAssetIds: _gameState.production.pipelineAssetIds,
+          focusShipId: _mapFocusShipId,
+          focusRequestId: _mapFocusRequestId,
           onChanged: _onMapChanged,
         ),
       _TabId.shipTech => ShipTechPage(
@@ -845,6 +866,7 @@ class _HomePageState extends State<HomePage>
           onCountersChanged: _onCountersChanged,
           onUpgradeCostIncurred: _onUpgradeCost,
           onRuleTap: _navigateToRule,
+          onLocateShip: _locateShipOnMap,
         ),
       _TabId.aliens => AlienEconomyPage(
           alienPlayers: _gameState.alienPlayers,

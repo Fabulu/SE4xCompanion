@@ -51,41 +51,6 @@ class ShipPurchase {
   }
 }
 
-class PipelineAsset {
-  final String id;
-  final String notes;
-  final int income;
-
-  const PipelineAsset({
-    required this.id,
-    this.notes = '',
-    this.income = 0,
-  });
-
-  PipelineAsset copyWith({
-    String? id,
-    String? notes,
-    int? income,
-  }) =>
-      PipelineAsset(
-        id: id ?? this.id,
-        notes: notes ?? this.notes,
-        income: income ?? this.income,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'notes': notes,
-        'income': income,
-      };
-
-  factory PipelineAsset.fromJson(Map<String, dynamic> json) => PipelineAsset(
-        id: json['id'] as String? ?? '',
-        notes: json['notes'] as String? ?? '',
-        income: json['income'] as int? ?? 0,
-      );
-}
-
 class ProductionState {
   // --- CP ledger (user-editable) ---
   final int cpCarryOver;
@@ -109,7 +74,12 @@ class ProductionState {
 
   // --- Ship purchases ---
   final List<ShipPurchase> shipPurchases;
-  final List<PipelineAsset> pipelineAssets;
+
+  /// Rule 13.2.2: Number of colonies currently connected to the empire's
+  /// pipeline trade network. Each connected colony yields +1 CP (or +2 CP
+  /// if Traders Empire Advantage is active), counted only once per
+  /// Economic Phase regardless of how many pipelines touch it.
+  final int pipelineConnectedColonies;
 
   // --- Empire state ---
   final List<WorldState> worlds;
@@ -120,8 +90,8 @@ class ProductionState {
   final Map<String, int> accumulatedResearch; // key: "techId_targetLevel" -> accumulated roll total
   final int researchGrantsCp; // CP spent on grants THIS turn
 
-  // --- Quick Learners EA #40 ---
-  final List<TechId> techPurchaseOrder; // order techs were bought this turn
+  // Order techs were bought this turn. Kept for ledger UX/history.
+  final List<TechId> techPurchaseOrder;
 
   const ProductionState({
     this.cpCarryOver = 0,
@@ -137,7 +107,7 @@ class ProductionState {
     this.tpCarryOver = 0,
     this.tpSpending = 0,
     this.shipPurchases = const [],
-    this.pipelineAssets = const [],
+    this.pipelineConnectedColonies = 0,
     this.worlds = const [],
     this.techState = const TechState(),
     this.pendingTechPurchases = const {},
@@ -169,7 +139,6 @@ class ProductionState {
   // ---------------------------------------------------------------------------
 
   /// Total CP from colonies/homeworld (non-blocked).
-  /// Includes Industrious Race (#35) bonus: +5 home colony, +1 other colonies.
   int colonyCp(GameConfig config) {
     final active = worlds.where((w) => !w.isBlocked);
     int total;
@@ -178,19 +147,12 @@ class ProductionState {
     } else {
       total = active.fold(0, (sum, w) => sum + w.cpValue);
     }
-    // Industrious Race (#35): +5 homeworld, +1 per other colony
-    if (config.empireAdvantage?.cardNumber == 35) {
-      for (final w in active) {
-        total += w.isHomeworld ? 5 : 1;
-      }
-    }
     // Scenario colony income multiplier (e.g., 4P 3v1 solo: 2x non-HW)
     if (config.colonyIncomeMultiplier != 1.0) {
       int hwCp = 0;
       for (final w in active) {
         if (w.isHomeworld) {
           hwCp += config.enableFacilities ? w.cpInFacilitiesMode() : w.cpValue;
-          if (config.empireAdvantage?.cardNumber == 35) hwCp += 5;
         }
       }
       final colonyCpOnly = total - hwCp;
@@ -233,33 +195,33 @@ class ProductionState {
         .fold(0, (sum, w) => sum + w.facilityResourceOutput(FacilityType.temporal));
   }
 
-  /// Total mineral income across worlds (non-blocked).
+  /// Total staged mineral CP across worlds (non-blocked).
+  /// Per rule 7.2: each Economic Phase, staged mineral markers on colonies
+  /// convert to CP and are removed. Blockaded colonies defer collection (7.1.2).
   int mineralCp() =>
-      worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.mineralIncome);
+      worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.stagedMineralCp);
 
   /// Total pipeline income across worlds (non-blocked).
-  /// Traders (#49): connected colonies produce +2 CP instead of +1 per pipeline.
+  /// Traders (#49): current ledger model treats the bonus as a multiplier on
+  /// tracked pipeline income.
   int pipelineCp([GameConfig? config]) {
     final mult = (config?.empireAdvantage?.cardNumber == 49) ? 2 : 1;
-    final assetIncome = pipelineAssets.fold(0, (sum, asset) => sum + asset.income);
-    if (assetIncome > 0) return assetIncome * mult;
+    if (pipelineConnectedColonies > 0) {
+      return pipelineConnectedColonies * mult;
+    }
+    // Legacy per-world pipelineIncome fallback (kept for compatibility with
+    // existing manual-override UI and saved games that used per-world entry).
     return worlds
         .where((w) => !w.isBlocked)
         .fold(0, (sum, w) => sum + w.pipelineIncome * mult);
   }
 
-  int get nextPipelineOrdinal {
-    var maxOrdinal = 0;
-    for (final asset in pipelineAssets) {
-      final match = RegExp(r'^pipeline-(\d+)$').firstMatch(asset.id);
-      if (match == null) continue;
-      final ordinal = int.tryParse(match.group(1) ?? '');
-      if (ordinal != null && ordinal > maxOrdinal) {
-        maxOrdinal = ordinal;
-      }
-    }
-    return maxOrdinal + 1;
-  }
+  /// Stable synthetic IDs for placing pipeline tokens on map hexes.
+  /// The map UI uses these IDs as a pool to drag-drop onto hexes; each ID
+  /// corresponds to one connected-colony slot in the pipeline network.
+  List<String> get pipelineAssetIds => [
+        for (int i = 1; i <= pipelineConnectedColonies; i++) 'pipeline-$i',
+      ];
 
   ProductionState ensureWorldIds() {
     var changed = false;
@@ -406,8 +368,6 @@ class ProductionState {
     final eaMult = ea?.techCostMultiplier ?? 1.0;
     final scenMult = config.techCostMultiplier;
     final techMod = _techCostModTotal(modifiers);
-    final isQuickLearners = ea?.cardNumber == 40;
-    final firstTech = techPurchaseOrder.isNotEmpty ? techPurchaseOrder.first : null;
     int total = 0;
     final fm = config.useFacilitiesCosts;
     for (final entry in pendingTechPurchases.entries) {
@@ -419,14 +379,13 @@ class ProductionState {
       int techTotal = 0;
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
-        if (eaMult != 1.0) cost = (cost * eaMult).floor();
+        if (eaMult != 1.0) {
+          final adjusted = cost * eaMult;
+          cost = ea?.roundTechCostsUp == true ? adjusted.ceil() : adjusted.floor();
+        }
         if (scenMult != 1.0) cost = (cost * scenMult).ceil();
         cost = (cost + techMod).clamp(0, 999);
         techTotal += cost;
-      }
-      // Quick Learners (#40): first tech this turn costs 50% less
-      if (isQuickLearners && entry.key == firstTech) {
-        techTotal = (techTotal * 0.5).floor();
       }
       total += techTotal;
     }
@@ -441,6 +400,7 @@ class ProductionState {
     final isAlt = config.enableAlternateEmpire;
     final ea = config.empireAdvantage;
     final cpPerUnit = ea?.cpPerUnitBuilt ?? 0;
+    final globalBuildCostModifier = ea?.globalBuildCostModifier ?? 0;
 
     // Ship types excluded from cpPerUnitBuilt rebate.
     const noRebate = {
@@ -463,6 +423,7 @@ class ProductionState {
       // Accumulate all cost modifiers before clamping.
       if (mods.containsKey(p.type)) unitCost += mods[p.type]!;
       if (costMods.containsKey(p.type)) unitCost += costMods[p.type]!;
+      unitCost += globalBuildCostModifier;
       if (cpPerUnit > 0 && !noRebate.contains(p.type)) unitCost -= cpPerUnit;
       if (shipSpecialAbilities[p.type] == 12) unitCost -= 2;
       // Scenario ship cost multiplier (e.g., 2v1 allied: 1.5x)
@@ -531,8 +492,6 @@ class ProductionState {
     final eaMult = ea?.techCostMultiplier ?? 1.0;
     final scenMult = config.techCostMultiplier;
     final techMod = _techCostModTotal(modifiers);
-    final isQuickLearners = ea?.cardNumber == 40;
-    final firstTech = techPurchaseOrder.isNotEmpty ? techPurchaseOrder.first : null;
     int total = 0;
     for (final entry in pendingTechPurchases.entries) {
       final costEntry = kFacilitiesTechCosts[entry.key];
@@ -542,13 +501,13 @@ class ProductionState {
       int techTotal = 0;
       for (int lvl = currentLevel + 1; lvl <= entry.value; lvl++) {
         int cost = costEntry.levelCosts[lvl] ?? 0;
-        if (eaMult != 1.0) cost = (cost * eaMult).floor();
+        if (eaMult != 1.0) {
+          final adjusted = cost * eaMult;
+          cost = ea?.roundTechCostsUp == true ? adjusted.ceil() : adjusted.floor();
+        }
         if (scenMult != 1.0) cost = (cost * scenMult).ceil();
         cost = (cost + techMod).clamp(0, 999);
         techTotal += cost;
-      }
-      if (isQuickLearners && entry.key == firstTech) {
-        techTotal = (techTotal * 0.5).floor();
       }
       total += techTotal;
     }
@@ -632,22 +591,16 @@ class ProductionState {
       return w.copyWith(
         growthMarkerLevel: newGrowth,
         homeworldValue: newHwValue,
-        mineralIncome: 0,
+        stagedMineralCp: 0,
         pipelineIncome: 0,
       );
     }).toList();
 
-    final newPipelineAssets = List<PipelineAsset>.from(pipelineAssets);
     final pipelinePurchase = shipPurchases
         .where((purchase) => purchase.type == ShipType.msPipeline)
         .fold<int>(0, (sum, purchase) => sum + purchase.quantity);
-    if (pipelinePurchase > 0) {
-      var nextOrdinal = nextPipelineOrdinal;
-      for (int i = 0; i < pipelinePurchase; i++) {
-        newPipelineAssets.add(PipelineAsset(id: 'pipeline-$nextOrdinal'));
-        nextOrdinal++;
-      }
-    }
+    final newPipelineConnectedColonies =
+        pipelineConnectedColonies + pipelinePurchase;
 
     return ProductionState(
       cpCarryOver: cpRemain,
@@ -663,7 +616,7 @@ class ProductionState {
       techSpendingRp: 0,
       tpSpending: 0,
       shipPurchases: const [],
-      pipelineAssets: newPipelineAssets,
+      pipelineConnectedColonies: newPipelineConnectedColonies,
       worlds: newWorlds,
       techState: newTech,
       pendingTechPurchases: const {},
@@ -691,7 +644,7 @@ class ProductionState {
     int? tpCarryOver,
     int? tpSpending,
     List<ShipPurchase>? shipPurchases,
-    List<PipelineAsset>? pipelineAssets,
+    int? pipelineConnectedColonies,
     List<WorldState>? worlds,
     TechState? techState,
     Map<TechId, int>? pendingTechPurchases,
@@ -715,7 +668,8 @@ class ProductionState {
         tpCarryOver: tpCarryOver ?? this.tpCarryOver,
         tpSpending: tpSpending ?? this.tpSpending,
         shipPurchases: shipPurchases ?? this.shipPurchases,
-        pipelineAssets: pipelineAssets ?? this.pipelineAssets,
+        pipelineConnectedColonies:
+            pipelineConnectedColonies ?? this.pipelineConnectedColonies,
         worlds: worlds ?? this.worlds,
         techState: techState ?? this.techState,
         pendingTechPurchases:
@@ -740,7 +694,7 @@ class ProductionState {
         'tpCarryOver': tpCarryOver,
         'tpSpending': tpSpending,
         'shipPurchases': shipPurchases.map((p) => p.toJson()).toList(),
-        'pipelineAssets': pipelineAssets.map((p) => p.toJson()).toList(),
+        'pipelineConnectedColonies': pipelineConnectedColonies,
         'worlds': worlds.map((w) => w.toJson()).toList(),
         'techState': techState.toJson(),
         'pendingTechPurchases':
@@ -784,11 +738,9 @@ class ProductionState {
                   (p) => ShipPurchase.fromJson(p as Map<String, dynamic>))
               .toList() ??
           const [],
-      pipelineAssets: (json['pipelineAssets'] as List?)
-              ?.map(
-                  (p) => PipelineAsset.fromJson(p as Map<String, dynamic>))
-              .toList() ??
-          const [],
+      pipelineConnectedColonies: json['pipelineConnectedColonies'] as int? ??
+          (json['pipelineAssets'] as List?)?.length ??
+          0,
       worlds: (json['worlds'] as List?)
               ?.map(
                   (w) => WorldState.fromJson(w as Map<String, dynamic>))

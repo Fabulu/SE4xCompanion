@@ -823,10 +823,10 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
               ],
             ),
           ),
-          _row('Mineral Income', world.mineralIncome, 0, 99, (v) {
+          _row('Staged Mineral CP', world.stagedMineralCp, 0, 99, (v) {
             setState(() {
               _worlds = List<WorldState>.from(_worlds);
-              _worlds[index] = world.copyWith(mineralIncome: v);
+              _worlds[index] = world.copyWith(stagedMineralCp: v);
             });
           }),
           _row('Pipeline Income', world.pipelineIncome, 0, 99, (v) {

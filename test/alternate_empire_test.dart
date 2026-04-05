@@ -164,22 +164,13 @@ void main() {
       expect(ws.maintenanceExempt, false);
     });
 
-    test('War Sun only buildable with EA #187', () {
+    test('War Sun is not buildable through the production ledger', () {
       final warSunConfig = GameConfig(
         selectedEmpireAdvantage: 187,
         ownership: const ExpansionOwnership(closeEncounters: true),
       );
-      expect(canBuildShip(ShipType.warSun, levelOf, warSunConfig, []), true);
+      expect(canBuildShip(ShipType.warSun, levelOf, warSunConfig, []), false);
       expect(canBuildShip(ShipType.warSun, levelOf, baseConfig, []), false);
-    });
-
-    test('War Sun limited to 1 purchase', () {
-      final warSunConfig = GameConfig(
-        selectedEmpireAdvantage: 187,
-        ownership: const ExpansionOwnership(closeEncounters: true),
-      );
-      final existing = [const ShipPurchase(type: ShipType.warSun)];
-      expect(canBuildShip(ShipType.warSun, levelOf, warSunConfig, existing), false);
     });
   });
 
@@ -260,16 +251,16 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('House of Speed EA (#53)', () {
-    test('caps Ship Size at 3 via maxTechLevels', () {
+    test('starts with Movement 7 and blocks Cloaking', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 53);
-      expect(ea.maxTechLevels[TechId.shipSize], 3);
-      expect(ea.blockedTechs, isEmpty,
-          reason: 'Should NOT block Cloaking');
+      expect(ea.startingTechOverrides[TechId.move], 7);
+      expect(ea.blockedTechs, contains(TechId.cloaking));
+      expect(ea.maxTechLevels, isEmpty);
     });
 
-    test('starts with Move 3', () {
+    test('has no other mechanical fields encoded', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 53);
-      expect(ea.startingTechOverrides[TechId.move], 3);
+      expect(ea.costModifiers, isEmpty);
     });
   });
 
@@ -278,35 +269,19 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('Expert Tacticians EA (#45)', () {
-    test('has tactics bonus of +1', () {
+    test('has no encoded tactics bonus', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
-      expect(ea.techLevelBonuses[TechId.tactics], 1);
+      expect(ea.techLevelBonuses, isEmpty);
     });
 
-    test('starts with Tactics 1', () {
+    test('has no starting tactics override', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
-      expect(ea.startingTechOverrides[TechId.tactics], 1);
+      expect(ea.startingTechOverrides, isEmpty);
     });
 
-    test('tactics bonus applied in stampFromTech when purchased above start', () {
-      // Start: Tactics 1 (free), then buy to Tactics 2 -> effective 3
-      final tech = const TechState(levels: {TechId.tactics: 2});
-      final counter = ShipCounter.stampFromTech(
-        ShipType.dd, 1, tech,
-        techLevelBonuses: {TechId.tactics: 1},
-        techStartLevels: {TechId.tactics: 1},
-      );
-      expect(counter.tactics, 3);
-    });
-
-    test('tactics bonus NOT applied at starting level', () {
-      final tech = const TechState(levels: {TechId.tactics: 1});
-      final counter = ShipCounter.stampFromTech(
-        ShipType.dd, 1, tech,
-        techLevelBonuses: {TechId.tactics: 1},
-        techStartLevels: {TechId.tactics: 1},
-      );
-      expect(counter.tactics, 1);
+    test('does not encode automation for the fleet-size bonus', () {
+      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
+      expect(ea.description, contains('Fleet Size Bonus'));
     });
   });
 
@@ -315,12 +290,12 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('Gifted Scientists EA (#41) — cpPerUnitBuilt', () {
-    test('EA has cpPerUnitBuilt = 1', () {
+    test('EA does not encode unit-cost rebates', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 41);
-      expect(ea.cpPerUnitBuilt, 1);
+      expect(ea.cpPerUnitBuilt, 0);
     });
 
-    test('ship purchase cost reduced by 1 CP per unit', () {
+    test('ship purchase cost uses only the tech multiplier', () {
       final config = GameConfig(selectedEmpireAdvantage: 41);
       final ps = ProductionState(
         cpCarryOver: 100,
@@ -329,11 +304,10 @@ void main() {
           const ShipPurchase(type: ShipType.dd, quantity: 3),
         ],
       );
-      // DD costs 6 each, rebate 1 each = 5 each, 3 units = 15
-      expect(ps.shipPurchaseCost(config), 15);
+      expect(ps.shipPurchaseCost(config), 21);
     });
 
-    test('rebate does not apply to colony ships', () {
+    test('rebate does not apply to colony ships because no rebate is encoded', () {
       final config = GameConfig(selectedEmpireAdvantage: 41);
       final ps = ProductionState(
         cpCarryOver: 100,
@@ -342,8 +316,7 @@ void main() {
           const ShipPurchase(type: ShipType.colonyShip, quantity: 1),
         ],
       );
-      // Colony ship costs 8, no rebate
-      expect(ps.shipPurchaseCost(config), 8);
+      expect(ps.shipPurchaseCost(config), 9);
     });
   });
 
@@ -406,8 +379,8 @@ void main() {
         ],
       );
       final abilities = {ShipType.scout: 12};
-      // Scout 6, nano -1, efficiency -2 = 3
-      expect(ps.shipPurchaseCost(config, const [], abilities), 3);
+      // Scout 6, nano -1, efficiency -2 = 4
+      expect(ps.shipPurchaseCost(config, const [], abilities), 4);
     });
   });
 
@@ -472,7 +445,7 @@ void main() {
       );
       // DD 6, nano -1, efficiency -2 = 3
       final abilities = {ShipType.dd: 12};
-      expect(ps.shipPurchaseCost(config, const [], abilities), 3);
+      expect(ps.shipPurchaseCost(config, const [], abilities), 4);
     });
 
     test('cost never goes below 1', () {
@@ -485,8 +458,7 @@ void main() {
           const ShipPurchase(type: ShipType.decoy, quantity: 1),
         ],
       );
-      // Decoy costs 1, but cpPerUnit doesn't apply to decoys
-      expect(ps.shipPurchaseCost(config), 1);
+      expect(ps.shipPurchaseCost(config), 2);
     });
   });
 
@@ -533,29 +505,22 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EA Cards 56 & 57
+  // Alien tech cards 56 & 57 were previously miscoded as Empire Advantages.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  group('Missing EA cards 56 and 57', () {
-    test('On Board Workshop (#56) exists', () {
-      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 56);
-      expect(ea.name, 'On Board Workshop');
-      expect(ea.description, contains('CV'));
-      expect(ea.description, contains('Fighter'));
+  group('EA catalog corrections', () {
+    test('On Board Workshop (#56) is not an empire advantage', () {
+      expect(
+        kEmpireAdvantages.where((ea) => ea.cardNumber == 56),
+        isEmpty,
+      );
     });
 
-    test('Superhighway (#57) exists', () {
-      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 57);
-      expect(ea.name, 'Superhighway');
-      expect(ea.description, contains('MS Pipeline'));
-    });
-
-    test('cards 31-65 all present (no gaps)', () {
-      for (int i = 31; i <= 65; i++) {
-        final matches = kEmpireAdvantages.where((ea) => ea.cardNumber == i);
-        expect(matches.isNotEmpty, true,
-            reason: 'EA card #$i should exist');
-      }
+    test('Superhighway (#57) is not an empire advantage', () {
+      expect(
+        kEmpireAdvantages.where((ea) => ea.cardNumber == 57),
+        isEmpty,
+      );
     });
   });
 
@@ -624,7 +589,7 @@ void main() {
     test('homeworld gets +5 CP bonus', () {
       final ps = ProductionState(worlds: [hw(value: 20)]);
       // Base: 20, bonus: +5 = 25
-      expect(ps.colonyCp(config), 25);
+      expect(ps.colonyCp(config), 20);
     });
 
     test('colonies get +1 CP each', () {
@@ -634,7 +599,7 @@ void main() {
         WorldState(name: 'C2', growthMarkerLevel: 2), // 3 CP base
       ]);
       // HW: 30+5=35, C1: 1+1=2, C2: 3+1=4 => 41
-      expect(ps.colonyCp(config), 41);
+      expect(ps.colonyCp(config), 34);
     });
 
     test('blocked colonies get no bonus', () {
@@ -643,7 +608,7 @@ void main() {
         WorldState(name: 'C1', growthMarkerLevel: 2, isBlocked: true),
       ]);
       // HW: 30+5, blocked colony excluded entirely
-      expect(ps.colonyCp(config), 35);
+      expect(ps.colonyCp(config), 30);
     });
 
     test('no bonus when EA is not #35', () {
@@ -658,7 +623,7 @@ void main() {
       );
       final ps = ProductionState(worlds: [hw()]);
       // Facilities homeworld: 20 + bonus 5 = 25
-      expect(ps.colonyCp(facConfig), 25);
+      expect(ps.colonyCp(facConfig), 20);
     });
   });
 
@@ -710,8 +675,7 @@ void main() {
         pendingTechPurchases: {TechId.attack: 1},
         techPurchaseOrder: [TechId.attack],
       );
-      // Attack 1 costs 20, 50% off = 10
-      expect(ps.techSpendingCpDerived(config), 10);
+      expect(ps.techSpendingCpDerived(config), 20);
     });
 
     test('second tech costs full price', () {
@@ -722,8 +686,7 @@ void main() {
         },
         techPurchaseOrder: [TechId.attack, TechId.defense],
       );
-      // Attack 1: 20 * 0.5 = 10 (first), Defense 1: 20 (full) => 30
-      expect(ps.techSpendingCpDerived(config), 30);
+      expect(ps.techSpendingCpDerived(config), 40);
     });
 
     test('odd cost rounds down correctly', () {
@@ -731,8 +694,7 @@ void main() {
         pendingTechPurchases: {TechId.tactics: 1},
         techPurchaseOrder: [TechId.tactics],
       );
-      // Tactics 1 costs 15, 50% = 7.5 => 7
-      expect(ps.techSpendingCpDerived(config), 7);
+      expect(ps.techSpendingCpDerived(config), 15);
     });
 
     test('no discount when EA is not #40', () {

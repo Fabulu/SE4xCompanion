@@ -262,6 +262,7 @@ class GameMapState {
   final double zoom;
   final double panX;
   final double panY;
+  final double rotation;
 
   const GameMapState({
     this.layoutPreset = MapLayoutPreset.standard4p,
@@ -272,6 +273,7 @@ class GameMapState {
     this.zoom = 1.0,
     this.panX = 0,
     this.panY = 0,
+    this.rotation = 0,
   });
 
   factory GameMapState.standard4p() =>
@@ -521,6 +523,7 @@ class GameMapState {
     double? zoom,
     double? panX,
     double? panY,
+    double? rotation,
   }) =>
       GameMapState(
         layoutPreset: layoutPreset ?? this.layoutPreset,
@@ -534,6 +537,7 @@ class GameMapState {
         zoom: zoom ?? this.zoom,
         panX: panX ?? this.panX,
         panY: panY ?? this.panY,
+        rotation: rotation ?? this.rotation,
       );
 
   Map<String, dynamic> toJson() => {
@@ -545,6 +549,7 @@ class GameMapState {
         'zoom': zoom,
         'panX': panX,
         'panY': panY,
+        'rotation': rotation,
       };
 
   factory GameMapState.fromJson(Map<String, dynamic> json) {
@@ -553,12 +558,43 @@ class GameMapState {
             ?.map((hex) => MapHexState.fromJson(hex as Map<String, dynamic>))
             .toList() ??
         const <MapHexState>[];
+    // Canonical coord set for the active preset. Any persisted hex or fleet
+    // sitting outside this set is an orphan from a prior layout revision and
+    // gets dropped silently so rendering never hits a phantom/missing coord.
+    final validCoordIds = <String>{
+      for (final hex in defaultHexesFor(layoutPreset)) hex.coord.id,
+    };
     final defaultsById = {
       for (final hex in defaultHexesFor(layoutPreset)) hex.coord.id: hex,
     };
     for (final hex in storedHexes) {
+      if (!validCoordIds.contains(hex.coord.id)) continue;
       defaultsById[hex.coord.id] = hex;
     }
+
+    final storedFleets = (json['fleets'] as List?)
+            ?.map((fleet) =>
+                FleetStackState.fromJson(fleet as Map<String, dynamic>))
+            .toList() ??
+        const <FleetStackState>[];
+    final sanitizedFleets = [
+      for (final fleet in storedFleets)
+        if (validCoordIds.contains(fleet.coord.id)) fleet,
+    ];
+
+    final storedSelectedHex = json['selectedHex'] != null
+        ? HexCoord.fromJson(json['selectedHex'] as Map<String, dynamic>)
+        : null;
+    final selectedHex = (storedSelectedHex != null &&
+            validCoordIds.contains(storedSelectedHex.id))
+        ? storedSelectedHex
+        : null;
+
+    final storedSelectedFleetId = json['selectedFleetId'] as String?;
+    final selectedFleetId = (storedSelectedFleetId != null &&
+            sanitizedFleets.any((f) => f.id == storedSelectedFleetId))
+        ? storedSelectedFleetId
+        : null;
 
     return GameMapState(
       layoutPreset: layoutPreset,
@@ -567,18 +603,13 @@ class GameMapState {
           final r = a.coord.r.compareTo(b.coord.r);
           return r != 0 ? r : a.coord.q.compareTo(b.coord.q);
         }),
-      fleets: (json['fleets'] as List?)
-              ?.map((fleet) =>
-                  FleetStackState.fromJson(fleet as Map<String, dynamic>))
-              .toList() ??
-          const [],
-      selectedHex: json['selectedHex'] != null
-          ? HexCoord.fromJson(json['selectedHex'] as Map<String, dynamic>)
-          : null,
-      selectedFleetId: json['selectedFleetId'] as String?,
+      fleets: sanitizedFleets,
+      selectedHex: selectedHex,
+      selectedFleetId: selectedFleetId,
       zoom: (json['zoom'] as num?)?.toDouble() ?? 1.0,
       panX: (json['panX'] as num?)?.toDouble() ?? 0,
       panY: (json['panY'] as num?)?.toDouble() ?? 0,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -592,32 +623,52 @@ class GameMapState {
 
   static List<MapHexState> defaultHexesFor(MapLayoutPreset preset) {
     return switch (preset) {
-      MapLayoutPreset.standard4p => _hexesFromRows(
-          const [4, 6, 8, 10, 11, 10, 11, 10, 11, 10, 8, 6, 4],
-          rowShift: const [2, 1, 0, -1, -1, -1, -2, -1, -1, -1, 0, 1, 2],
-        ),
-      MapLayoutPreset.special5p => _hexesFromRows(
-          const [3, 4, 5, 6, 7, 8, 9, 10, 11, 10, 9, 8, 7, 6, 5, 4, 3],
-        ),
+      MapLayoutPreset.standard4p => _hexesFromRows(const [
+          _RowSpec(start: 3, length: 12),
+          _RowSpec(start: 3, length: 12),
+          _RowSpec(start: 2, length: 12),
+          _RowSpec(start: 2, length: 12),
+          _RowSpec(start: 1, length: 12),
+          _RowSpec(start: 1, length: 12),
+          _RowSpec(start: 0, length: 12),
+          _RowSpec(start: 0, length: 12),
+          _RowSpec(start: -1, length: 12),
+          _RowSpec(start: -1, length: 12),
+          _RowSpec(start: -2, length: 12),
+          _RowSpec(start: -2, length: 12),
+        ]),
+      MapLayoutPreset.special5p => _hexesFromRows(const [
+          _RowSpec(start: -1, length: 3),
+          _RowSpec(start: -2, length: 5),
+          _RowSpec(start: -3, length: 8),
+          _RowSpec(start: -5, length: 10),
+          _RowSpec(start: -5, length: 12),
+          _RowSpec(start: -7, length: 14),
+          _RowSpec(start: -7, length: 15),
+          _RowSpec(start: -8, length: 16),
+          _RowSpec(start: -8, length: 16),
+          _RowSpec(start: -8, length: 15),
+          _RowSpec(start: -7, length: 15),
+          _RowSpec(start: -7, length: 14),
+          _RowSpec(start: -6, length: 13),
+          _RowSpec(start: -6, length: 12),
+          _RowSpec(start: -6, length: 13),
+          _RowSpec(start: -6, length: 12),
+          _RowSpec(start: -5, length: 11),
+          _RowSpec(start: -5, length: 10),
+        ]),
     };
   }
 
-  static List<MapHexState> _hexesFromRows(
-    List<int> rowLengths, {
-    List<int>? rowShift,
-  }) {
+  static List<MapHexState> _hexesFromRows(List<_RowSpec> rows) {
     final hexes = <MapHexState>[];
-    final centerRow = rowLengths.length ~/ 2;
-    for (int rowIndex = 0; rowIndex < rowLengths.length; rowIndex++) {
-      final length = rowLengths[rowIndex];
+    final centerRow = rows.length ~/ 2;
+    for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      final row = rows[rowIndex];
       final r = rowIndex - centerRow;
-      final shift = rowShift != null && rowIndex < rowShift.length
-          ? rowShift[rowIndex]
-          : 0;
-      final qStart = -((length - 1) ~/ 2) + shift;
-      for (int i = 0; i < length; i++) {
+      for (int i = 0; i < row.length; i++) {
         hexes.add(
-          MapHexState(coord: HexCoord(qStart + i, r)),
+          MapHexState(coord: HexCoord(row.start + i, r)),
         );
       }
     }
@@ -632,4 +683,14 @@ class GameMapState {
     final rows = counts.keys.toList()..sort();
     return [for (final row in rows) counts[row]!];
   }
+}
+
+class _RowSpec {
+  final int start;
+  final int length;
+
+  const _RowSpec({
+    required this.start,
+    required this.length,
+  });
 }
