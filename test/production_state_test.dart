@@ -3,6 +3,7 @@ import 'package:se4x/data/empire_advantages.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/data/tech_costs.dart';
 import 'package:se4x/models/game_config.dart';
+import 'package:se4x/models/map_state.dart';
 import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
@@ -1107,6 +1108,231 @@ void main() {
       expect(next.worlds[1].pipelineIncome, 0);
       // Growth still proceeds for non-homeworld worlds (rule 7.1.2 note).
       expect(next.worlds[1].growthMarkerLevel, 3);
+    });
+  });
+
+  group('Hex mining income (T3-D)', () {
+    // Helpers.
+    MapHexState hex(int q, int r, HexTerrain terrain) =>
+        MapHexState(coord: HexCoord(q, r), terrain: terrain);
+
+    ShipCounter minerCounter(int n, {bool built = true}) =>
+        ShipCounter(type: ShipType.miner, number: n, isBuilt: built);
+
+    FleetStackState friendlyFleet({
+      required String id,
+      required HexCoord coord,
+      List<String> ships = const [],
+    }) =>
+        FleetStackState(
+          id: id,
+          coord: coord,
+          shipCounterIds: ships,
+        );
+
+    FleetStackState enemyFleet(String id, HexCoord coord) => FleetStackState(
+          id: id,
+          coord: coord,
+          isEnemy: true,
+        );
+
+    test('asteroid hex with friendly Miner yields 3 CP', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.asteroid), hex(1, 0, HexTerrain.deepSpace)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+        ],
+      );
+      final ps = ProductionState();
+      expect(ps.asteroidMiningCp(map, [minerCounter(1)]), 3);
+    });
+
+    test('asteroid hex without Miner yields 0', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.asteroid)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: const ['dd:1'],
+          ),
+        ],
+      );
+      final ps = ProductionState();
+      expect(
+        ps.asteroidMiningCp(
+          map,
+          const [ShipCounter(type: ShipType.dd, number: 1, isBuilt: true)],
+        ),
+        0,
+      );
+    });
+
+    test('two asteroid hexes, each with a Miner, yield 6 CP', () {
+      final map = GameMapState(
+        hexes: [
+          hex(0, 0, HexTerrain.asteroid),
+          hex(1, 0, HexTerrain.asteroid),
+        ],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+          friendlyFleet(
+            id: 'f2',
+            coord: const HexCoord(1, 0),
+            ships: [minerCounter(2).id],
+          ),
+        ],
+      );
+      final ps = ProductionState();
+      expect(
+        ps.asteroidMiningCp(map, [minerCounter(1), minerCounter(2)]),
+        6,
+      );
+    });
+
+    test('multiple Miners in same hex yield one stipend (3 CP)', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.asteroid)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id, minerCounter(2).id],
+          ),
+        ],
+      );
+      final ps = ProductionState();
+      expect(
+        ps.asteroidMiningCp(map, [minerCounter(1), minerCounter(2)]),
+        3,
+      );
+    });
+
+    test('enemy fleet on asteroid hex blockades mining', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.asteroid)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+          enemyFleet('e1', const HexCoord(0, 0)),
+        ],
+      );
+      final ps = ProductionState();
+      expect(ps.asteroidMiningCp(map, [minerCounter(1)]), 0);
+    });
+
+    test('nebula mining requires Terraforming 2', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.nebula)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+        ],
+      );
+      final noTerra = ProductionState();
+      expect(noTerra.nebulaMiningCp(map, [minerCounter(1)]), 0);
+
+      final terra1 = ProductionState(
+        techState: const TechState(levels: {TechId.terraforming: 1}),
+      );
+      expect(terra1.nebulaMiningCp(map, [minerCounter(1)]), 0);
+
+      final terra2 = ProductionState(
+        techState: const TechState(levels: {TechId.terraforming: 2}),
+      );
+      expect(terra2.nebulaMiningCp(map, [minerCounter(1)]), 3);
+    });
+
+    test('nebula mining blockaded by enemy presence', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.nebula)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+          enemyFleet('e1', const HexCoord(0, 0)),
+        ],
+      );
+      final terra2 = ProductionState(
+        techState: const TechState(levels: {TechId.terraforming: 2}),
+      );
+      expect(terra2.nebulaMiningCp(map, [minerCounter(1)]), 0);
+    });
+
+    test('non-asteroid/nebula terrain yields no mining income', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.deepSpace)],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+        ],
+      );
+      final ps = ProductionState(
+        techState: const TechState(levels: {TechId.terraforming: 2}),
+      );
+      expect(ps.asteroidMiningCp(map, [minerCounter(1)]), 0);
+      expect(ps.nebulaMiningCp(map, [minerCounter(1)]), 0);
+    });
+
+    test('totalCp includes asteroid and nebula mining when map provided', () {
+      final map = GameMapState(
+        hexes: [
+          hex(0, 0, HexTerrain.asteroid),
+          hex(1, 0, HexTerrain.nebula),
+        ],
+        fleets: [
+          friendlyFleet(
+            id: 'f1',
+            coord: const HexCoord(0, 0),
+            ships: [minerCounter(1).id],
+          ),
+          friendlyFleet(
+            id: 'f2',
+            coord: const HexCoord(1, 0),
+            ships: [minerCounter(2).id],
+          ),
+        ],
+      );
+      final ps = ProductionState(
+        cpCarryOver: 10,
+        worlds: [hw()],
+        techState: const TechState(levels: {TechId.terraforming: 2}),
+      );
+      final counters = [minerCounter(1), minerCounter(2)];
+      // 10 + 30 (HW) + 3 (asteroid) + 3 (nebula) = 46
+      expect(ps.totalCp(baseConfig, const [], map, counters), 46);
+      // Without map passed: mining income excluded.
+      expect(ps.totalCp(baseConfig), 40);
+    });
+
+    test('enemy fleet without friendly Miner does not generate income', () {
+      final map = GameMapState(
+        hexes: [hex(0, 0, HexTerrain.asteroid)],
+        fleets: [
+          enemyFleet('e1', const HexCoord(0, 0)),
+        ],
+      );
+      final ps = ProductionState();
+      expect(ps.asteroidMiningCp(map, const []), 0);
     });
   });
 }

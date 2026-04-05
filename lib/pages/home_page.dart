@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/empire_advantages.dart';
 import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/alien_economy.dart';
+import '../models/drawn_card.dart';
 import '../models/game_config.dart';
 import '../models/game_modifier.dart';
 import '../models/game_state.dart';
@@ -428,6 +430,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  void _onDrawnHandChanged(List<DrawnCard> hand) {
+    _updateGameState(
+      _gameState.copyWith(drawnHand: hand),
+      'Update hand',
+    );
+  }
+
+  /// Played a drawn card as an event: append its modifiers to the active
+  /// modifier ledger (same path as the Apply-from-catalog flow). The hand
+  /// is updated separately by [_onDrawnHandChanged].
+  void _onPlayCardAsEvent(String cardName, List<GameModifier> modifiers) {
+    if (modifiers.isEmpty) return;
+    _updateGameState(
+      _gameState.copyWith(
+        activeModifiers: [..._gameState.activeModifiers, ...modifiers],
+      ),
+      'Play card: $cardName',
+    );
+  }
+
+  /// Played a drawn card for credits: add a one-shot `+N CP` income modifier
+  /// stamped with the card's name so it shows up in the active-modifier chips.
+  void _onPlayCardForCredits(String cardName, int cpGained) {
+    if (cpGained <= 0) return;
+    final mod = GameModifier(
+      name: '$cardName (credits)',
+      type: 'incomeMod',
+      value: cpGained,
+    );
+    _updateGameState(
+      _gameState.copyWith(
+        activeModifiers: [..._gameState.activeModifiers, mod],
+      ),
+      'Play card for credits: $cardName',
+    );
+  }
+
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
     _updateGameState(
       _gameState.copyWith(alienPlayers: aliens),
@@ -815,9 +854,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       maintenancePaid: maintenancePaid,
     );
 
-    final nextProduction = prod.prepareForNextTurn(
-      config,
+    // Materialize completed ship purchases into stamped ShipCounters before
+    // rolling the turn over. In RAW (no multi-turn queue) every purchase is
+    // treated as completed; with multi-turn builds enabled, partially-built
+    // purchases are left in place by materializeCompletedPurchases.
+    final materialized = prod.materializeCompletedPurchases(
+      prod.techState,
       counters,
+      facilitiesMode: fm,
+      shipSpecialAbilities: _gameState.shipSpecialAbilities,
+    );
+    final prodAfterBuild = materialized.state;
+    final countersAfterBuild = materialized.counters;
+
+    final nextProduction = prodAfterBuild.prepareForNextTurn(
+      config,
+      countersAfterBuild,
       mods,
       _gameState.shipSpecialAbilities,
     );
@@ -825,6 +877,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _gameState.copyWith(
         turnNumber: _gameState.turnNumber + 1,
         production: nextProduction,
+        shipCounters: countersAfterBuild,
         turnSummaries: [..._gameState.turnSummaries, summary],
       ),
       'End Turn ${_gameState.turnNumber}',
@@ -934,6 +987,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _lastActionWasEndTurn = false;
     });
     _save();
+  }
+
+  /// Reopen the most recently committed turn: pop its [TurnSummary] and
+  /// restore the pre-commit [ProductionState] from the snapshot.
+  ///
+  /// Only available when the last turn summary carries a full snapshot
+  /// (all summaries committed since T2-C do). The turn counter is rolled
+  /// back by one so the player lands back in the Economic Phase they just
+  /// finished.
+  void _reopenLastTurn() {
+    if (!_gameState.canReopenLastTurn) return;
+    final restoredTurn = _gameState.turnSummaries.last.turnNumber;
+    _updateGameState(
+      _gameState.reopenLastTurn(),
+      'Reopen Turn $restoredTurn',
+    );
+    _lastActionWasEndTurn = false;
   }
 
   void _navigateToRule(String sectionId) {
@@ -1252,6 +1322,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           empireAdvantageCardNumber: config.selectedEmpireAdvantage,
         );
 
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+            _performUndo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
+            _performUndo,
+      },
+      child: Focus(
+        autofocus: true,
+        child: _buildScaffold(
+          prod: prod,
+          config: config,
+          counters: counters,
+          activeMods: activeMods,
+          repPlayer: repPlayer,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold({
+    required ProductionState prod,
+    required GameConfig config,
+    required List<ShipCounter> counters,
+    required List<GameModifier> activeMods,
+    required ReplicatorPlayerState repPlayer,
+  }) {
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -1259,8 +1356,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             IconButton(
               icon: const Icon(Icons.undo),
               tooltip: _undoDescriptions.isNotEmpty
-                  ? 'Undo: ${_undoDescriptions.last}'
-                  : 'Undo',
+                  ? 'Undo: ${_undoDescriptions.last} '
+                      '(${_undoHistory.length} available)'
+                  : 'Undo (${_undoHistory.length} available)',
               onPressed: _undo,
             ),
         ],
@@ -1291,7 +1389,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   worlds: _gameState.production.worlds,
                 )
               : _ResourceBar(
-                  totalCp: prod.totalCp(config, activeMods),
+                  totalCp: prod.totalCp(
+                    config,
+                    activeMods,
+                    _gameState.mapState,
+                    counters,
+                  ),
                   maintenance: prod.maintenanceTotal(
                     counters,
                     config,
@@ -1357,12 +1460,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 shipCounters: _gameState.shipCounters,
                 activeModifiers: _gameState.activeModifiers,
                 shipSpecialAbilities: _gameState.shipSpecialAbilities,
+                mapState: _gameState.mapState,
                 onProductionChanged: _onProductionChanged,
                 onEndTurn: _onEndTurn,
                 onRuleTap: _navigateToRule,
                 onGameStateOverride: _onGameStateOverride,
                 onActiveModifiersChanged: _onActiveModifiersChanged,
                 onLocateShip: _locateShipOnMap,
+                drawnHand: _gameState.drawnHand,
+                onDrawnHandChanged: _onDrawnHandChanged,
+                onPlayCardAsEvent: _onPlayCardAsEvent,
+                onPlayCardForCredits: _onPlayCardForCredits,
               ),
       _TabId.map => MapPage(
         state: _gameState.mapState.hexes.isEmpty
@@ -1438,6 +1546,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             'Special Abilities',
           );
         },
+        onReopenLastTurn: _reopenLastTurn,
       ),
       _TabId.rules => RulesReferencePage(
           key: _rulesKey,

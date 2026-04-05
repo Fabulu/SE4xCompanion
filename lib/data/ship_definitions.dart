@@ -27,6 +27,7 @@ enum ShipType {
   shipyard,
   decoy,
   warSun,
+  groundUnit,
 }
 
 class ShipDefinition {
@@ -305,5 +306,13 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     weaponClass: 'A', baseAttack: 0,
     description: 'Hull size 5, A-class, 2 attacks per round. Cannot retreat. Cannot be rebuilt if destroyed. No tech prerequisites. Requires War Sun EA (#187).',
     ruleSection: '24.0',
+  ),
+  ShipType.groundUnit: ShipDefinition(
+    type: ShipType.groundUnit, abbreviation: 'GU', name: 'Ground Unit',
+    hullSize: 1, buildCost: 1, maintenanceExempt: true, maxCounters: 0,
+    weaponClass: 'D',
+    description: 'Infantry Ground Unit. No maintenance (21.2). Purchased at un-blockaded Colonies (21.3) up to the Colony\'s CP value; no Shipyard required. Free units granted per rule 21.5. Provides planetary defense and participates in ground combat (21.6/21.8).',
+    prerequisite: 'Ground 1',
+    ruleSection: '21.0',
   ),
 };

@@ -2,6 +2,7 @@
 
 import '../data/ship_definitions.dart';
 import 'alien_economy.dart';
+import 'drawn_card.dart';
 import 'game_config.dart';
 import 'game_modifier.dart';
 import 'map_state.dart';
@@ -19,6 +20,11 @@ class GameState {
   final List<AlienPlayer> alienPlayers;
   final List<TurnSummary> turnSummaries;
   final List<GameModifier> activeModifiers;
+
+  /// Cards the player has drawn and is holding in hand (T3-C).
+  /// Unlike `activeModifiers` (one-shot application), these persist as
+  /// real card state until played or discarded.
+  final List<DrawnCard> drawnHand;
 
   /// Alternate Empire: random special abilities per ship type (Rule 24.2/24.3).
   final Map<ShipType, int> shipSpecialAbilities;
@@ -43,6 +49,7 @@ class GameState {
     this.alienPlayers = const [],
     this.turnSummaries = const [],
     this.activeModifiers = const [],
+    this.drawnHand = const [],
     this.shipSpecialAbilities = const {},
     this.victoryPoints = 0,
     this.replicatorState,
@@ -61,6 +68,7 @@ class GameState {
     List<AlienPlayer>? alienPlayers,
     List<TurnSummary>? turnSummaries,
     List<GameModifier>? activeModifiers,
+    List<DrawnCard>? drawnHand,
     Map<ShipType, int>? shipSpecialAbilities,
     int? victoryPoints,
     ReplicatorState? replicatorState,
@@ -76,6 +84,7 @@ class GameState {
     alienPlayers: alienPlayers ?? this.alienPlayers,
     turnSummaries: turnSummaries ?? this.turnSummaries,
     activeModifiers: activeModifiers ?? this.activeModifiers,
+    drawnHand: drawnHand ?? this.drawnHand,
     shipSpecialAbilities: shipSpecialAbilities ?? this.shipSpecialAbilities,
     victoryPoints: victoryPoints ?? this.victoryPoints,
     replicatorState: clearReplicatorState
@@ -95,6 +104,7 @@ class GameState {
     'alienPlayers': alienPlayers.map((a) => a.toJson()).toList(),
     'turnSummaries': turnSummaries.map((s) => s.toJson()).toList(),
     'activeModifiers': activeModifiers.map((m) => m.toJson()).toList(),
+    'drawnHand': drawnHand.map((c) => c.toJson()).toList(),
     'shipSpecialAbilities': shipSpecialAbilities.map(
       (k, v) => MapEntry(k.name, v),
     ),
@@ -178,6 +188,11 @@ class GameState {
               ?.map((m) => GameModifier.fromJson(m as Map<String, dynamic>))
               .toList() ??
           const [],
+      drawnHand:
+          (json['drawnHand'] as List?)
+              ?.map((c) => DrawnCard.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          const [],
       shipSpecialAbilities: abilities,
       victoryPoints: json['victoryPoints'] as int? ?? 0,
       replicatorState: json['replicatorState'] != null
@@ -191,6 +206,27 @@ class GameState {
             )
           : null,
       mapState: mapState,
+    );
+  }
+
+  /// Whether the most recently committed turn carries a full
+  /// [ProductionState] snapshot and can therefore be reopened.
+  bool get canReopenLastTurn =>
+      turnSummaries.isNotEmpty &&
+      turnSummaries.last.productionSnapshot != null;
+
+  /// Return a copy of this state with the most recently committed turn
+  /// reopened: the last [TurnSummary] is popped, [production] is restored
+  /// from its snapshot, and [turnNumber] rewinds to that turn.
+  ///
+  /// Returns `this` unchanged when [canReopenLastTurn] is false.
+  GameState reopenLastTurn() {
+    if (!canReopenLastTurn) return this;
+    final last = turnSummaries.last;
+    return copyWith(
+      production: last.productionSnapshot,
+      turnSummaries: turnSummaries.sublist(0, turnSummaries.length - 1),
+      turnNumber: last.turnNumber,
     );
   }
 

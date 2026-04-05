@@ -92,6 +92,23 @@ class ShipPurchase {
   }
 }
 
+/// Result of [ProductionState.materializeCompletedPurchases]: the updated
+/// state (with completed purchases removed), the mutated counter list, the
+/// ids of the counters that were just stamped as built, and any warnings.
+class MaterializeResult {
+  final ProductionState state;
+  final List<ShipCounter> counters;
+  final List<String> newCounterIds;
+  final List<String> warnings;
+
+  const MaterializeResult({
+    required this.state,
+    required this.counters,
+    this.newCounterIds = const [],
+    this.warnings = const [],
+  });
+}
+
 class ProductionState {
   // --- CP ledger (user-editable) ---
   final int cpCarryOver;
@@ -261,6 +278,130 @@ class ProductionState {
     return worlds
         .where((w) => !w.isBlocked)
         .fold(0, (sum, w) => sum + w.pipelineIncome * mult);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hex-based mining income (rule 39.2 Asteroid Field, rule 34.0
+  // Terraforming Nebulae)
+  // ---------------------------------------------------------------------------
+
+  /// CP from friendly Miners sitting on Asteroid hexes.
+  /// Rule 39.2 (Asteroid Field): "Miners in an Asteroid Field produce 3 CP
+  /// per Economic Phase." Mining is deferred on any hex that also contains
+  /// an enemy fleet (blockade; mirrors rule 7.1.2 mineral deferral).
+  int asteroidMiningCp(
+    GameMapState mapState,
+    List<ShipCounter> shipCounters,
+  ) {
+    return _mineHexesOf(
+      mapState,
+      shipCounters,
+      terrain: HexTerrain.asteroid,
+      perHex: 3,
+    );
+  }
+
+  /// CP from friendly Miners sitting on Nebula hexes, gated by
+  /// Terraforming 2 (rule 34.0 Terraforming Nebulae optional rule).
+  /// Suppressed by enemy presence on the hex.
+  int nebulaMiningCp(
+    GameMapState mapState,
+    List<ShipCounter> shipCounters, {
+    bool facilitiesMode = false,
+  }) {
+    final terraLevel = techState.getLevel(
+      TechId.terraforming,
+      facilitiesMode: facilitiesMode,
+    );
+    if (terraLevel < 2) return 0;
+    return _mineHexesOf(
+      mapState,
+      shipCounters,
+      terrain: HexTerrain.nebula,
+      perHex: 3,
+    );
+  }
+
+  int _mineHexesOf(
+    GameMapState mapState,
+    List<ShipCounter> shipCounters, {
+    required HexTerrain terrain,
+    required int perHex,
+  }) {
+    if (mapState.hexes.isEmpty || mapState.fleets.isEmpty) return 0;
+    final typeByShipId = <String, ShipType>{
+      for (final c in shipCounters) c.id: c.type,
+    };
+    final terrainByCoord = <String, HexTerrain>{
+      for (final hex in mapState.hexes) hex.coord.id: hex.terrain,
+    };
+    final enemyCoordIds = <String>{
+      for (final fleet in mapState.fleets)
+        if (fleet.isEnemy) fleet.coord.id,
+    };
+    final minerCoordIds = <String>{};
+    for (final fleet in mapState.fleets) {
+      if (fleet.isEnemy) continue;
+      final coordId = fleet.coord.id;
+      if (terrainByCoord[coordId] != terrain) continue;
+      if (enemyCoordIds.contains(coordId)) continue;
+      for (final shipId in fleet.shipCounterIds) {
+        if (typeByShipId[shipId] == ShipType.miner) {
+          minerCoordIds.add(coordId);
+          break;
+        }
+      }
+    }
+    return minerCoordIds.length * perHex;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Free Ground Units (Rule 21.5) — optional
+  // ---------------------------------------------------------------------------
+
+  /// Count of un-blockaded 5-CP colonies (growth level 3, not Homeworld)
+  /// currently eligible to generate free Ground Units.
+  int freeGroundTroopSourceColonies() {
+    int count = 0;
+    for (final w in worlds) {
+      if (w.isHomeworld) continue;
+      if (w.isBlocked) continue;
+      if (w.growthMarkerLevel != 3) continue;
+      count++;
+    }
+    return count;
+  }
+
+  /// Number of free Ground Units granted this Economic Phase under
+  /// Rule 21.5 (one per three qualifying 5-CP colonies, rounded down).
+  /// Returns 0 when the rule is disabled in [config].
+  int freeGroundTroopsGranted(GameConfig config) {
+    if (!config.enableFreeGroundTroops) return 0;
+    return freeGroundTroopSourceColonies() ~/ 3;
+  }
+
+  /// Number of colonies/homeworlds that can host a free Ground Unit
+  /// (un-blockaded 5-CP colonies and un-blockaded Homeworlds, one each).
+  int freeGroundTroopPlacementSlots() {
+    int slots = 0;
+    for (final w in worlds) {
+      if (w.isBlocked) continue;
+      if (w.isHomeworld) {
+        slots++;
+      } else if (w.growthMarkerLevel == 3) {
+        slots++;
+      }
+    }
+    return slots;
+  }
+
+  /// Number of free Ground Units that can actually be placed this
+  /// Economic Phase — the grant capped by available placement slots
+  /// (Rule 21.5: "one per Colony").
+  int freeGroundTroopsPlaceable(GameConfig config) {
+    final granted = freeGroundTroopsGranted(config);
+    final slots = freeGroundTroopPlacementSlots();
+    return granted < slots ? granted : slots;
   }
 
   /// Stable synthetic IDs for placing pipeline tokens on map hexes.
@@ -454,11 +595,26 @@ class ProductionState {
     return total;
   }
 
-  /// Gross CP income before subtractions.
-  int totalCp(GameConfig config, [List<GameModifier> modifiers = const []]) {
+  /// Gross CP income before subtractions. Passing [mapState] and
+  /// [shipCounters] enables hex-based mining income (asteroid Miners,
+  /// nebula Miners gated on Terraforming 2).
+  int totalCp(
+    GameConfig config, [
+    List<GameModifier> modifiers = const [],
+    GameMapState? mapState,
+    List<ShipCounter> shipCounters = const [],
+  ]) {
     int total = cpCarryOver + colonyCp(config) + mineralCp() + pipelineCp(config);
     if (config.enableFacilities) {
       total += facilityCp(config);
+    }
+    if (mapState != null) {
+      total += asteroidMiningCp(mapState, shipCounters);
+      total += nebulaMiningCp(
+        mapState,
+        shipCounters,
+        facilitiesMode: config.useFacilitiesCosts,
+      );
     }
     total += modifierIncome(modifiers);
     return total;
@@ -477,8 +633,8 @@ class ProductionState {
 
   /// CP after maintenance, bid, and LP penalty.
   int subtotalCp(GameConfig config, List<ShipCounter> shipCounters,
-      [List<GameModifier> modifiers = const []]) {
-    int sub = totalCp(config, modifiers) - turnOrderBid;
+      [List<GameModifier> modifiers = const [], GameMapState? mapState]) {
+    int sub = totalCp(config, modifiers, mapState, shipCounters) - turnOrderBid;
     if (!config.enableFacilities) {
       // Base mode: maintenance comes from CP
       sub -= maintenanceTotal(shipCounters, config, modifiers);
@@ -575,13 +731,22 @@ class ProductionState {
     return shipSpendingCp;
   }
 
+  /// True when the player has queued ship purchases while still holding
+  /// uncommitted pending tech purchases. Rule 9.11 requires tech purchases
+  /// to be committed before the ships that use them are built, because
+  /// ships built on the same turn benefit from the newly researched tech
+  /// only if that tech is acquired first. Used to drive a soft UI warning.
+  bool get hasShipsQueuedBeforeResearch =>
+      pendingTechPurchases.isNotEmpty && shipPurchases.isNotEmpty;
+
   /// Remaining CP after all spending.
   int remainingCp(GameConfig config, List<ShipCounter> shipCounters,
       [List<GameModifier> modifiers = const [],
-      Map<ShipType, int> shipSpecialAbilities = const {}]) {
+      Map<ShipType, int> shipSpecialAbilities = const {},
+      GameMapState? mapState]) {
     // techSpendingCpDerived returns 0 when unpredictable research is on,
     // so researchGrantsCp replaces it seamlessly.
-    return subtotalCp(config, shipCounters, modifiers) -
+    return subtotalCp(config, shipCounters, modifiers, mapState) -
         techSpendingCpDerived(config, modifiers) -
         researchGrantsCp -
         effectiveShipSpending(config, modifiers, shipSpecialAbilities) -
@@ -663,6 +828,107 @@ class ProductionState {
 
   int remainingTp(GameConfig config) {
     return totalTp(config) - tpSpending;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ship materialization (link ShipPurchase -> ShipCounter inventory)
+  // ---------------------------------------------------------------------------
+
+  /// Walk [shipPurchases] and, for every completed build (buildProgressHp >=
+  /// totalHpNeeded), consume blank counters of that type from [counters] and
+  /// stamp them with the current tech. Partially-built purchases are left in
+  /// place for the next turn.
+  ///
+  /// Returns a [MaterializeResult] containing the updated [ProductionState]
+  /// (with completed purchases removed), the updated counter list, the list
+  /// of freshly materialized counter IDs, and any warning messages (e.g.
+  /// when the counter pool for a type is exhausted and some ships could not
+  /// be materialized).
+  MaterializeResult materializeCompletedPurchases(
+    TechState tech,
+    List<ShipCounter> counters, {
+    bool facilitiesMode = false,
+    Map<ShipType, int> shipSpecialAbilities = const {},
+  }) {
+    final updatedCounters = List<ShipCounter>.from(counters);
+    final remainingPurchases = <ShipPurchase>[];
+    final newIds = <String>[];
+    final warnings = <String>[];
+
+    for (final p in shipPurchases) {
+      final def = kShipDefinitions[p.type];
+      if (def == null) {
+        remainingPurchases.add(p);
+        continue;
+      }
+      // Only materialize fully-built purchases. A purchase with no explicit
+      // totalHpNeeded and buildProgressHp == 0 is considered "instant build"
+      // (RAW mode): need is hull*qty and progress starts at 0, so in that
+      // mode the caller is expected to pre-set buildProgressHp == need OR
+      // leave totalHpNeeded null with progress 0 meaning "treat as complete
+      // at end of turn". We use the latter convention: if totalHpNeeded is
+      // null, treat as complete. If non-null, require progress >= need.
+      final isComplete = p.totalHpNeeded == null
+          ? true
+          : p.buildProgressHp >= p.totalHpNeeded!;
+      if (!isComplete) {
+        remainingPurchases.add(p);
+        continue;
+      }
+
+      // Untracked pools (maxCounters == 0): skip counter materialization,
+      // but still consume the purchase (pipelines, mines, bases, etc. are
+      // tracked on the map, not on the ship sheet).
+      if (def.maxCounters == 0) {
+        continue;
+      }
+
+      final advMuni = shipSpecialAbilities[p.type] == 11;
+      int materialized = 0;
+      for (int q = 0; q < p.quantity; q++) {
+        int blankIdx = -1;
+        for (int i = 0; i < updatedCounters.length; i++) {
+          final c = updatedCounters[i];
+          if (c.type == p.type && !c.isBuilt) {
+            blankIdx = i;
+            break;
+          }
+        }
+        if (blankIdx < 0) {
+          // Counter pool exhausted for this type.
+          warnings.add(
+            'No blank counters left for ${def.abbreviation} (wanted '
+            '${p.quantity - materialized} more).',
+          );
+          break;
+        }
+        final stamped = ShipCounter.stampFromTech(
+          p.type,
+          updatedCounters[blankIdx].number,
+          tech,
+          facilitiesMode: facilitiesMode,
+          advancedMunitions: advMuni,
+        );
+        updatedCounters[blankIdx] = stamped;
+        newIds.add(stamped.id);
+        materialized++;
+      }
+
+      // If we failed to materialize every ship in the purchase, keep the
+      // unfulfilled remainder in place as a still-pending purchase so the
+      // user sees a stuck build rather than silently losing CP-spent ships.
+      final unfulfilled = p.quantity - materialized;
+      if (unfulfilled > 0) {
+        remainingPurchases.add(p.copyWith(quantity: unfulfilled));
+      }
+    }
+
+    return MaterializeResult(
+      state: copyWith(shipPurchases: remainingPurchases),
+      counters: updatedCounters,
+      newCounterIds: newIds,
+      warnings: warnings,
+    );
   }
 
   // ---------------------------------------------------------------------------

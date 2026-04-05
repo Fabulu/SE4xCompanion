@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../data/card_manifest.dart';
+import '../data/card_modifiers.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
+import '../models/drawn_card.dart';
 import '../models/game_config.dart';
 import '../models/game_modifier.dart';
 import '../models/game_state.dart';
+import '../models/map_state.dart';
 import '../models/production_state.dart';
 import '../models/research_event.dart';
 import '../models/ship_counter.dart';
@@ -137,6 +141,11 @@ bool canBuildShip(
     case ShipType.transport:
       return effectiveLevel(TechId.ground) >= 1;
 
+    // Ground Units (21.0): Ground Combat 1 is free at start of game.
+    // Purchased at un-blockaded Colonies (21.3); no Shipyard required.
+    case ShipType.groundUnit:
+      return effectiveLevel(TechId.ground) >= 1;
+
     // Mines: require Mines tech >= 1
     case ShipType.mine:
       return effectiveLevel(TechId.mines) >= 1;
@@ -179,12 +188,18 @@ class ProductionPage extends StatefulWidget {
   final List<ShipCounter> shipCounters;
   final List<GameModifier> activeModifiers;
   final Map<ShipType, int> shipSpecialAbilities;
+  final GameMapState? mapState;
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
   final ValueChanged<GameState>? onGameStateOverride;
   final ValueChanged<List<GameModifier>>? onActiveModifiersChanged;
   final ValueChanged<String>? onLocateShip;
+  final List<DrawnCard> drawnHand;
+  final ValueChanged<List<DrawnCard>>? onDrawnHandChanged;
+  final void Function(String cardName, List<GameModifier> modifiers)?
+      onPlayCardAsEvent;
+  final void Function(String cardName, int cpGained)? onPlayCardForCredits;
 
   const ProductionPage({
     super.key,
@@ -194,12 +209,17 @@ class ProductionPage extends StatefulWidget {
     required this.shipCounters,
     this.activeModifiers = const [],
     this.shipSpecialAbilities = const {},
+    this.mapState,
     required this.onProductionChanged,
     required this.onEndTurn,
     this.onRuleTap,
     this.onGameStateOverride,
     this.onActiveModifiersChanged,
     this.onLocateShip,
+    this.drawnHand = const [],
+    this.onDrawnHandChanged,
+    this.onPlayCardAsEvent,
+    this.onPlayCardForCredits,
   });
 
   @override
@@ -269,7 +289,7 @@ class _ProductionPageState extends State<ProductionPage>
     ));
 
     _prevRemainingCp =
-        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities, widget.mapState);
   }
 
   @override
@@ -278,7 +298,7 @@ class _ProductionPageState extends State<ProductionPage>
 
     // Task 3C: pop on remaining CP change
     final newRemaining =
-        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities);
+        widget.production.remainingCp(widget.config, widget.shipCounters, widget.activeModifiers, widget.shipSpecialAbilities, widget.mapState);
     if (_prevRemainingCp != null && newRemaining != _prevRemainingCp) {
       _cpPopController.forward(from: 0);
     }
@@ -320,6 +340,7 @@ class _ProductionPageState extends State<ProductionPage>
   List<ShipCounter> get shipCounters => widget.shipCounters;
   List<GameModifier> get modifiers => widget.activeModifiers;
   Map<ShipType, int> get abilities => widget.shipSpecialAbilities;
+  GameMapState? get mapState => widget.mapState;
 
   // ---- helpers ----
 
@@ -408,7 +429,7 @@ class _ProductionPageState extends State<ProductionPage>
       return rpAvail >= cost;
     } else {
       // Uses CP
-      final cpAvail = production.remainingCp(config, shipCounters, modifiers, abilities);
+      final cpAvail = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
       return cpAvail >= cost;
     }
   }
@@ -454,7 +475,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   /// How many grants the player can afford (each grant = 5 CP).
   int _maxGrantsAffordable() {
-    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     return (remaining / 5).floor().clamp(0, 999);
   }
 
@@ -594,6 +615,9 @@ class _ProductionPageState extends State<ProductionPage>
         // Carry-over warnings
         _buildCarryOverWarning(),
 
+        // Research pre-gate soft warning (rule 9.11)
+        _buildResearchPreGateWarning(),
+
         // Ledger sections
         if (config.enableFacilities) ...[
           if (config.enableLogistics) ...[
@@ -635,6 +659,11 @@ class _ProductionPageState extends State<ProductionPage>
 
         // Worlds
         _buildWorldsSection(context),
+
+        const SizedBox(height: 16),
+
+        // Cards in hand (T3-C)
+        _buildCardsSection(context),
 
         const SizedBox(height: 20),
 
@@ -728,7 +757,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   Widget _buildCarryOverWarning() {
     final theme = Theme.of(context);
-    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final remainingRp =
         config.enableFacilities ? production.remainingRp(config, modifiers) : 0;
     final cpExcess = remainingCp - 30;
@@ -793,6 +822,43 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   // ===========================================================================
+  // Research pre-gate soft warning (rule 9.11)
+  // ===========================================================================
+
+  Widget _buildResearchPreGateWarning() {
+    if (!production.hasShipsQueuedBeforeResearch) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+            color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber,
+              color: theme.colorScheme.tertiary, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Research before building: commit tech purchases first '
+              '(rule 9.11). Ship purchases made now may use outdated '
+              'tech levels.',
+              style: TextStyle(
+                  fontSize: 14, color: theme.colorScheme.tertiary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
   // Base-mode CP ledger
   // ===========================================================================
 
@@ -801,11 +867,21 @@ class _ProductionPageState extends State<ProductionPage>
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
     final pipelineCp = production.pipelineCp(config);
-    final totalCp = production.totalCp(config, modifiers);
-    final subtotal = production.subtotalCp(config, shipCounters, modifiers);
+    final asteroidCp = mapState != null
+        ? production.asteroidMiningCp(mapState!, shipCounters)
+        : 0;
+    final nebulaCp = mapState != null
+        ? production.nebulaMiningCp(
+            mapState!,
+            shipCounters,
+            facilitiesMode: config.useFacilitiesCosts,
+          )
+        : 0;
+    final totalCp = production.totalCp(config, modifiers, mapState, shipCounters);
+    final subtotal = production.subtotalCp(config, shipCounters, modifiers, mapState);
     final techSpending = production.techSpendingCpDerived(config, modifiers);
     final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
-    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -822,6 +898,14 @@ class _ProductionPageState extends State<ProductionPage>
         LedgerRow(label: '+ Colony CPs', computedValue: colonyCp),
         LedgerRow(label: '+ Mineral CPs', computedValue: mineralCp),
         LedgerRow(label: '+ MS Pipeline CPs', computedValue: pipelineCp),
+        if (asteroidCp > 0)
+          LedgerRow(
+              label: '+ Asteroid Mining CPs (rule 39.2)',
+              computedValue: asteroidCp),
+        if (nebulaCp > 0)
+          LedgerRow(
+              label: '+ Nebula Mining CPs (rule 34.0)',
+              computedValue: nebulaCp),
         LedgerRow(label: 'TOTAL', computedValue: totalCp, isTotal: true),
         LedgerRow(label: '- Maintenance', computedValue: maint),
         LedgerRow(
@@ -852,6 +936,11 @@ class _ProductionPageState extends State<ProductionPage>
             isEditable: true,
             min: 0,
             onChanged: (v) => _update((s) => s.copyWith(shipSpendingCp: v)),
+          ),
+        if (config.enableFreeGroundTroops)
+          LedgerRow(
+            label: 'Free Ground Units (21.5)',
+            computedValue: production.freeGroundTroopsPlaceable(config),
           ),
         LedgerRow(
           label: 'REMAINING CP',
@@ -933,11 +1022,21 @@ class _ProductionPageState extends State<ProductionPage>
     final colonyCp = production.colonyCp(config);
     final mineralCp = production.mineralCp();
     final pipelineCp = production.pipelineCp(config);
-    final totalCp = production.totalCp(config, modifiers);
+    final asteroidCp = mapState != null
+        ? production.asteroidMiningCp(mapState!, shipCounters)
+        : 0;
+    final nebulaCp = mapState != null
+        ? production.nebulaMiningCp(
+            mapState!,
+            shipCounters,
+            facilitiesMode: config.useFacilitiesCosts,
+          )
+        : 0;
+    final totalCp = production.totalCp(config, modifiers, mapState, shipCounters);
     final penaltyLp = production.penaltyLp(config, shipCounters, modifiers);
-    final subtotal = production.subtotalCp(config, shipCounters, modifiers);
+    final subtotal = production.subtotalCp(config, shipCounters, modifiers, mapState);
     final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
-    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final unpredictable = config.enableUnpredictableResearch;
 
     return LedgerGrid(
@@ -955,6 +1054,14 @@ class _ProductionPageState extends State<ProductionPage>
         LedgerRow(
             label: '+ Mineral/Resource Card CP', computedValue: mineralCp),
         LedgerRow(label: '+ MS Pipeline CP', computedValue: pipelineCp),
+        if (asteroidCp > 0)
+          LedgerRow(
+              label: '+ Asteroid Mining CP (rule 39.2)',
+              computedValue: asteroidCp),
+        if (nebulaCp > 0)
+          LedgerRow(
+              label: '+ Nebula Mining CP (rule 34.0)',
+              computedValue: nebulaCp),
         LedgerRow(label: 'TOTAL CP', computedValue: totalCp, isTotal: true),
         if (penaltyLp > 0)
           LedgerRow(label: '- 3x Penalty LP', computedValue: penaltyLp),
@@ -984,6 +1091,11 @@ class _ProductionPageState extends State<ProductionPage>
             isEditable: true,
             min: 0,
             onChanged: (v) => _update((s) => s.copyWith(shipSpendingCp: v)),
+          ),
+        if (config.enableFreeGroundTroops)
+          LedgerRow(
+            label: 'Free Ground Units (21.5)',
+            computedValue: production.freeGroundTroopsPlaceable(config),
           ),
         LedgerRow(
           label: 'REMAINING CP (30 Max)',
@@ -1842,7 +1954,7 @@ class _ProductionPageState extends State<ProductionPage>
   bool _canAffordOneMore(ShipType type) {
     final def = kShipDefinitions[type];
     if (def == null) return false;
-    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts);
   }
 
@@ -1887,7 +1999,7 @@ class _ProductionPageState extends State<ProductionPage>
 
   void _showAddShipDialog(BuildContext context) {
     // Task 2: Filter to ships the player has tech to build AND can afford
-    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
 
     final isAlt = config.enableAlternateEmpire;
     final buyableShips = kShipDefinitions.entries
@@ -2410,6 +2522,369 @@ class _ProductionPageState extends State<ProductionPage>
     );
   }
 
+  // ===========================================================================
+  // Cards in hand (T3-C)
+  // ===========================================================================
+
+  Widget _buildCardsSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final hand = widget.drawnHand;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'CARDS',
+          subtitle: hand.isEmpty ? 'empty hand' : '${hand.length} in hand',
+          trailing: TextButton.icon(
+            onPressed: () => _showDrawCardDialog(context),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Draw'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (hand.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Text(
+              'No cards drawn. Tap "Draw" to add Action, Alien Tech, or '
+              'Crew cards from the deck.',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < hand.length; i++) _buildDrawnCardTile(context, i),
+      ],
+    );
+  }
+
+  Widget _buildDrawnCardTile(BuildContext context, int index) {
+    final theme = Theme.of(context);
+    final card = widget.drawnHand[index];
+    final entry = _lookupCardEntry(card.cardNumber);
+    final title = entry != null
+        ? '#${card.cardNumber} ${entry.name}'
+        : '#${card.cardNumber}';
+    final typeLabel = entry?.type ?? 'unknown';
+    final canPlayAsEvent = card.assignedModifiers.isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.4),
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                card.isFaceUp ? Icons.visibility : Icons.visibility_off,
+                size: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '$typeLabel \u00B7 T${card.drawnOnTurn}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+          if (entry != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              entry.description,
+              style: TextStyle(
+                fontSize: 11,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+          if (card.assignedModifiers.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              card.assignedModifiers
+                  .map((m) => m.effectDescription)
+                  .join(' \u2022 '),
+              style: TextStyle(
+                fontSize: 10,
+                color: theme.colorScheme.primary.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton(
+                onPressed:
+                    canPlayAsEvent ? () => _playCardAsEvent(index) : null,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text(
+                  'Play as event',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _playCardForCredits(index),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text(
+                  'Play for credits',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _toggleCardFaceUp(index),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(
+                  card.isFaceUp ? 'Flip down' : 'Flip up',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _discardCard(index),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: theme.colorScheme.error,
+                ),
+                child: const Text(
+                  'Discard',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static CardEntry? _lookupCardEntry(int cardNumber) {
+    for (final c in kAllCards) {
+      if (c.number == cardNumber) return c;
+    }
+    return null;
+  }
+
+  Future<void> _showDrawCardDialog(BuildContext context) async {
+    String query = '';
+    String typeFilter = 'all';
+    final allCards = kAllCards;
+    final selected = await showDialog<CardEntry>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setInnerState) {
+            final q = query.toLowerCase();
+            final filtered = allCards.where((c) {
+              if (typeFilter != 'all' && c.type != typeFilter) return false;
+              if (q.isEmpty) return true;
+              return c.name.toLowerCase().contains(q) ||
+                  c.description.toLowerCase().contains(q) ||
+                  '#${c.number}'.contains(q);
+            }).toList();
+            return AlertDialog(
+              title: const Text('Draw Card'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 420,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        isDense: true,
+                      ),
+                      onChanged: (v) => setInnerState(() => query = v),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4,
+                      children: [
+                        for (final t in const [
+                          'all',
+                          'resource',
+                          'alienTech',
+                          'crew',
+                          'mission',
+                          'planetAttribute',
+                        ])
+                          ChoiceChip(
+                            label: Text(
+                              t,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            selected: typeFilter == t,
+                            onSelected: (_) =>
+                                setInnerState(() => typeFilter = t),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final card = filtered[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              '#${card.number} ${card.name}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            subtitle: Text(
+                              '${card.type} \u00B7 ${card.description}',
+                              style: const TextStyle(fontSize: 11),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(ctx, card),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (selected != null) {
+      _drawCard(selected);
+    }
+  }
+
+  void _drawCard(CardEntry entry) {
+    final binding = cardModifiersFor(entry.number);
+    final mods = binding?.modifiers ?? const <GameModifier>[];
+    final drawn = DrawnCard(
+      cardNumber: entry.number,
+      drawnOnTurn: widget.turnNumber,
+      assignedModifiers: List<GameModifier>.from(mods),
+    );
+    widget.onDrawnHandChanged?.call([...widget.drawnHand, drawn]);
+  }
+
+  void _playCardAsEvent(int index) {
+    final card = widget.drawnHand[index];
+    if (card.assignedModifiers.isEmpty) return;
+    final entry = _lookupCardEntry(card.cardNumber);
+    final name = entry?.name ?? 'Card #${card.cardNumber}';
+    widget.onPlayCardAsEvent?.call(name, card.assignedModifiers);
+    final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
+    widget.onDrawnHandChanged?.call(updated);
+  }
+
+  Future<void> _playCardForCredits(int index) async {
+    final card = widget.drawnHand[index];
+    final entry = _lookupCardEntry(card.cardNumber);
+    final name = entry?.name ?? 'Card #${card.cardNumber}';
+    final defaultCp = _parseCpValue(entry?.cpValue) ?? 10;
+    final controller = TextEditingController(text: '$defaultCp');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Play "$name" for credits'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Discard this card for a one-time CP income bonus this turn.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'CP gained',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = int.tryParse(controller.text.trim());
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Play'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result <= 0) return;
+    widget.onPlayCardForCredits?.call(name, result);
+    final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
+    widget.onDrawnHandChanged?.call(updated);
+  }
+
+  void _discardCard(int index) {
+    final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
+    widget.onDrawnHandChanged?.call(updated);
+  }
+
+  void _toggleCardFaceUp(int index) {
+    final updated = List<DrawnCard>.from(widget.drawnHand);
+    updated[index] =
+        updated[index].copyWith(isFaceUp: !updated[index].isFaceUp);
+    widget.onDrawnHandChanged?.call(updated);
+  }
+
+  static int? _parseCpValue(String? cpValue) {
+    if (cpValue == null) return null;
+    final m = RegExp(r'(\d+)').firstMatch(cpValue);
+    if (m == null) return null;
+    return int.tryParse(m.group(1)!);
+  }
+
   Widget _buildManualOverrideButton(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
@@ -2441,7 +2916,7 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _confirmEndTurn(BuildContext context) {
-    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities);
+    final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final cpLost = remainingCp > 30 ? remainingCp - 30 : 0;
     final remainingRp = config.enableFacilities ? production.remainingRp(config, modifiers) : null;
     final rpLost = (remainingRp != null && remainingRp > 30) ? remainingRp - 30 : 0;

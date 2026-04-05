@@ -32,6 +32,7 @@ class SettingsPage extends StatelessWidget {
   final ValueChanged<GameState>? onImportGame;
   final Map<ShipType, int> shipSpecialAbilities;
   final ValueChanged<Map<ShipType, int>>? onSpecialAbilitiesChanged;
+  final VoidCallback? onReopenLastTurn;
 
   const SettingsPage({
     super.key,
@@ -54,6 +55,7 @@ class SettingsPage extends StatelessWidget {
     this.onImportGame,
     this.shipSpecialAbilities = const {},
     this.onSpecialAbilitiesChanged,
+    this.onReopenLastTurn,
   });
 
   @override
@@ -109,6 +111,29 @@ class SettingsPage extends StatelessWidget {
           const SizedBox(height: 8),
           for (final summary in turnSummaries)
             _TurnSummaryTile(summary: summary),
+          if (onReopenLastTurn != null &&
+              turnSummaries.last.productionSnapshot != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _confirmReopenLastTurn(context),
+                  icon: const Icon(Icons.restore, size: 20),
+                  label: Text(
+                    'Reopen Turn ${turnSummaries.last.turnNumber}',
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    minimumSize: const Size(0, 48),
+                  ),
+                ),
+              ),
+            ),
           const Divider(height: 24),
         ],
 
@@ -568,6 +593,36 @@ class SettingsPage extends StatelessWidget {
   }
 
   // ── Dialogs ──
+
+  void _confirmReopenLastTurn(BuildContext context) {
+    if (turnSummaries.isEmpty) return;
+    final last = turnSummaries.last;
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reopen Turn ${last.turnNumber}?'),
+        content: const Text(
+          'This restores the Economic Phase as it was when the turn '
+          'was committed. Any actions taken on the current turn will '
+          'be lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        onReopenLastTurn?.call();
+      }
+    });
+  }
 
   void _showRenameDialog(BuildContext context, SavedGame game) {
     final controller = TextEditingController(text: game.name);

@@ -56,6 +56,11 @@ class GameConfig {
   /// HP contributions from shipyards. Off by default (RAW). See T2-A spec.
   final bool enableMultiTurnBuilds;
 
+  /// Optional Rule 21.5: grant one free Infantry Ground Unit per three
+  /// un-blockaded 5-CP colonies (excluding the Homeworld) at the start of
+  /// every Economic Phase, rounded down. Off by default. See T3-F spec.
+  final bool enableFreeGroundTroops;
+
   // Scenario overrides
   final String? scenarioId;
   final String? replicatorDifficulty;
@@ -79,6 +84,7 @@ class GameConfig {
     this.enableAlternateEmpire = false,
     this.selectedEmpireAdvantage,
     this.enableMultiTurnBuilds = false,
+    this.enableFreeGroundTroops = false,
     this.scenarioId,
     this.replicatorDifficulty,
     this.shipCostMultiplier = 1.0,
@@ -131,6 +137,7 @@ class GameConfig {
     int? selectedEmpireAdvantage,
     bool clearEmpireAdvantage = false,
     bool? enableMultiTurnBuilds,
+    bool? enableFreeGroundTroops,
     String? scenarioId,
     bool clearScenario = false,
     String? replicatorDifficulty,
@@ -159,6 +166,8 @@ class GameConfig {
         : (selectedEmpireAdvantage ?? this.selectedEmpireAdvantage),
     enableMultiTurnBuilds:
         enableMultiTurnBuilds ?? this.enableMultiTurnBuilds,
+    enableFreeGroundTroops:
+        enableFreeGroundTroops ?? this.enableFreeGroundTroops,
     scenarioId: clearScenario ? null : (scenarioId ?? this.scenarioId),
     replicatorDifficulty: clearScenario
         ? null
@@ -185,6 +194,7 @@ class GameConfig {
     'enableAlternateEmpire': enableAlternateEmpire,
     'selectedEmpireAdvantage': selectedEmpireAdvantage,
     'enableMultiTurnBuilds': enableMultiTurnBuilds,
+    'enableFreeGroundTroops': enableFreeGroundTroops,
     'scenarioId': scenarioId,
     'replicatorDifficulty': replicatorDifficulty,
     'shipCostMultiplier': shipCostMultiplier,
@@ -213,6 +223,8 @@ class GameConfig {
     enableAlternateEmpire: json['enableAlternateEmpire'] as bool? ?? false,
     selectedEmpireAdvantage: json['selectedEmpireAdvantage'] as int?,
     enableMultiTurnBuilds: json['enableMultiTurnBuilds'] as bool? ?? false,
+    enableFreeGroundTroops:
+        json['enableFreeGroundTroops'] as bool? ?? false,
     scenarioId: json['scenarioId'] as String?,
     replicatorDifficulty: json['replicatorDifficulty'] as String?,
     shipCostMultiplier: (json['shipCostMultiplier'] as num?)?.toDouble() ?? 1.0,
