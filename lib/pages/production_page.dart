@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../data/card_manifest.dart';
 import '../data/card_modifiers.dart';
+import '../data/counter_pool.dart' as counter_pool;
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/drawn_card.dart';
@@ -767,52 +768,24 @@ class _ProductionPageState extends State<ProductionPage>
 
     if (cpExcess > 0) {
       warnings.add(
-        Container(
-          padding: const EdgeInsets.all(8),
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber, color: theme.colorScheme.tertiary, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '$cpExcess CP will be lost at End Turn (carry-over cap is 30)',
-                  style: TextStyle(fontSize: 14, color: theme.colorScheme.tertiary),
-                ),
-              ),
-            ],
-          ),
+        _warningBanner(
+          theme,
+          icon: Icons.payments_outlined,
+          prefix: 'CP Cap',
+          message:
+              '$cpExcess CP will be lost at End Turn (carry-over cap is 30)',
         ),
       );
     }
 
     if (config.enableFacilities && rpExcess > 0) {
       warnings.add(
-        Container(
-          padding: const EdgeInsets.all(8),
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber, color: theme.colorScheme.tertiary, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '$rpExcess RP will be lost at End Turn (carry-over cap is 30)',
-                  style: TextStyle(fontSize: 14, color: theme.colorScheme.tertiary),
-                ),
-              ),
-            ],
-          ),
+        _warningBanner(
+          theme,
+          icon: Icons.science_outlined,
+          prefix: 'RP Cap',
+          message:
+              '$rpExcess RP will be lost at End Turn (carry-over cap is 30)',
         ),
       );
     }
@@ -830,27 +803,50 @@ class _ProductionPageState extends State<ProductionPage>
       return const SizedBox.shrink();
     }
     final theme = Theme.of(context);
+    return _warningBanner(
+      theme,
+      icon: Icons.lightbulb_outline,
+      prefix: 'Research Order',
+      message:
+          'commit tech purchases first (rule 9.11). Ship purchases made '
+          'now may use outdated tech levels.',
+    );
+  }
+
+  /// Shared amber/tertiary warning banner. Per-banner icon + prefix
+  /// label keep stacked warnings visually distinguishable while
+  /// preserving consistent warning semantics.
+  Widget _warningBanner(
+    ThemeData theme, {
+    required IconData icon,
+    required String prefix,
+    required String message,
+  }) {
+    final color = theme.colorScheme.tertiary;
     return Container(
       padding: const EdgeInsets.all(8),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-            color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber,
-              color: theme.colorScheme.tertiary, size: 20),
+          Icon(icon, color: color, size: 20),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              'Research before building: commit tech purchases first '
-              '(rule 9.11). Ship purchases made now may use outdated '
-              'tech levels.',
-              style: TextStyle(
-                  fontSize: 14, color: theme.colorScheme.tertiary),
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(fontSize: 14, color: color),
+                children: [
+                  TextSpan(
+                    text: '$prefix: ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: message),
+                ],
+              ),
             ),
           ),
         ],
@@ -1958,29 +1954,13 @@ class _ProductionPageState extends State<ProductionPage>
     return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts);
   }
 
-  /// T1-C: Number of blank/unused physical counters remaining for this ship
-  /// type, after subtracting built ships and queued purchases. Returns null
-  /// when this ship type is not tracked on the Ship Technology Sheet
-  /// (maxCounters == 0, e.g. mines, transports, pipelines).
-  int? _countersRemaining(ShipType type) {
-    final def = kShipDefinitions[type];
-    if (def == null) return null;
-    if (def.maxCounters == 0) return null; // untracked pool
-    final built =
-        shipCounters.where((c) => c.type == type && c.isBuilt).length;
-    final queued = production.shipPurchases
-        .where((p) => p.type == type)
-        .fold<int>(0, (s, p) => s + p.quantity);
-    final remaining = def.maxCounters - built - queued;
-    return remaining < 0 ? 0 : remaining;
-  }
-
   /// T1-C: Hard block — true if at least one blank counter is available.
-  bool _hasCounterStock(ShipType type) {
-    final remaining = _countersRemaining(type);
-    if (remaining == null) return true; // untracked = unlimited
-    return remaining > 0;
-  }
+  bool _hasCounterStock(ShipType type) =>
+      counter_pool.hasCounterStock(
+        type,
+        shipCounters,
+        production.shipPurchases,
+      );
 
   /// T1-C: Tooltip describing why the "+1" button is blocked.
   String _counterStockTooltip(ShipType type) {

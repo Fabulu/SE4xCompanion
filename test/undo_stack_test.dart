@@ -10,8 +10,12 @@
 //     (modeled here via a minimal stack harness).
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:se4x/data/ship_definitions.dart';
+import 'package:se4x/models/drawn_card.dart';
+import 'package:se4x/models/game_modifier.dart';
 import 'package:se4x/models/game_state.dart';
 import 'package:se4x/models/production_state.dart';
+import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/turn_summary.dart';
 
 /// Minimal port of the undo-stack semantics used inside _HomePageState,
@@ -211,6 +215,137 @@ void main() {
       expect(h.current.turnNumber, 3);
       expect(h.current.production.cpCarryOver, 6);
       expect(h.current.turnSummaries.length, 1);
+    });
+  });
+
+  group('GameState.reopenLastTurn — full gameStateSnapshot', () {
+    test('restores drawnHand, activeModifiers, shipCounters from snapshot',
+        () {
+      // Pre-commit state the player had on turn 2 mid-Economic-Phase.
+      final preCommitProduction = const ProductionState(cpCarryOver: 12);
+      final preCommitDrawn = [
+        const DrawnCard(cardNumber: 1001, drawnOnTurn: 2),
+        const DrawnCard(cardNumber: 1007, drawnOnTurn: 2, notes: 'keep'),
+      ];
+      final preCommitMods = [
+        const GameModifier(
+          name: 'Soylent Purple',
+          type: 'maintenanceMod',
+          value: 50,
+          isPercent: true,
+        ),
+      ];
+      final preCommitCounters = [
+        const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true),
+      ];
+
+      final snapshot = <String, dynamic>{
+        'production': preCommitProduction.toJson(),
+        'drawnHand': preCommitDrawn.map((c) => c.toJson()).toList(),
+        'activeModifiers': preCommitMods.map((m) => m.toJson()).toList(),
+        'shipCounters': preCommitCounters.map((c) => c.toJson()).toList(),
+      };
+      final summary = TurnSummary(
+        turnNumber: 2,
+        completedAt: DateTime(2026, 4, 4),
+        productionSnapshot: preCommitProduction,
+        gameStateSnapshot: snapshot,
+      );
+
+      // Post-commit state: turn advanced, hand changed, modifier dropped,
+      // a fresh built counter materialized from T3-A.
+      final gs = GameState(
+        turnNumber: 3,
+        production: const ProductionState(cpCarryOver: 0),
+        drawnHand: const [],
+        activeModifiers: const [],
+        shipCounters: const [
+          ShipCounter(type: ShipType.dd, number: 1, isBuilt: true),
+          ShipCounter(type: ShipType.dd, number: 2, isBuilt: true),
+        ],
+        turnSummaries: [summary],
+      );
+
+      final reopened = gs.reopenLastTurn();
+      expect(reopened.turnNumber, 2);
+      expect(reopened.production.cpCarryOver, 12);
+      expect(reopened.drawnHand.length, 2);
+      expect(reopened.drawnHand.first.cardNumber, 1001);
+      expect(reopened.drawnHand.last.notes, 'keep');
+      expect(reopened.activeModifiers.length, 1);
+      expect(reopened.activeModifiers.single.name, 'Soylent Purple');
+      expect(reopened.shipCounters.length, 1);
+      expect(reopened.shipCounters.single.number, 1);
+      expect(reopened.turnSummaries, isEmpty);
+    });
+
+    test('legacy summaries (no gameStateSnapshot) fall back to '
+        'production-only restore', () {
+      // Summary without gameStateSnapshot — represents a legacy save.
+      final summary = TurnSummary(
+        turnNumber: 1,
+        completedAt: DateTime(2026, 4, 4),
+        productionSnapshot: const ProductionState(cpCarryOver: 5),
+      );
+      // Post-commit gameplay mutated drawnHand / shipCounters. Under the
+      // fallback path we must NOT clobber those — only production and
+      // turnNumber rewind.
+      final gs = GameState(
+        turnNumber: 2,
+        production: const ProductionState(cpCarryOver: 0),
+        drawnHand: const [DrawnCard(cardNumber: 42, drawnOnTurn: 1)],
+        shipCounters: const [
+          ShipCounter(type: ShipType.ca, number: 1, isBuilt: true),
+        ],
+        turnSummaries: [summary],
+      );
+
+      final reopened = gs.reopenLastTurn();
+      expect(reopened.turnNumber, 1);
+      expect(reopened.production.cpCarryOver, 5);
+      // Legacy fallback preserves current drawnHand / shipCounters.
+      expect(reopened.drawnHand.length, 1);
+      expect(reopened.drawnHand.single.cardNumber, 42);
+      expect(reopened.shipCounters.length, 1);
+      expect(reopened.turnSummaries, isEmpty);
+    });
+
+    test('gameStateSnapshot round-trips through toJson/fromJson', () {
+      final snapshot = <String, dynamic>{
+        'production': const ProductionState(cpCarryOver: 7).toJson(),
+        'drawnHand': const [
+          DrawnCard(cardNumber: 3, drawnOnTurn: 1),
+        ].map((c) => c.toJson()).toList(),
+        'activeModifiers': const <Map<String, dynamic>>[],
+        'shipCounters': const [
+          ShipCounter(type: ShipType.dd, number: 2, isBuilt: true),
+        ].map((c) => c.toJson()).toList(),
+      };
+      final original = TurnSummary(
+        turnNumber: 4,
+        completedAt: DateTime(2026, 4, 4),
+        productionSnapshot: const ProductionState(cpCarryOver: 7),
+        gameStateSnapshot: snapshot,
+      );
+      final roundtripped = TurnSummary.fromJson(original.toJson());
+      expect(roundtripped.gameStateSnapshot, isNotNull);
+      expect(roundtripped.gameStateSnapshot!['drawnHand'], isA<List>());
+      final drawnList =
+          (roundtripped.gameStateSnapshot!['drawnHand'] as List);
+      expect(drawnList.length, 1);
+
+      // And that the round-tripped summary still drives a full reopen.
+      final gs = GameState(
+        turnNumber: 5,
+        production: const ProductionState(cpCarryOver: 0),
+        turnSummaries: [roundtripped],
+      );
+      final reopened = gs.reopenLastTurn();
+      expect(reopened.turnNumber, 4);
+      expect(reopened.production.cpCarryOver, 7);
+      expect(reopened.drawnHand.length, 1);
+      expect(reopened.drawnHand.single.cardNumber, 3);
+      expect(reopened.shipCounters.length, 1);
     });
   });
 }

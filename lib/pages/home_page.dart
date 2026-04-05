@@ -839,10 +839,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ...prod.emitPendingTechPurchaseEvents(config, mods),
     ];
 
+    // Capture a symmetric pre-commit snapshot of the GameState fields
+    // that can mutate during a turn so reopenLastTurn() restores them
+    // all in lockstep (T3-A ship materialization, card plays, modifier
+    // application).
+    final gameStateSnapshot = <String, dynamic>{
+      'production': prod.toJson(),
+      'drawnHand':
+          _gameState.drawnHand.map((c) => c.toJson()).toList(),
+      'activeModifiers':
+          _gameState.activeModifiers.map((m) => m.toJson()).toList(),
+      'shipCounters':
+          _gameState.shipCounters.map((c) => c.toJson()).toList(),
+    };
+
     final summary = TurnSummary(
       turnNumber: _gameState.turnNumber,
       completedAt: DateTime.now(),
       productionSnapshot: prod,
+      gameStateSnapshot: gameStateSnapshot,
       researchLog: researchLog,
       techsGained: techsGained,
       shipsBuilt: shipsBuilt,

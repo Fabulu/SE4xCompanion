@@ -1,43 +1,17 @@
 // T1-C: Counter stock check on ship purchase (hard block).
 //
 // The production UI must prevent queueing ship purchases beyond the physical
-// counter pool for each ship type. This test exercises the same computation
-// used by the "+1" button enable/disable logic in `production_page.dart`
-// (`_countersRemaining` / `_hasCounterStock`) so that regressions in either
-// the data (`ShipDefinition.maxCounters`) or the queue-vs-counter math are
-// caught independently of the Flutter widget tree.
+// counter pool for each ship type. Both the "+1" button enable/disable logic
+// in `production_page.dart` and this test call the shared helper in
+// `lib/data/counter_pool.dart`, so regressions in either the data
+// (`ShipDefinition.maxCounters`) or the queue-vs-counter math are caught
+// against the real implementation — no widget tree required.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:se4x/data/counter_pool.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
-
-/// Mirror of `_countersRemaining` in production_page.dart.
-int? countersRemaining(
-  ShipType type,
-  List<ShipCounter> shipCounters,
-  List<ShipPurchase> shipPurchases,
-) {
-  final def = kShipDefinitions[type];
-  if (def == null) return null;
-  if (def.maxCounters == 0) return null;
-  final built = shipCounters.where((c) => c.type == type && c.isBuilt).length;
-  final queued = shipPurchases
-      .where((p) => p.type == type)
-      .fold<int>(0, (s, p) => s + p.quantity);
-  final remaining = def.maxCounters - built - queued;
-  return remaining < 0 ? 0 : remaining;
-}
-
-bool hasCounterStock(
-  ShipType type,
-  List<ShipCounter> shipCounters,
-  List<ShipPurchase> shipPurchases,
-) {
-  final r = countersRemaining(type, shipCounters, shipPurchases);
-  if (r == null) return true;
-  return r > 0;
-}
 
 void main() {
   group('T1-C: counter stock hard block', () {

@@ -219,13 +219,78 @@ class GameState {
   /// reopened: the last [TurnSummary] is popped, [production] is restored
   /// from its snapshot, and [turnNumber] rewinds to that turn.
   ///
+  /// When the summary carries a full [TurnSummary.gameStateSnapshot] we
+  /// additionally restore `drawnHand`, `activeModifiers`, and
+  /// `shipCounters` to their end-of-turn state, so card plays,
+  /// modifier application, and T3-A materialization performed during
+  /// the committed turn all roll back in sync. Legacy summaries only
+  /// carry [TurnSummary.productionSnapshot]; in that case we fall back
+  /// to restoring only production + turnNumber.
+  ///
   /// Returns `this` unchanged when [canReopenLastTurn] is false.
   GameState reopenLastTurn() {
     if (!canReopenLastTurn) return this;
     final last = turnSummaries.last;
+    final gss = last.gameStateSnapshot;
+    final nextSummaries = turnSummaries.sublist(0, turnSummaries.length - 1);
+
+    if (gss == null) {
+      // Legacy path: only production + turnNumber are restored.
+      return copyWith(
+        production: last.productionSnapshot,
+        turnSummaries: nextSummaries,
+        turnNumber: last.turnNumber,
+      );
+    }
+
+    // Full snapshot path: restore production, drawnHand, activeModifiers,
+    // shipCounters from the snapshot. The ProductionState in the
+    // snapshot map takes precedence; fall back to productionSnapshot.
+    ProductionState restoredProduction = last.productionSnapshot ?? production;
+    final rawProd = gss['production'];
+    if (rawProd is Map<String, dynamic>) {
+      restoredProduction = ProductionState.fromJson(rawProd);
+    } else if (rawProd is Map) {
+      restoredProduction =
+          ProductionState.fromJson(Map<String, dynamic>.from(rawProd));
+    }
+
+    List<DrawnCard> restoredDrawnHand = drawnHand;
+    final rawDrawn = gss['drawnHand'];
+    if (rawDrawn is List) {
+      restoredDrawnHand = rawDrawn
+          .map((c) => c is Map<String, dynamic>
+              ? DrawnCard.fromJson(c)
+              : DrawnCard.fromJson(Map<String, dynamic>.from(c as Map)))
+          .toList();
+    }
+
+    List<GameModifier> restoredModifiers = activeModifiers;
+    final rawMods = gss['activeModifiers'];
+    if (rawMods is List) {
+      restoredModifiers = rawMods
+          .map((m) => m is Map<String, dynamic>
+              ? GameModifier.fromJson(m)
+              : GameModifier.fromJson(Map<String, dynamic>.from(m as Map)))
+          .toList();
+    }
+
+    List<ShipCounter> restoredCounters = shipCounters;
+    final rawCounters = gss['shipCounters'];
+    if (rawCounters is List) {
+      restoredCounters = rawCounters
+          .map((c) => c is Map<String, dynamic>
+              ? ShipCounter.fromJson(c)
+              : ShipCounter.fromJson(Map<String, dynamic>.from(c as Map)))
+          .toList();
+    }
+
     return copyWith(
-      production: last.productionSnapshot,
-      turnSummaries: turnSummaries.sublist(0, turnSummaries.length - 1),
+      production: restoredProduction,
+      drawnHand: restoredDrawnHand,
+      activeModifiers: restoredModifiers,
+      shipCounters: restoredCounters,
+      turnSummaries: nextSummaries,
       turnNumber: last.turnNumber,
     );
   }
