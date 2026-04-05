@@ -9,12 +9,19 @@ class GameModifier {
   final int value; // the modifier value (+2, -1, 50 for percent, etc.)
   final bool isPercent; // true for percentage modifiers (maintenance 50%)
 
+  /// Origin identifier for de-duping when the same card/effect is applied
+  /// twice. Format: `'<cardType>:<cardNumber>'`, e.g. `'planetAttribute:1005'`
+  /// or `'alienTech:1'`. Nullable for back-compat with legacy saves and
+  /// manually-entered modifiers.
+  final String? sourceCardId;
+
   const GameModifier({
     required this.name,
     required this.type,
     this.shipType,
     required this.value,
     this.isPercent = false,
+    this.sourceCardId,
   });
 
   /// Human-readable effect description.
@@ -55,6 +62,7 @@ class GameModifier {
         if (shipType != null) 'shipType': shipType!.name,
         'value': value,
         'isPercent': isPercent,
+        if (sourceCardId != null) 'sourceCardId': sourceCardId,
       };
 
   factory GameModifier.fromJson(Map<String, dynamic> json) => GameModifier(
@@ -65,6 +73,16 @@ class GameModifier {
             : null,
         value: json['value'] as int? ?? 0,
         isPercent: json['isPercent'] as bool? ?? false,
+        sourceCardId: json['sourceCardId'] as String?,
+      );
+
+  GameModifier withSourceCardId(String? id) => GameModifier(
+        name: name,
+        type: type,
+        shipType: shipType,
+        value: value,
+        isPercent: isPercent,
+        sourceCardId: id,
       );
 
   static ShipType? _shipTypeFromName(String name) {

@@ -202,6 +202,26 @@ class SettingsPage extends StatelessWidget {
               onConfigChanged(config.copyWith(enableAdvancedConstruction: v)),
         ),
         _RuleToggle(
+          title: 'Multi-Turn Ship Builds',
+          value: config.enableMultiTurnBuilds,
+          enabled: true,
+          helpText:
+              'House rule — allows big ships to build over multiple turns. '
+              'OFF = RAW (must have capacity same turn).',
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableMultiTurnBuilds: v)),
+        ),
+        _RuleToggle(
+          title: 'Free Ground Troops (rule 21.5)',
+          value: config.enableFreeGroundTroops,
+          enabled: true,
+          helpText:
+              'Rule 21.5: grant one free Ground Unit per three un-blockaded '
+              '5-CP colonies each Economic Phase.',
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableFreeGroundTroops: v)),
+        ),
+        _RuleToggle(
           title: 'Replicator Opponent',
           value: config.enableReplicators && !config.playerControlsReplicators,
           enabled: config.ownership.replicators,
@@ -838,6 +858,7 @@ class _RuleToggle extends StatelessWidget {
   final bool value;
   final bool enabled;
   final String? disabledReason;
+  final String? helpText;
   final ValueChanged<bool> onChanged;
 
   const _RuleToggle({
@@ -845,23 +866,34 @@ class _RuleToggle extends StatelessWidget {
     required this.value,
     required this.enabled,
     this.disabledReason,
+    this.helpText,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    Widget? subtitle;
+    if (!enabled && disabledReason != null) {
+      subtitle = Text(
+        disabledReason!,
+        style: TextStyle(
+          fontSize: 13,
+          color: theme.colorScheme.error.withValues(alpha: 0.7),
+        ),
+      );
+    } else if (helpText != null) {
+      subtitle = Text(
+        helpText!,
+        style: TextStyle(
+          fontSize: 12,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      );
+    }
     return SwitchListTile(
       title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: (!enabled && disabledReason != null)
-          ? Text(
-              disabledReason!,
-              style: TextStyle(
-                fontSize: 13,
-                color: theme.colorScheme.error.withValues(alpha: 0.7),
-              ),
-            )
-          : null,
+      subtitle: subtitle,
       value: value && enabled,
       onChanged: enabled ? onChanged : null,
     );

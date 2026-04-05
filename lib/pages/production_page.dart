@@ -718,13 +718,17 @@ class _ProductionPageState extends State<ProductionPage>
               const Spacer(),
               // M-2: Turn Log button — opens modal with turn history.
               if (widget.turnSummaries.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.history, size: 22),
-                  tooltip: 'Turn Log',
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () => _showTurnLogModal(context),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    icon: const Icon(Icons.history, size: 22),
+                    tooltip: 'Turn Log',
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                    onPressed: () => _showTurnLogModal(context),
+                  ),
                 ),
             ],
           ),
@@ -800,8 +804,8 @@ class _ProductionPageState extends State<ProductionPage>
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
+            spacing: 8,
+            runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: chips,
           ),
@@ -1043,6 +1047,23 @@ class _ProductionPageState extends State<ProductionPage>
                     if (summary.cpLostToCap > 0) {
                       details.add('CP lost to cap: ${summary.cpLostToCap}');
                     }
+                    // Bug D: surface activeModifiers that were active at end
+                    // of turn so history is auditable.
+                    final snapModifiers = <GameModifier>[];
+                    final gss = summary.gameStateSnapshot;
+                    if (gss != null) {
+                      final raw = gss['activeModifiers'];
+                      if (raw is List) {
+                        for (final entry in raw) {
+                          if (entry is Map<String, dynamic>) {
+                            snapModifiers.add(GameModifier.fromJson(entry));
+                          } else if (entry is Map) {
+                            snapModifiers.add(GameModifier.fromJson(
+                                Map<String, dynamic>.from(entry)));
+                          }
+                        }
+                      }
+                    }
                     return ExpansionTile(
                       title: Text('Turn ${summary.turnNumber}',
                           style: const TextStyle(fontSize: 15)),
@@ -1055,6 +1076,32 @@ class _ProductionPageState extends State<ProductionPage>
                             children: [
                               for (final line in details)
                                 Text(line, style: dimStyle),
+                              if (snapModifiers.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Active modifiers at end of turn:',
+                                  style: dimStyle.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    for (final m in snapModifiers)
+                                      Chip(
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        label: Text(
+                                          '${m.name}: ${m.effectDescription}',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -2243,8 +2290,13 @@ class _ProductionPageState extends State<ProductionPage>
                     ? () {
                         final updated =
                             List<ShipPurchase>.from(production.shipPurchases);
-                        updated[index] =
-                            purchase.copyWith(quantity: purchase.quantity - 1);
+                        final newQty = purchase.quantity - 1;
+                        final hullHere = _hullCostFor(purchase.type);
+                        final newTotalHp = purchase.totalHpNeeded == null
+                            ? null
+                            : hullHere * newQty;
+                        updated[index] = purchase.copyWith(
+                            quantity: newQty, totalHpNeeded: newTotalHp);
                         widget.onProductionChanged(
                             production.copyWith(shipPurchases: updated));
                       }
@@ -2271,10 +2323,27 @@ class _ProductionPageState extends State<ProductionPage>
                 builder: (context) {
                   final hasStock = _hasCounterStock(purchase.type);
                   final canAfford = _canAffordOneMore(purchase.type);
-                  final enabled = canAfford && hasStock;
-                  final tooltip = !hasStock
-                      ? _counterStockTooltip(purchase.type)
-                      : (!canAfford ? 'Not enough CP for another unit' : '');
+                  // Bug A: enforce shipyard HP capacity at +1 time. When
+                  // enableMultiTurnBuilds is ON the user may intentionally
+                  // over-queue to build across turns, so we don't block.
+                  final hull = _hullCostFor(purchase.type);
+                  final hexId = purchase.shipyardHexId;
+                  final hasCapacity = hexId == null ||
+                      config.enableMultiTurnBuilds ||
+                      _remainingHpForHex(hexId) >= hull;
+                  final enabled = canAfford && hasStock && hasCapacity;
+                  String tooltip;
+                  if (!hasStock) {
+                    tooltip = _counterStockTooltip(purchase.type);
+                  } else if (!canAfford) {
+                    tooltip = 'Not enough CP for another unit';
+                  } else if (!hasCapacity) {
+                    tooltip = 'Shipyard capacity full for this turn '
+                        '(needs $hull HP). Turn on Multi-Turn Builds to queue '
+                        'across turns.';
+                  } else {
+                    tooltip = '';
+                  }
                   final button = IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -2284,8 +2353,15 @@ class _ProductionPageState extends State<ProductionPage>
                         ? () {
                             final updated = List<ShipPurchase>.from(
                                 production.shipPurchases);
+                            final newQty = purchase.quantity + 1;
+                            // Bug F: keep totalHpNeeded in sync with quantity
+                            // when it is being tracked for multi-turn builds.
+                            final newTotalHp = purchase.totalHpNeeded == null
+                                ? null
+                                : hull * newQty;
                             updated[index] = purchase.copyWith(
-                                quantity: purchase.quantity + 1);
+                                quantity: newQty,
+                                totalHpNeeded: newTotalHp);
                             widget.onProductionChanged(production.copyWith(
                                 shipPurchases: updated));
                           }
@@ -2396,6 +2472,37 @@ class _ProductionPageState extends State<ProductionPage>
   // QW-2: Summarize the set of hexes that currently have shipyards so the
   // "Add Ship" dialog can expose a per-hex dropdown and the purchase list can
   // show which hex each purchase is assigned to.
+  /// Bug A: Remaining HP capacity for a given hex, factoring in the
+  /// purchases already assigned to it this turn. Returns 0 for unknown or
+  /// blocked hexes.
+  int _remainingHpForHex(String hexId) {
+    final map = mapState;
+    if (map == null) return 0;
+    for (final hex in map.hexes) {
+      if (hex.coord.id != hexId) continue;
+      final techState = production.techState.withPending(
+        production.pendingTechPurchases,
+      );
+      final cap = production.shipyardCapacityForHex(
+        hex.coord,
+        map,
+        techState,
+        facilitiesMode: config.useFacilitiesCosts,
+      );
+      final used = production.hullPointsSpentInHex(
+        hex.coord,
+        facilitiesMode: config.useFacilitiesCosts,
+      );
+      final remaining = cap - used;
+      return remaining < 0 ? 0 : remaining;
+    }
+    return 0;
+  }
+
+  /// Bug A: Hull size required to add one more of [type] this turn.
+  int _hullCostFor(ShipType type) =>
+      kShipDefinitions[type]?.effectiveHullSize(config.useFacilitiesCosts) ?? 0;
+
   List<_ShipyardHexInfo> _shipyardHexes() {
     final map = mapState;
     if (map == null) return const [];
@@ -2462,7 +2569,7 @@ class _ProductionPageState extends State<ProductionPage>
           for (final info in infos)
             Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: info.isBlocked
                     ? theme.colorScheme.error.withValues(alpha: 0.10)
@@ -2480,7 +2587,7 @@ class _ProductionPageState extends State<ProductionPage>
                     ? '${info.label}: blocked'
                     : '${info.label}: ${info.used}/${info.capacity} HP',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontFeatures: const [FontFeature.tabularFigures()],
                   color: theme.colorScheme.onSurface,
                 ),
@@ -2605,11 +2712,29 @@ class _ProductionPageState extends State<ProductionPage>
                     ),
                   ),
                 for (final entry in buyableShips)
-                  InkWell(
-                    onTap: () => Navigator.of(ctx).pop(
-                      (type: entry.key, hexId: selectedHexId),
-                    ),
-                    child: Padding(
+                  Builder(builder: (_) {
+                    // Bug A: grey out ships whose hull size exceeds the
+                    // remaining HP capacity of the selected shipyard hex.
+                    // Skip the check entirely when multi-turn builds are
+                    // enabled (house rule) or when no hex is selectable.
+                    final hull = entry.value
+                        .effectiveHullSize(facilitiesMode);
+                    final remainingHp = selectedHexId == null
+                        ? 0
+                        : _remainingHpForHex(selectedHexId!);
+                    final overCapacity = selectedHexId != null &&
+                        !config.enableMultiTurnBuilds &&
+                        hull > remainingHp;
+                    final dim = overCapacity
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.35)
+                        : null;
+                    final row = InkWell(
+                      onTap: overCapacity
+                          ? null
+                          : () => Navigator.of(ctx).pop(
+                                (type: entry.key, hexId: selectedHexId),
+                              ),
+                      child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
                       child: Row(
@@ -2621,21 +2746,24 @@ class _ProductionPageState extends State<ProductionPage>
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
+                                color: dim ?? theme.colorScheme.primary,
                               ),
                             ),
                           ),
                           Expanded(
                             child: Text(
-                              entry.value.name,
-                              style: const TextStyle(fontSize: 15),
+                              overCapacity
+                                  ? '${entry.value.name} (needs $hull HP — '
+                                      '$remainingHp HP left)'
+                                  : entry.value.name,
+                              style: TextStyle(fontSize: 15, color: dim),
                             ),
                           ),
                           Text(
                             '${entry.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode)}CP',
                             style: TextStyle(
                               fontSize: 14,
-                              color: theme.colorScheme.onSurface
+                              color: dim ?? theme.colorScheme.onSurface
                                   .withValues(alpha: 0.6),
                             ),
                           ),
@@ -2655,7 +2783,9 @@ class _ProductionPageState extends State<ProductionPage>
                         ],
                       ),
                     ),
-                  ),
+                    );
+                    return row;
+                  }),
               ],
             );
           },
@@ -2663,11 +2793,18 @@ class _ProductionPageState extends State<ProductionPage>
       },
     ).then((result) {
       if (result != null) {
+        // Bug A + Bug F: when multi-turn builds are enabled, record the
+        // totalHpNeeded so prepareForNextTurn can accumulate progress on
+        // ships that can't complete this turn.
+        final def = kShipDefinitions[result.type];
+        final hull = def?.effectiveHullSize(config.useFacilitiesCosts) ?? 0;
         final updated =
             List<ShipPurchase>.from(production.shipPurchases)
               ..add(ShipPurchase(
                 type: result.type,
                 shipyardHexId: result.hexId,
+                totalHpNeeded:
+                    config.enableMultiTurnBuilds ? hull : null,
               ));
         widget.onProductionChanged(
             production.copyWith(shipPurchases: updated));
@@ -3379,7 +3516,11 @@ class _ProductionPageState extends State<ProductionPage>
 
   void _drawCard(CardEntry entry) {
     final binding = cardModifiersFor(entry.number);
-    final mods = binding?.modifiers ?? const <GameModifier>[];
+    final rawMods = binding?.modifiers ?? const <GameModifier>[];
+    // Bug C: stamp the card's identity on each modifier snapshot so the
+    // Play-as-event path can de-dup against the activeModifiers ledger.
+    final sourceId = '${entry.type}:${entry.number}';
+    final mods = [for (final m in rawMods) m.withSourceCardId(sourceId)];
     final drawn = DrawnCard(
       cardNumber: entry.number,
       drawnOnTurn: widget.turnNumber,

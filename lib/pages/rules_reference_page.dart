@@ -621,7 +621,11 @@ class RulesReferencePageState extends State<RulesReferencePage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () {
-              widget.onApplyCardModifiers!(card.name, binding.modifiers);
+              final sourceId = '${card.type}:${card.number}';
+              final stamped = [
+                for (final m in binding.modifiers) m.withSourceCardId(sourceId),
+              ];
+              widget.onApplyCardModifiers!(card.name, stamped);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Applied: ${card.name}'),

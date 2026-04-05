@@ -509,11 +509,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _onApplyCardModifiers(
       String cardName, List<GameModifier> modifiers) {
     if (modifiers.isEmpty) return;
+    final deduped = _dedupCardModifiers(modifiers);
+    if (deduped.isEmpty) {
+      _showAlreadyAppliedSnack(cardName);
+      return;
+    }
     _updateGameState(
       _gameState.copyWith(
-        activeModifiers: [..._gameState.activeModifiers, ...modifiers],
+        activeModifiers: [..._gameState.activeModifiers, ...deduped],
       ),
       'Apply card: $cardName',
+    );
+  }
+
+  /// Bug C: drop any modifiers whose [GameModifier.sourceCardId] is already
+  /// present in the active ledger. Returns the survivors.
+  List<GameModifier> _dedupCardModifiers(List<GameModifier> incoming) {
+    final existingIds = <String>{
+      for (final m in _gameState.activeModifiers)
+        if (m.sourceCardId != null) m.sourceCardId!,
+    };
+    final out = <GameModifier>[];
+    for (final m in incoming) {
+      final id = m.sourceCardId;
+      if (id != null && existingIds.contains(id)) continue;
+      out.add(m);
+      if (id != null) existingIds.add(id);
+    }
+    return out;
+  }
+
+  void _showAlreadyAppliedSnack(String cardName) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text('$cardName already applied'),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -536,9 +568,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   /// is updated separately by [_onDrawnHandChanged].
   void _onPlayCardAsEvent(String cardName, List<GameModifier> modifiers) {
     if (modifiers.isEmpty) return;
+    final deduped = _dedupCardModifiers(modifiers);
+    if (deduped.isEmpty) {
+      _showAlreadyAppliedSnack(cardName);
+      return;
+    }
     _updateGameState(
       _gameState.copyWith(
-        activeModifiers: [..._gameState.activeModifiers, ...modifiers],
+        activeModifiers: [..._gameState.activeModifiers, ...deduped],
       ),
       'Play card: $cardName',
     );
@@ -873,10 +910,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return;
     }
 
-    final prod = _gameState.production;
+    var prod = _gameState.production;
     final config = _gameState.config;
     final counters = _gameState.shipCounters;
     final fm = config.useFacilitiesCosts;
+
+    // Bug F: advance multi-turn build progress before snapshot + materialize.
+    // Each assigned shipyard hex contributes its per-turn HP budget toward
+    // the purchases assigned to it. Partial progress persists across turns.
+    prod = prod.applyBuildProgress(
+      config,
+      _gameState.mapState,
+      facilitiesMode: fm,
+    );
 
     // Compute techs gained
     final techsGained = <String>[];

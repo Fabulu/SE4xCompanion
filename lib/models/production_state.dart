@@ -833,6 +833,62 @@ class ProductionState {
   }
 
   // ---------------------------------------------------------------------------
+  // Multi-turn build progress (rule 9.6 house-rule — Bug F)
+  // ---------------------------------------------------------------------------
+
+  /// For every purchase with a recorded [ShipPurchase.totalHpNeeded] and an
+  /// assigned shipyard hex, apply this turn's HP contribution from that hex.
+  /// Each purchase is credited up to the hex's remaining capacity, capped at
+  /// the HP it still needs to complete.
+  ///
+  /// Returns a new [ProductionState] with updated [ShipPurchase.buildProgressHp]
+  /// values. No-op when [GameConfig.enableMultiTurnBuilds] is false.
+  ProductionState applyBuildProgress(
+    GameConfig config,
+    GameMapState map, {
+    bool facilitiesMode = false,
+  }) {
+    if (!config.enableMultiTurnBuilds) return this;
+    // Track remaining HP capacity per shipyard hex for this turn.
+    final capBudget = <String, int>{};
+    for (final hex in map.hexes) {
+      if (hex.shipyardCount <= 0) continue;
+      final cap = shipyardCapacityForHex(
+        hex.coord,
+        map,
+        techState,
+        facilitiesMode: facilitiesMode,
+      );
+      if (cap > 0) capBudget[hex.coord.id] = cap;
+    }
+    final updated = <ShipPurchase>[];
+    for (final p in shipPurchases) {
+      final hexId = p.shipyardHexId;
+      if (hexId == null || p.totalHpNeeded == null) {
+        updated.add(p);
+        continue;
+      }
+      final remainingNeed = (p.totalHpNeeded! - p.buildProgressHp)
+          .clamp(0, 99999);
+      if (remainingNeed <= 0) {
+        updated.add(p);
+        continue;
+      }
+      final budget = capBudget[hexId] ?? 0;
+      if (budget <= 0) {
+        updated.add(p);
+        continue;
+      }
+      final contribution = budget < remainingNeed ? budget : remainingNeed;
+      capBudget[hexId] = budget - contribution;
+      updated.add(p.copyWith(
+        buildProgressHp: p.buildProgressHp + contribution,
+      ));
+    }
+    return copyWith(shipPurchases: updated);
+  }
+
+  // ---------------------------------------------------------------------------
   // Ship materialization (link ShipPurchase -> ShipCounter inventory)
   // ---------------------------------------------------------------------------
 
