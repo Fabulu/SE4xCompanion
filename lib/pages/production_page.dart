@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/card_manifest.dart';
 import '../data/card_modifiers.dart';
@@ -447,6 +448,7 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _buyTech(TechId id) {
+    if (config.strongHaptics) HapticFeedback.selectionClick();
     final newLevel = _effectiveLevel(id) + 1;
     final pending = Map<TechId, int>.from(production.pendingTechPurchases);
     pending[id] = newLevel;
@@ -460,6 +462,7 @@ class _ProductionPageState extends State<ProductionPage>
   /// (rule 6.8.1). No CP/RP is spent. Bumps the committed techState level by 1;
   /// does not interact with pending purchases.
   void _applyWreckUpgrade(TechId id) {
+    if (config.strongHaptics) HapticFeedback.selectionClick();
     final fm = config.useFacilitiesCosts;
     final committedLevel = production.techState.getLevel(id, facilitiesMode: fm);
     final maxLevel = _maxLevel(id);
@@ -2566,9 +2569,20 @@ class _ProductionPageState extends State<ProductionPage>
                           }
                         : null,
                   );
-                  return tooltip.isEmpty
-                      ? button
-                      : Tooltip(message: tooltip, child: button);
+                  if (tooltip.isEmpty) return button;
+                  // Fire a light haptic when the user taps a blocked +1
+                  // so tremor-prone users feel that the app registered
+                  // their tap but the action is unavailable.
+                  return Tooltip(
+                    message: tooltip,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: enabled
+                          ? null
+                          : () => HapticFeedback.selectionClick(),
+                      child: button,
+                    ),
+                  );
                 },
               ),
             ),
@@ -3468,14 +3482,17 @@ class _ProductionPageState extends State<ProductionPage>
       child: SizedBox(
         width: double.infinity,
         height: 48,
-        child: OutlinedButton(
-          onPressed: () => _confirmEndTurn(context),
-          style: OutlinedButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
+        child: Semantics(
+          label: 'End turn, finalize turn ${widget.turnNumber}',
+          child: OutlinedButton(
+            onPressed: () => _confirmEndTurn(context),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
             ),
+            child: const Text('END TURN', style: TextStyle(fontSize: 16)),
           ),
-          child: const Text('END TURN', style: TextStyle(fontSize: 16)),
         ),
       ),
     );
@@ -3494,13 +3511,16 @@ class _ProductionPageState extends State<ProductionPage>
         SectionHeader(
           title: 'CARDS',
           subtitle: hand.isEmpty ? 'empty hand' : '${hand.length} in hand',
-          trailing: TextButton.icon(
-            onPressed: () => _showDrawCardDialog(context),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Draw'),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              visualDensity: VisualDensity.compact,
+          trailing: Semantics(
+            label: 'Draw card',
+            child: TextButton.icon(
+              onPressed: () => _showDrawCardDialog(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Draw'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+              ),
             ),
           ),
         ),
@@ -3936,6 +3956,7 @@ class _ProductionPageState extends State<ProductionPage>
       ),
     ).then((confirmed) {
       if (confirmed == true) {
+        if (config.strongHaptics) HapticFeedback.mediumImpact();
         widget.onEndTurn();
       }
     });

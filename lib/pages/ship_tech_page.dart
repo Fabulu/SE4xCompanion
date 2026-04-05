@@ -563,6 +563,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
           otherTechs: otherDisplays,
           experience: counter?.experience.index ?? 0,
           showExperience: widget.showExperience && template.hasExperience,
+          strongHaptics: widget.config.strongHaptics,
           onBuild: () => _buildCounter(
             template.type,
             template.counterNumber,

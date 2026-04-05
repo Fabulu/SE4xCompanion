@@ -71,6 +71,10 @@ class GameConfig {
   final List<TechId> scenarioBlockedTechs;
   final List<ShipType> scenarioBlockedShips;
 
+  /// Accessibility: when true, the app fires haptic feedback on major actions
+  /// (end turn, buy tech, apply card, scrap counter, etc.). Default on.
+  final bool strongHaptics;
+
   const GameConfig({
     this.ownership = const ExpansionOwnership(),
     this.enableFacilities = false,
@@ -93,6 +97,7 @@ class GameConfig {
     this.colonyGrowthBonus = 0,
     this.scenarioBlockedTechs = const [],
     this.scenarioBlockedShips = const [],
+    this.strongHaptics = true,
   });
 
   /// Whether to use the facilities cost table instead of the base cost table.
@@ -147,6 +152,7 @@ class GameConfig {
     int? colonyGrowthBonus,
     List<TechId>? scenarioBlockedTechs,
     List<ShipType>? scenarioBlockedShips,
+    bool? strongHaptics,
   }) => GameConfig(
     ownership: ownership ?? this.ownership,
     enableFacilities: enableFacilities ?? this.enableFacilities,
@@ -179,6 +185,7 @@ class GameConfig {
     colonyGrowthBonus: colonyGrowthBonus ?? this.colonyGrowthBonus,
     scenarioBlockedTechs: scenarioBlockedTechs ?? this.scenarioBlockedTechs,
     scenarioBlockedShips: scenarioBlockedShips ?? this.scenarioBlockedShips,
+    strongHaptics: strongHaptics ?? this.strongHaptics,
   );
 
   Map<String, dynamic> toJson() => {
@@ -203,6 +210,7 @@ class GameConfig {
     'colonyGrowthBonus': colonyGrowthBonus,
     'scenarioBlockedTechs': scenarioBlockedTechs.map((t) => t.name).toList(),
     'scenarioBlockedShips': scenarioBlockedShips.map((s) => s.name).toList(),
+    'strongHaptics': strongHaptics,
   };
 
   factory GameConfig.fromJson(Map<String, dynamic> json) => GameConfig(
@@ -254,5 +262,6 @@ class GameConfig {
             .whereType<ShipType>()
             .toList() ??
         const [],
+    strongHaptics: json['strongHaptics'] as bool? ?? true,
   );
 }

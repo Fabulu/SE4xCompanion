@@ -537,12 +537,15 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
 
   // ── Helpers ──
 
-  Widget _sectionLabel(ThemeData theme, String text) => Text(
-    text,
-    style: TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.bold,
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+  Widget _sectionLabel(ThemeData theme, String text) => Semantics(
+    header: true,
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.bold,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+      ),
     ),
   );
 

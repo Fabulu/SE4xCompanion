@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'tech_tracker.dart';
 
@@ -59,6 +60,7 @@ class CounterRow extends StatelessWidget {
   final VoidCallback? onDestroy;
   final VoidCallback? onLocate;
   final int? upgradeCost;
+  final bool strongHaptics;
 
   const CounterRow({
     super.key,
@@ -81,6 +83,7 @@ class CounterRow extends StatelessWidget {
     this.onDestroy,
     this.onLocate,
     this.upgradeCost,
+    this.strongHaptics = true,
   });
 
   static const _expLabels = ['', 'G', 'S', 'V', 'E', 'L'];
@@ -94,6 +97,11 @@ class CounterRow extends StatelessWidget {
       return _buildUnbuiltRow(theme, dimColor);
     }
     return _buildBuiltRow(theme, dimColor);
+  }
+
+  void _tapDestroy() {
+    if (strongHaptics) HapticFeedback.heavyImpact();
+    onDestroy?.call();
   }
 
   Widget _buildUnbuiltRow(ThemeData theme, Color dimColor) {
@@ -196,16 +204,20 @@ class CounterRow extends StatelessWidget {
                 SizedBox(
                   width: 36,
                   height: 36,
-                  child: IconButton(
-                    onPressed: onDestroy,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    iconSize: 18,
-                    icon: Icon(
-                      Icons.close,
-                      color: theme.colorScheme.error.withValues(alpha: 0.5),
+                  child: Semantics(
+                    button: true,
+                    label: 'Scrap $label counter',
+                    child: IconButton(
+                      onPressed: _tapDestroy,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 18,
+                      icon: Icon(
+                        Icons.close,
+                        color: theme.colorScheme.error.withValues(alpha: 0.5),
+                      ),
+                      tooltip: 'Destroy / Scrap',
                     ),
-                    tooltip: 'Destroy / Scrap',
                   ),
                 ),
               if (onLocate != null)

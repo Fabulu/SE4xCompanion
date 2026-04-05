@@ -65,6 +65,36 @@ class SettingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
+        // ── Accessibility ──
+        _SectionTitle(title: 'ACCESSIBILITY'),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text(
+            'Strong haptic feedback',
+            style: TextStyle(fontSize: 16),
+          ),
+          subtitle: const Text(
+            'Vibrate on end turn, buy tech, scrap, and other major actions.',
+            style: TextStyle(fontSize: 13),
+          ),
+          value: config.strongHaptics,
+          onChanged: (v) {
+            onConfigChanged(config.copyWith(strongHaptics: v));
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text(
+            "This app uses your device's text size and motion settings.",
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+        const Divider(height: 24),
+
         // ── Game Setup ──
         _SectionTitle(title: 'GAME SETUP'),
         const SizedBox(height: 8),
@@ -680,6 +710,7 @@ class SettingsPage extends StatelessWidget {
       ),
     ).then((confirmed) {
       if (confirmed == true) {
+        if (config.strongHaptics) HapticFeedback.mediumImpact();
         onReopenLastTurn?.call();
       }
     });
@@ -934,7 +965,12 @@ class _SavedGameTile extends StatelessWidget {
     final theme = Theme.of(context);
     final updatedStr = _formatDate(game.updatedAt);
 
-    return Container(
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: '${isActive ? "Active saved game. " : "Saved game. "}'
+          '${game.name}, turn ${game.state.turnNumber}, updated $updatedStr',
+      child: Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         border: Border.all(
@@ -1015,6 +1051,7 @@ class _SavedGameTile extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -1118,9 +1155,12 @@ class _TurnSummaryTile extends StatelessWidget {
     }
 
     return ExpansionTile(
-      title: Text(
-        'Turn ${summary.turnNumber}',
-        style: const TextStyle(fontSize: 16),
+      title: Semantics(
+        label: 'Turn ${summary.turnNumber} log',
+        child: Text(
+          'Turn ${summary.turnNumber}',
+          style: const TextStyle(fontSize: 16),
+        ),
       ),
       children: [
         Padding(

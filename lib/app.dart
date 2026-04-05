@@ -48,7 +48,7 @@ class Se4XApp extends StatelessWidget {
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Color(0xFF252525),
           selectedItemColor: Color(0xFF8AB4F8),
-          unselectedItemColor: Color(0xFF777777),
+          unselectedItemColor: Color(0xFFB0B0B0),
           selectedLabelStyle: TextStyle(fontSize: 13),
           unselectedLabelStyle: TextStyle(fontSize: 13),
           type: BottomNavigationBarType.fixed,
