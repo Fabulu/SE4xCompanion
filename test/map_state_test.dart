@@ -7,7 +7,7 @@ void main() {
       final hexes = GameMapState.defaultHexesFor(MapLayoutPreset.standard4p);
 
       expect(hexes, hasLength(144));
-      const expectedStarts = [3, 3, 2, 2, 1, 1, 0, 0, -1, -1, -2, -2];
+      const expectedStarts = [3, 3, 3, 3, 2, 2, 1, 1, 0, 0, -1, -1];
       for (var rowIndex = 0; rowIndex < 12; rowIndex++) {
         final r = rowIndex - 6;
         final row = _rowQs(hexes, r);

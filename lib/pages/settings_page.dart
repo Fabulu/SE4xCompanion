@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/empire_advantages.dart';
 import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/special_abilities.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
 import '../models/turn_summary.dart';
+import '../widgets/empire_advantage_picker.dart';
 
 class SettingsPage extends StatelessWidget {
   final GameConfig config;
@@ -798,9 +798,6 @@ class _EmpireAdvantageTile extends StatelessWidget {
 
   void _showPicker(BuildContext context) {
     final replicatorsOwned = config.ownership.replicators;
-    final filtered = kEmpireAdvantages
-        .where((ea) => !ea.isReplicator || replicatorsOwned)
-        .toList();
 
     showModalBottomSheet(
       context: context,
@@ -832,59 +829,21 @@ class _EmpireAdvantageTile extends StatelessWidget {
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: filtered.length + 1,
-                    itemBuilder: (_, index) {
-                      if (index == 0) {
-                        return ListTile(
-                          leading: const Icon(Icons.clear),
-                          title: const Text('None'),
-                          selected:
-                              config.selectedEmpireAdvantage == null,
-                          onTap: () {
-                            onConfigChanged(config.copyWith(
-                                clearEmpireAdvantage: true));
-                            Navigator.of(ctx).pop();
-                          },
-                        );
+                  child: EmpireAdvantagePicker(
+                    replicatorsOwned: replicatorsOwned,
+                    selectedCardNumber: config.selectedEmpireAdvantage,
+                    descriptionTruncation: 80,
+                    style: EmpireAdvantagePickerStyle.avatar,
+                    scrollController: scrollController,
+                    onChanged: (value) {
+                      if (value == null) {
+                        onConfigChanged(
+                            config.copyWith(clearEmpireAdvantage: true));
+                      } else {
+                        onConfigChanged(config.copyWith(
+                            selectedEmpireAdvantage: value));
                       }
-                      final ea = filtered[index - 1];
-                      final desc = ea.description.length > 80
-                          ? '${ea.description.substring(0, 80)}...'
-                          : ea.description;
-                      return ListTile(
-                        leading: CircleAvatar(
-                          radius: 16,
-                          backgroundColor: ea.isReplicator
-                              ? theme.colorScheme.error.withValues(alpha: 0.15)
-                              : theme.colorScheme.primary
-                                  .withValues(alpha: 0.15),
-                          child: Text(
-                            '${ea.cardNumber}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: ea.isReplicator
-                                  ? theme.colorScheme.error
-                                  : theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                        title: Text(ea.name,
-                            style: const TextStyle(fontSize: 15)),
-                        subtitle: Text(desc,
-                            style: const TextStyle(fontSize: 12),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                        selected: config.selectedEmpireAdvantage ==
-                            ea.cardNumber,
-                        onTap: () {
-                          onConfigChanged(config.copyWith(
-                              selectedEmpireAdvantage: ea.cardNumber));
-                          Navigator.of(ctx).pop();
-                        },
-                      );
+                      Navigator.of(ctx).pop();
                     },
                   ),
                 ),

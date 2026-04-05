@@ -7,6 +7,7 @@ import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/game_config.dart';
+import 'empire_advantage_picker.dart';
 
 class NewGameResult {
   final String gameName;
@@ -321,19 +322,12 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
         // Empire Advantage picker
         _sectionLabel(theme, 'Empire Advantage'),
         const SizedBox(height: 4),
-        _radioTile(theme, 'None', _selectedEA == null,
-            () => setState(() => _selectedEA = null)),
-        for (final ea in kEmpireAdvantages.where((ea) =>
-            (!ea.isReplicator || _replicators)))
-          _radioTile(
-            theme,
-            '#${ea.cardNumber} ${ea.name}',
-            _selectedEA == ea.cardNumber,
-            () => setState(() => _selectedEA = ea.cardNumber),
-            subtitle: ea.description.length > 60
-                ? '${ea.description.substring(0, 60)}...'
-                : ea.description,
-          ),
+        EmpireAdvantagePicker(
+          replicatorsOwned: _replicators,
+          selectedCardNumber: _selectedEA,
+          descriptionTruncation: 60,
+          onChanged: (v) => setState(() => _selectedEA = v),
+        ),
       ],
     );
   }

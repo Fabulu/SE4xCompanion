@@ -43,30 +43,15 @@ class ShipCounter {
     int number,
     TechState tech, {
     bool facilitiesMode = false,
-    Map<TechId, int> techLevelBonuses = const {},
-    Map<TechId, int> techStartLevels = const {},
     bool advancedMunitions = false,
   }) {
-    // Apply EA tech bonuses only for levels above the starting level.
-    int applyBonus(TechId id, int level) {
-      final bonus = techLevelBonuses[id];
-      if (bonus == null || bonus == 0) return level;
-      final start = techStartLevels[id] ?? 0;
-      if (level <= start) return level;
-      return level + bonus;
-    }
-
     final def = kShipDefinitions[type];
     final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
 
-    int attLevel = applyBonus(TechId.attack,
-        tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode));
-    int defLevel = applyBonus(TechId.defense,
-        tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode));
-    final tacLevel = applyBonus(TechId.tactics,
-        tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode));
-    final moveLevel = applyBonus(TechId.move,
-        tech.getLevel(TechId.move, facilitiesMode: facilitiesMode));
+    int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
+    int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
+    final tacLevel = tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode);
+    final moveLevel = tech.getLevel(TechId.move, facilitiesMode: facilitiesMode);
 
     // Hull size caps on attack/defense (raiders are exempt from the cap)
     // Advanced Munitions (special ability #11): attack cap is hull + 1
@@ -95,31 +80,17 @@ class ShipCounter {
   /// the given tech state (i.e. it can benefit from an upgrade).
   bool needsUpgrade(TechState tech, {
     bool facilitiesMode = false,
-    Map<TechId, int> techLevelBonuses = const {},
-    Map<TechId, int> techStartLevels = const {},
     bool advancedMunitions = false,
   }) {
     if (!isBuilt) return false;
 
-    int applyBonus(TechId id, int level) {
-      final bonus = techLevelBonuses[id];
-      if (bonus == null || bonus == 0) return level;
-      final start = techStartLevels[id] ?? 0;
-      if (level <= start) return level;
-      return level + bonus;
-    }
-
     final def = kShipDefinitions[type];
     final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
 
-    int attLevel = applyBonus(TechId.attack,
-        tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode));
-    int defLevel = applyBonus(TechId.defense,
-        tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode));
-    final tacLevel = applyBonus(TechId.tactics,
-        tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode));
-    final moveLevel = applyBonus(TechId.move,
-        tech.getLevel(TechId.move, facilitiesMode: facilitiesMode));
+    int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
+    int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
+    final tacLevel = tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode);
+    final moveLevel = tech.getLevel(TechId.move, facilitiesMode: facilitiesMode);
 
     if (type != ShipType.raider) {
       final attackCap = advancedMunitions ? hull + 1 : hull;
@@ -139,31 +110,17 @@ class ShipCounter {
   /// Returns null if already up to date.
   ShipCounter? upgradeToTech(TechState tech, {
     bool facilitiesMode = false,
-    Map<TechId, int> techLevelBonuses = const {},
-    Map<TechId, int> techStartLevels = const {},
     bool advancedMunitions = false,
   }) {
     if (!isBuilt) return null;
 
-    int applyBonus(TechId id, int level) {
-      final bonus = techLevelBonuses[id];
-      if (bonus == null || bonus == 0) return level;
-      final start = techStartLevels[id] ?? 0;
-      if (level <= start) return level;
-      return level + bonus;
-    }
-
     final def = kShipDefinitions[type];
     final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
 
-    int attLevel = applyBonus(TechId.attack,
-        tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode));
-    int defLevel = applyBonus(TechId.defense,
-        tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode));
-    final tacLevel = applyBonus(TechId.tactics,
-        tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode));
-    final moveLevel = applyBonus(TechId.move,
-        tech.getLevel(TechId.move, facilitiesMode: facilitiesMode));
+    int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
+    int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
+    final tacLevel = tech.getLevel(TechId.tactics, facilitiesMode: facilitiesMode);
+    final moveLevel = tech.getLevel(TechId.move, facilitiesMode: facilitiesMode);
 
     if (type != ShipType.raider) {
       final attackCap = advancedMunitions ? hull + 1 : hull;

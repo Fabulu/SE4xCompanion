@@ -626,6 +626,8 @@ class GameMapState {
       MapLayoutPreset.standard4p => _hexesFromRows(const [
           _RowSpec(start: 3, length: 12),
           _RowSpec(start: 3, length: 12),
+          _RowSpec(start: 3, length: 12),
+          _RowSpec(start: 3, length: 12),
           _RowSpec(start: 2, length: 12),
           _RowSpec(start: 2, length: 12),
           _RowSpec(start: 1, length: 12),
@@ -634,8 +636,6 @@ class GameMapState {
           _RowSpec(start: 0, length: 12),
           _RowSpec(start: -1, length: 12),
           _RowSpec(start: -1, length: 12),
-          _RowSpec(start: -2, length: 12),
-          _RowSpec(start: -2, length: 12),
         ]),
       MapLayoutPreset.special5p => _hexesFromRows(const [
           _RowSpec(start: -1, length: 3),

@@ -926,7 +926,7 @@ void main() {
       expect(ps.maintenanceTotal(counters, insectoidsConfig), 1);
     });
 
-    test('Robot Race (50% maintenance) halves total and rounds UP: 5 maintenance -> 3', () {
+    test('Robot Race (50% maintenance) halves total and rounds DOWN: 5 maintenance -> 2', () {
       // Need 5 hull points of built non-exempt ships
       final counters = [
         const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
@@ -935,11 +935,11 @@ void main() {
       const ps = ProductionState();
       // Base: 2 + 3 = 5
       expect(ps.maintenanceTotal(counters, baseConfig), 5);
-      // Robot Race: ceil(5 * 0.50) = ceil(2.5) = 3
-      expect(ps.maintenanceTotal(counters, robotRaceConfig), 3);
+      // Robot Race: floor(5 * 0.50) = floor(2.5) = 2
+      expect(ps.maintenanceTotal(counters, robotRaceConfig), 2);
     });
 
-    test('Robot Race with odd maintenance: 7 maintenance -> 4', () {
+    test('Robot Race with odd maintenance: 7 maintenance -> 3', () {
       final counters = [
         const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true), // hull 1
         const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
@@ -948,8 +948,8 @@ void main() {
       const ps = ProductionState();
       // Base: 1 + 2 + 4 = 7
       expect(ps.maintenanceTotal(counters, baseConfig), 7);
-      // Robot Race: ceil(7 * 0.50) = ceil(3.5) = 4
-      expect(ps.maintenanceTotal(counters, robotRaceConfig), 4);
+      // Robot Race: floor(7 * 0.50) = floor(3.5) = 3
+      expect(ps.maintenanceTotal(counters, robotRaceConfig), 3);
     });
 
     test('Gifted Scientists tech cost multiplier: Attack 1 normally 20 CP, with 0.67 multiplier -> 14 CP', () {

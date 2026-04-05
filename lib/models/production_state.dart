@@ -292,8 +292,10 @@ class ProductionState {
     if (result < 0) result = 0;
 
     // Apply EA global maintenance percent.
+    // Robot Race (#190) is currently the only EA using this path and its rule
+    // ("divide in half, and round down") requires floor rounding.
     if (ea != null && ea.maintenancePercent != 100) {
-      result = (result * ea.maintenancePercent / 100).ceil();
+      result = (result * ea.maintenancePercent / 100).floor();
     }
 
     // Apply global modifier maintenance percent (shipType null).
@@ -399,14 +401,7 @@ class ProductionState {
     final mods = config.shipCostModifiers;
     final isAlt = config.enableAlternateEmpire;
     final ea = config.empireAdvantage;
-    final cpPerUnit = ea?.cpPerUnitBuilt ?? 0;
     final globalBuildCostModifier = ea?.globalBuildCostModifier ?? 0;
-
-    // Ship types excluded from cpPerUnitBuilt rebate.
-    const noRebate = {
-      ShipType.colonyShip, ShipType.shipyard, ShipType.base,
-      ShipType.starbase, ShipType.decoy,
-    };
 
     // Collect costMod modifiers by ship type.
     final costMods = <ShipType, int>{};
@@ -424,7 +419,6 @@ class ProductionState {
       if (mods.containsKey(p.type)) unitCost += mods[p.type]!;
       if (costMods.containsKey(p.type)) unitCost += costMods[p.type]!;
       unitCost += globalBuildCostModifier;
-      if (cpPerUnit > 0 && !noRebate.contains(p.type)) unitCost -= cpPerUnit;
       if (shipSpecialAbilities[p.type] == 12) unitCost -= 2;
       // Scenario ship cost multiplier (e.g., 2v1 allied: 1.5x)
       if (config.shipCostMultiplier != 1.0) {

@@ -7,12 +7,21 @@
 import 'tech_costs.dart';
 import '../data/ship_definitions.dart';
 
+/// How fully the app automates an Empire Advantage's rule effects.
+///
+/// - [implemented]: all mechanical effects are enforced in code.
+/// - [partial]: some effects are enforced; others are documented in the
+///   [EmpireAdvantage.implementationNote] as unmodelled.
+/// - [referenceOnly]: no mechanical enforcement; card text is surfaced in
+///   the rules reference only.
+enum EaSupportStatus { implemented, partial, referenceOnly }
+
 class EmpireAdvantage {
   final int cardNumber;
   final String name;
   final String description;
   final String revealCondition;
-  final String supportStatus;
+  final EaSupportStatus supportStatus;
   final String? implementationNote;
   final int hullSizeModifier;
   final int maintenancePercent;
@@ -20,12 +29,9 @@ class EmpireAdvantage {
   final Map<ShipType, int> costModifiers;
   final int globalBuildCostModifier;
   final List<TechId> blockedTechs;
-  final Map<TechId, int> maxTechLevels;
-  final Map<TechId, int> techLevelBonuses;
   final int colonyShipCostModifier;
   final double techCostMultiplier;
   final bool roundTechCostsUp;
-  final int cpPerUnitBuilt;
   final bool isReplicator;
 
   const EmpireAdvantage({
@@ -33,7 +39,7 @@ class EmpireAdvantage {
     required this.name,
     required this.description,
     required this.revealCondition,
-    this.supportStatus = 'referenceOnly',
+    this.supportStatus = EaSupportStatus.referenceOnly,
     this.implementationNote,
     this.hullSizeModifier = 0,
     this.maintenancePercent = 100,
@@ -41,12 +47,9 @@ class EmpireAdvantage {
     this.costModifiers = const {},
     this.globalBuildCostModifier = 0,
     this.blockedTechs = const [],
-    this.maxTechLevels = const {},
-    this.techLevelBonuses = const {},
     this.colonyShipCostModifier = 0,
     this.techCostMultiplier = 1.0,
     this.roundTechCostsUp = false,
-    this.cpPerUnitBuilt = 0,
     this.isReplicator = false,
   });
 }
@@ -79,9 +82,9 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''The Hull Size of all units except Ground Units and Missiles is increased by one. This affects construction capacity, damage to destroy, mounted technology, maintenance, boarding parties, and similar Hull Size rules. Giant Race may not research Fighters or gain them by other means.''',
     revealCondition: 'Reveal when first entering any combat, including Aliens.',
-    supportStatus: 'implemented',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
-        'Hull size changes and the fighter restriction are enforced. Other Hull-Size-driven side effects flow through the existing ship model.',
+        'Hull-size modifier currently only affects maintenance. Shipyard capacity, damage-to-destroy thresholds, tech hull limits, and boarding parties do NOT yet propagate the +1 hull size. The Fighters research block IS enforced.',
     hullSizeModifier: 1,
     blockedTechs: [TechId.fighters],
   ),
@@ -127,7 +130,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This race starts with Military Academy level 1 and rolls two dice, taking the best result, when checking whether a ship gains Experience. Other empires may never gain Military Academy technology from this race.''',
     revealCondition: 'Reveal when rolling to see if a ship gains Experience.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The starting Military Academy level is applied. The altered experience-roll procedure is not automated.',
     startingTechOverrides: {TechId.militaryAcad: 1},
@@ -138,7 +141,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This race gets a 33% discount on all technology research, rounded up and applied before other discounts. However, every unit it builds costs 1 CP more.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'implemented',
+    supportStatus: EaSupportStatus.implemented,
     implementationNote:
         'Tech discounts and the +1 CP build surcharge are applied in the production ledger.',
     techCostMultiplier: 0.67,
@@ -151,7 +154,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This race starts with Move 2 and Fast 1 technologies. In addition, each full-strength colony may produce and retrofit ships as if it had one Shipyard present, which may be combined with real Shipyards.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The starting Movement level is applied. Colony-as-Shipyard capacity is not automated.',
     startingTechOverrides: {TechId.move: 2},
@@ -162,9 +165,9 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''The Hull Size of all units except Ground Units and Missiles is decreased by one. This affects construction capacity, damage to destroy, technology limits, maintenance, boarding parties, and related Hull Size rules. Insectoids may not research Military Academies or Fighters.''',
     revealCondition: 'Reveal when first entering any combat, including Aliens.',
-    supportStatus: 'implemented',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
-        'Hull size changes and blocked techs are enforced. Other Hull-Size-driven side effects flow through the existing ship model.',
+        'Hull-size modifier currently only affects maintenance. Shipyard capacity, damage-to-destroy thresholds, tech hull limits, and boarding parties do NOT yet propagate the -1 hull size. Hull-0 clauses (no maintenance for Hull 0, no Atk/Def tech, free upgrades) are NOT modelled. The blocked-tech list IS enforced.',
     hullSizeModifier: -1,
     blockedTechs: [TechId.militaryAcad, TechId.fighters],
   ),
@@ -174,7 +177,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''Once per round of combat, this race may ignore one point of damage on one of its ships. Colony Ships cost 2 CP more. Immortals may not research Boarding or gain it by any means.''',
     revealCondition: 'Reveal when they first choose to ignore 1 hit in combat.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The Colony Ship surcharge and Boarding restriction are enforced. Combat damage negation is not automated.',
     colonyShipCostModifier: 2,
@@ -202,7 +205,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
         '''This race starts with Ground Combat 2. All of its boarding attacks get +1 Attack Strength, all boarding attacks against it get -1 Attack Strength, and all of its Ground Units, including Militia, get +1 Attack and Defense Strength.''',
     revealCondition:
         'Reveal when engaging in boarding attack or ground invasion for the first time.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The starting Ground Combat level is applied. Boarding and ground-combat bonuses are not automated.',
     startingTechOverrides: {TechId.ground: 2},
@@ -221,7 +224,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This empire gets one extra CP for each colony connected by an MS Pipeline.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'Pipeline income is ledger-based, so the app applies the Traders bonus as a multiplier to tracked pipeline income.',
   ),
@@ -239,7 +242,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This empire''s Scouts, Destroyers, and Fighters get +1 Attack Strength when firing on a unit with Hull Size 2 or greater. Its Destroyers cost 1 less to build.''',
     revealCondition: 'Reveal when they first use their ability.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The Destroyer cost reduction is applied. Combat bonuses are not automated.',
     costModifiers: {ShipType.dd: -1},
@@ -259,7 +262,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
         '''This race starts with Movement 7 technology. Opponents get +2 Attack Strength when firing at its ships, and it may never research Cloaking or gain it by any other means.''',
     revealCondition:
         'Reveal the first time a ship moves more than 1 hex in a turn or the first time its ships are in combat.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The starting Movement level and Cloaking restriction are enforced. The combat vulnerability is not automated.',
     startingTechOverrides: {TechId.move: 7},
@@ -271,7 +274,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''This race starts with Exploration 1 and may reveal all face-down Groups adjacent to one of its ships with Exploration technology.''',
     revealCondition: 'Reveal the first time a stack is inspected.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The starting Exploration level is applied. Psychic stack inspection is not automated.',
     startingTechOverrides: {TechId.exploration: 1},
@@ -328,7 +331,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''All maintenance for this race is halved. Add up all maintenance costs, including reductions from alien technology cards and experience, divide in half, and round down.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'implemented',
+    supportStatus: EaSupportStatus.implemented,
     implementationNote: 'Maintenance is halved in the production ledger.',
     maintenancePercent: 50,
   ),
@@ -348,7 +351,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''Replicators start with Move 2 technology. Future Movement levels cost 15 CP instead of 20.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'Replicator tracker setup uses the higher starting movement and reduced move-tech cost.',
     isReplicator: true,
@@ -385,7 +388,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''Replicators begin the game with one extra RP. Buying RP costs only 25 CP instead of 30.''',
     revealCondition: 'Reveal at the end of the game.',
-    supportStatus: 'partial',
+    supportStatus: EaSupportStatus.partial,
     implementationNote:
         'The tracker can represent the extra starting RP, but not a full Replicator RP-purchase engine.',
     isReplicator: true,

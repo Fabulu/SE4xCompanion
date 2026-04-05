@@ -342,25 +342,11 @@ class _ProductionPageState extends State<ProductionPage>
     );
   }
 
-  /// Effective level including EA tech bonuses (e.g. Expert Tacticians +1 Tactics).
-  /// Used for display and ship stamping, NOT for cost/purchase calculations.
-  int _bonusLevel(TechId id) {
-    final base = _effectiveLevel(id);
-    final ea = config.empireAdvantage;
-    final bonus = ea?.techLevelBonuses[id] ?? 0;
-    if (bonus == 0) return base;
-    // Only apply bonus if the player has purchased beyond the starting level.
-    // Starting level = override from EA, or natural start from cost table.
-    final overrideLevel = ea?.startingTechOverrides[id];
-    final naturalStart = (config.useFacilitiesCosts
-            ? kFacilitiesTechCosts
-            : kBaseTechCosts)[id]
-        ?.startLevel ??
-        0;
-    final startLevel = overrideLevel ?? naturalStart;
-    if (base <= startLevel) return base;
-    return base + bonus;
-  }
+  /// Display-tier effective level for a tech.
+  ///
+  /// Previously applied EA `techLevelBonuses`; no EA currently grants bonuses,
+  /// so this now returns the plain effective level.
+  int _bonusLevel(TechId id) => _effectiveLevel(id);
 
   /// Number of pending buy levels for a tech this turn.
   int _pendingBuys(TechId id) {
@@ -402,11 +388,6 @@ class _ProductionPageState extends State<ProductionPage>
     // Alternate empire: cap Fast BC at level 1 (no Fast 2)
     if (id == TechId.fastBcAbility && config.enableAlternateEmpire && max > 1) {
       max = 1;
-    }
-    // Empire Advantage tech level caps (e.g. House of Speed: Ship Size max 3)
-    final eaCap = config.empireAdvantage?.maxTechLevels[id];
-    if (eaCap != null && eaCap < max) {
-      max = eaCap;
     }
     return max;
   }
@@ -1306,8 +1287,7 @@ class _ProductionPageState extends State<ProductionPage>
         ?.startLevel ??
         0;
     final maxLevel = _maxLevel(id);
-    final bonus = config.empireAdvantage?.techLevelBonuses[id] ?? 0;
-    final displayMax = bonus > 0 ? maxLevel + bonus : maxLevel;
+    final displayMax = maxLevel;
     final nextCost = _nextCost(id);
     final pending = _pendingBuys(id);
     final canAfford = _canAffordTech(id);

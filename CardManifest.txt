@@ -1,0 +1,2041 @@
+©2024 GMT Games, LLC
+CARD MANIFEST &
+DEEP SPACE PLANET ATTRIBUTES
+by Jim Krohn
+2 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+Design Note: Cards are not listed in sequential number but rather
+grouped by type. Also, the card numbers vary due to being published in various expansions.
+Empire Advantage Card List
+31. Fearless Race: The ethos of this race places a high value
+on proving their courage. All of their combat-capable ships and
+Shipyards (excluding Boarding Ships and Ground Units) fire as
+A-Class ships in the first round of combat (only). Their Missiles
+hit as C-Class in the first round. After the first round everything
+reverts to its normal Class. However, none of their ships are able
+to retreat from combat until after Round 3 (this may be modified
+by e.g. Crew Cards). Their ships would still fire as E-Class (or
+F-Class for Boarding Ships) when in Asteroids or Nebulae (5.8).
+REVEAL: When first entering any combat, including Aliens.
+32. Warrior Race: +1 to Attack Strength for all non-Boarding
+Ship units when they are the attacker in a battle. –1 to the Attack
+Strength for all non-Boarding Ship units when they are the
+defender in a battle. No advantage is given when bombarding
+a planet or to ground troops.
+REVEAL: When first entering any combat, including Aliens.
+33. Celestial Knights: Once per space battle (not ground
+combat or Colony bombardment), after the first round, at the
+start of a round, this race may declare a “charge”. All of their
+units (including Boarding Ships and Missile Boats but not any
+kind of Bases, DSN, Ion Cannons and Shipyards) get two attacks
+(or fire two missiles) in that round only. However, in all
+following rounds all enemy units get +1 to their Attack Strength
+(this does not apply to fire against Missiles, but does apply
+against any kind of Bases, DSN, and Shipyards). In addition,
+the charging ships may not retreat the round after the charge.
+REVEAL: When a “charge” is declared for the first time.
+34. Giant Race: The Hull Size of all units (except Ground
+Units and Missiles) of this race is increased by one. This impacts
+everything that has to do with Hull Size – SYs needed to construct
+(including for Miners, Colony Ships, and MS Pipelines), damage
+to destroy, technology that can be carried, maintenance, boarding
+parties, etc. The cost to build the ships remains the same.
+Captured ships of this race retain their Hull Size. Giant Race may
+not research Fighters and may not get them by any other means
+(capturing technology, etc.). Decoys continue to have a Hull
+Size of zero and do not need a SY to build. Missiles still only
+take 1 hit to destroy
+REVEAL: When first entering any combat, including Aliens.
+35. Industrious Race: When this race researches Terraforming
+1, they may colonize Asteroids exactly as if they were a Barren
+Planet. The Asteroids still retain their normal terrain effects.
+Titans may not destroy an Asteroid like it would a planet and
+may not attack Asteroid Colonies at all. Other players may not
+attack an Asteroid Colony with Ground Units. If playing with
+the Short Game Victory Condition (Colony Points; CSB 1.1.7),
+Asteroid Colonies in Deep Space do not count as a Colony Point.
+If colonizing an Asteroid, the player does NOT get an Alien
+Technology Card (11.0).
+REVEAL: When an asteroid is colonized for the first time.
+36. Ancient Race: At the start of the game (before it begins),
+this player reveals that they are the Ancient Race, then explores
+all hexes adjacent to their Homeworld. They then explore six of
+the hexes that are adjacent to those hexes (these will be two hexes
+from their Homeworld). This means that it is possible for some
+of the hexes that are two spaces away from their Homeworld
+to not be explored (depending on the setup). They immediately
+collect up to 3 Minerals that were revealed and place those
+Minerals on their Homeworld. Next, this player places up to 3
+Colony Ships from their supply (Colony Ship side up) on any
+non-barren planets that are revealed in this way (3 Colony Ships
+still start at the Homeworld). They will become Colony 1s at the
+end of the first Economic Phase. This represents colonists that
+have made contact with this player’s race again after spending
+hundreds of years in cryogenic sleep while in transit to these
+planets. Now that the “modern” faster than light drive has been
+perfected, the Colonies will grow and become part of the Empire.
+REVEAL: At the start of the game.
+37. Space Pilgrims: This race has a greater understanding of
+space and is at home in it. They suffer no movement penalties
+in Nebulae or Asteroids. Their ships never get sucked into Black
+Holes and they are never Lost in Space. They may even use
+the Black Hole Slingshot optional rule automatically, without
+having to roll for destruction. They still are destroyed by Danger!
+markers and other terrain still affects them.
+REVEAL: When entering a Black Hole or Lost in Space marker
+or if they ignore the movement penalty of an Asteroid or Nebula.
+In order to keep their advantage secret, they may choose to roll
+when entering a Black Hole hex.
+38. Hive Mind: This race learns and adapts in each battle.
+Starting in round 2 of a battle, all of this race’s units get +1 to
+their Defense Strength. Starting in round 4, all units also get
++1 to their Attack Strength. Starting in round 6, all units get +1
+to their Hull Size. These same modifiers also apply to ground
+combat, but the ground combat is considered to have started
+with round 1 even if a space battle preceded it. If the attacker
+does not get to fire in the first round of ground combat (because
+of not having Drop Ships), that still counts as the first round
+of combat. They do not get these benefits while bombarding
+planets. Missiles receive the attack and defense strength benefits,
+but not the hull size benefit.
+REVEAL: When first entering any combat, including Aliens.
+Empire Advantage Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 3
+© 2024 GMT Games, LLC
+39. Nano-technology: This race’s units may instantly upgrade
+to the newest technology for free regardless of location. If they
+do so they must not move that turn.
+REVEAL: At the end of the game.
+40. Quick Learners: These start with Military Academy level
+1 and roll 2 dice (taking the best result) when checking to see
+if a ship increases in Experience. Other Empires may NEVER
+gain Military Academy technology from this race.
+REVEAL: When rolling to see if a ship gains Experience.
+41. Gifted Scientists: This highly technological race gets
+a 33% discount (rounded up and applied before any other
+discounts) when researching any technology. However, every
+unit they build (Colony Ship, Decoy, Scout, Pipeline, etc.) costs
+1 CP more.
+REVEAL: At the end of the game.
+42. Master Engineers: This race uses a highly advanced, but
+unstable form of faster-than-light drive. This empire starts the
+game with Move 2 and Fast 1 technologies. In addition, each
+full-strength colony can produce and retrofit ships as if it had 1
+SY present. This may be combined with actual SY that are built.
+EXAMPLE: A Full Strength Colony without an SY and with SY
+Tech 3 could produce a BC.
+REVEAL: At the end of the game.
+43. Insectoids: This race reproduces and builds very
+rapidly. The Hull Size of all units (except Ground Units and
+Missiles) of this race is decreased by one. Except as noted,
+this impacts everything that has to do with Hull Size – SYs
+needed to construct (including for Miners, Colony Ships, and
+MS pipelines), damage to destroy, tech that can be carried,
+maintenance, boarding parties, etc. The cost to build the ships
+remains the same. A ship such as a DD, which has a Hull Size
+of 0, would pay no maintenance, not be allowed to carry any
+attack or defense tech, and could upgrade technology at a SY for
+no CP cost. A ship with a Hull Size of 0 would still be destroyed
+by 1 hit and would be considered to have a Hull Size of 1 for
+the purpose of any Experience roll. Ships with a Hull Size of
+0 are considered to have a Hull Size of 1/2 for the purpose of
+using Shipyard capacity. For example: 1 Shipyard at Shipyard
+Tech 2 could build 3 DDs in an Economic Phase. Insectoids
+may not research Military Academies or Fighters and may not
+get them by any means (capturing technology, etc.). Captured
+ships of this race retain their Hull Size. Insectoid Starbases may
+still mount Attack 4.
+REVEAL: When first entering any combat, including Aliens.
+44. Immortals: This race reproduces very slowly, but never dies
+of old age. They have developed extra shielding and a system of
+reserve power in an attempt to preserve the lives of their people.
+One time in each round of combat, this race may choose to ignore
+one point of damage. This means that it is impossible for one
+of their ships to be destroyed in a one-on-one battle (unless the
+other ship is a Titan or Missile Boat or uses Resource Cards). An
+Alternate Empire player cannot ignore a hit against one of their
+Missiles. However, because a large seed population is needed
+for their Colonies, each Colony Ship costs 2 CP more. They
+may not choose to ignore a boarding hit. Captured ships retain
+this ability. However, only a hit on the captured ship(s) can be
+ignored. Immortals may not research Boarding and may not get
+it by any means (capturing technology, etc.). If playing with any
+rule that normally would allow a player to carry CP over into the
+start of the game (like the Technology Head Start Scenario
+Modifier), the Immortals may not and will lose any CP not spent
+on research. Immortals cannot use their special ability against
+Bombardment Damage or during Ground Combat.
+REVEAL: When they first choose to ignore 1 hit in combat.
+45. Expert Tacticians: This race of superior tacticians gets
+the +1 Attack Fleet Size Bonus as soon as they have one more
+combat-capable ship in a battle than their opponent (they don’t
+need to have a 2:1 advantage). In addition, opponents do not
+get the Fleet Size Bonus against them unless they outnumber
+them by 3:1. If the opposing fleet has Agent Smith or has an
+Admiral Of The Navy (or any combination thereof), everything
+cancels each other out and the Fleet Size Bonus is given at 2:1.
+REVEAL: When they first choose to use their improved Fleet
+Size Bonuses in combat.
+46. Horsemen of the Plains: This race developed from a
+culture that valued the ability to strike quickly and evade. If
+a ship of this race could otherwise retreat, it may do so at the
+end of a round of combat, even if it fired during that round. It
+does not need to wait for its turn to fire to retreat. They could
+retreat as early as the end of Round 1, before Round 2 begins. In
+addition, all of this player’s ships always get +2 to their Attack
+Strength when firing on a planet.
+REVEAL: When they first use one of their abilities.
+47. And We Still Carry Swords: This race loves physical
+combat. This race starts with Ground Combat 2. All of their
+boarding attacks get +1 to their Attack Strength and all boarding
+attacks against them get -1 to their Attack Strength. In addition,
+all of their Ground Units, including Militia, get +1 to their Attack
+and Defense Strength (whether attacking or defending). Other
+Empires may NEVER gain Ground Combat tech from this race.
+REVEAL: When engaging in boarding attack or ground
+invasion for the first time.
+Empire Advantage Cards
+4 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+48. Amazing Diplomats: Non-Player Aliens do not attack this
+race and this race may both move through their System and
+stack with them. NPAs with the Aggressive trait do not attack
+them. While the alien ships will not leave the System, they will
+defend it against attacks from other players. This player may
+colonize alien planets as if the aliens were not there (and gain
+an Alien Technology card). This represents them developing a
+relationship, trade, and an outpost on that planet. A Colony on
+an alien planet is treated like a player’s Colony in every respect.
+If the alien ships are subsequently destroyed by another player,
+the Colony still continues until destroyed normally.
+REVEAL: When entering a NPA hex for the first time or if
+Aggressive NPA would attack them.
+49. Traders: Gets one extra CP for each colony connected by
+an MS Pipeline.
+REVEAL: At the end of the game.
+50. Cloaking Geniuses: After researching Cloaking 1, all of
+their Scouts and Destroyers also get the benefit of Cloaking.
+After researching Cloaking level 2, all of their Cruisers also
+get the benefit of Cloaking. If not nullified by scanners the SCs,
+DDs & CAs do get the +1 to their Attack Strength during the
+first firing round. If nullified by Scanners, these ships fire where
+they normally would according to their Weapon Class rating
+(a CA would fire as C-Class). This is not an instant upgrade.
+Any ships already produced would have to be refitted. A note
+will need to be made on existing Groups in the margin of the
+Ship Technology Sheet. Captured ships of this race retain their
+Cloaking ability (and can be upgraded).
+REVEAL: When a cloaked SC/DD/CA is encountered in
+combat or moves through an enemy ship.
+51. Star Wolves: Each of this race’s SCs, DDs, and Fighters
+get +1 to their Attack Strength when firing on a unit with a Hull
+Size of 2 or greater. In addition, their DDs cost 1 less (8 CP for
+Base Empires, or 9 CP for Alternate Empires).
+REVEAL: When they first use their ability.
+52. Power to the People: Mines, Colony Ships, Miners, and
+MS Pipelines are automatically and instantly upgraded to the
+player’s current Movement technology (they will be able to
+move more than 1 space per turn).
+REVEAL: When a Miner, CO, MS Pipeline, or revealed Mine
+moves faster than normal for the first time.
+53. House of Speed: This race starts with Movement 7 tech,
+but their ships sacrifice defensive abilities. Opponents (including
+NPAs, Doomsday Machines, Space Amoebas, and Space Pirates)
+get a +2 to their Attack Strength (even when boarding) when
+firing at ships of this race (including Fighters, but not any type
+of Bases, SYs, DSN, Colonies, Space Stations or Ground Units).
+Also, their Movement technology gives off such a strong energy
+signature that they may never research Cloaking or get it by any
+other means (capturing technology, etc.). They may use captured
+Raiders but may not increase the speed of the captured Raider.
+Captured ships of this race retain both their speed advantage and
+their defensive liability. However, their movement technology
+is so complex that other Empires may NEVER gain Movement
+technology from this race (either by scrapping boarded ships
+or capturing planets).
+REVEAL: The first time a ship moves more than 1 hex in a
+turn or the first time its ships are in combat.
+54. Powerful Psychics: This race starts with Exploration
+1 technology. In addition, their sensors are more advanced.
+This player may reveal all face down Groups that are adjacent
+to one of their ships with Exploration technology (e.g. CAs,
+Flagship, Unique ships). These counters are left face up
+(as if they had been encountered in combat). However, the
+technology on the revealed ships is not revealed by this power.
+Since their Exploration technology is partially based on their
+psychic powers, other Empires may NEVER gain Exploration
+technology from this race (either by scrapping boarded ships
+or capturing planets).
+REVEAL: The first time a stack is inspected.
+55. Shape Shifters: This Empire may place Decoys in any
+hex with a friendly combat ship in addition to any hex with a
+Colony. Each Economic Phase they get two free Decoy units.
+If they run out of Decoys, they may use any spare counter as a
+Decoy if they mark it as such on their Ship Tech sheet.
+EXAMPLE: CA #2 can be marked as a Decoy on the Ship Tech
+Sheet and used as a Decoy.
+In combat, they do not have to reveal any technology possessed
+unless it actually would change the result of a combat roll, in
+which case they announce it after the roll.
+EXAMPLE: A CA Group has Attack 2 Tech. This is not revealed.
+After rolling an Attack, one of the dice misses by one. The player
+then must reveal that he has Attack 2 and it scores a hit.
+Once per game, they may retreat their ships as if they had just
+played Resource Card #107 Retreat While Engaged.
+REVEAL: When a non-Decoy effect of this card is used.
+58. On the Move: Shipyards and all types of Bases have
+Move 1 and may attack and explore. They may not retreat from
+combat, and they can never be upgraded to a higher Movement
+technology. They may move an extra hex if using MS Pipelines
+or Black Hole Slingshot. Shipyards may only build ships during
+the Economic Phase if they are in the same hex with a friendly
+Colony that produced CP during this Economic Phase. However,
+they may be used to upgrade ships normally no matter where
+they are on the map. Both the SY and group being upgraded
+Empire Advantage Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 5
+© 2024 GMT Games, LLC
+may not move when performing the retrofit. All other rules for
+Shipyards and Bases are the same.
+REVEAL: The first time a revealed Shipyard/Base moves, the
+first time a Shipyard or a (non advanced) Base is revealed while
+not at a Colony, or the first time a Shipyard/Base is in battle.
+59. Longbowmen: This race uses long range torpedoes. The
+Weapon Class of their SC, DD, CA, BC, Flagship, Missiles, and
+nullified Raiders is increased by one letter (C-Class becomes
+B-Class, B-Class becomes A-Class, etc.). A-Class ships remain
+A-Class and get no benefit. This benefit is only if the battle is in
+open space, Space Stations, planets, Minerals, or Space Wrecks.
+DDs with Long Lance Torpedoes and Fighters stay at B-Class
+and get no benefit.
+REVEAL: When first entering combat, including Aliens, with
+one of the affected ships.
+187. War Sun: This race has spent generations refitting an
+ancient warship, and it is nearly operational. Once during
+the game, they gain a free Titan at their Homeworld. It will
+have the player’s current tech and requires no Shipyard to
+place. It pays no maintenance as long as it is at a friendly
+Colony during the Econ Phase. This ship may not enter
+Deep Space until Ship Size 6 has been researched.
+Additionally, the War Sun has revealed to this race the
+ability to pass safely through Super Nova hexes (though
+they cannot end their movement in one). Alternate Empires
+(24.0) are given one Titan counter. This is the only time
+an Alternate Empire can have a Titan; they may still not
+research or build other Titans and they may not rebuild
+this one if destroyed.
+REVEAL: When any of their Titan counters are revealed.
+188. Salvage Experts: When this race wins a space battle,
+they may salvage one friendly destroyed combat ship
+from the battle (not Shipyards, Bases, Mines, Starbases,
+Defense Satellite Networks, or Flagships). The salvaged
+ship is placed face down in the hex at its previous Ship
+Experience level. Ships that were carrying other units or
+Logistic Points when they were destroyed do not regain
+them when the ship is salvaged. If none of their ships are
+destroyed no ship is gained, but if the enemy lost at least
+one combat ship, this empire gains 3 CP.
+REVEAL: When first entering combat, including Aliens.
+189. Berserker Genome: At the end of every combat
+round of space combat in which this race loses a unit, they
+may make a special attack for each unit destroyed (units
+hit by boarding attacks do not count as destroyed for this
+purpose). These bonus attacks hit on a roll of 1+the Hull
+Size of the destroyed unit, regardless of the target’s defense
+and does one damage (example: a destroyed BC gets a final
+attack hitting on 1-3).
+REVEAL: When first used.
+190. Robot Race: Due to the low maintenance of this
+race, all maintenance is halved; add up all maintenance
+costs (including reductions from alien technology cards
+and experience), divide the total in half and round down.
+REVEAL: At the end of the game.
+191. Masters of the Gates: All CAs have Warp Gates
+without requiring any research and at no extra cost. Rules
+as per UN Ship Table #3.
+REVEAL: The first time a Warp Gate is used or a CA is
+in combat.
+REPLICATOR EMPIRE ADVANTAGE CARDS
+60. Fast Replicators: Replicators start with Move 2 tech.
+Future levels of Movement technology only cost 15 CP.
+REVEAL: At the end of the game.
+61. Green Replicators: Replicator Colonies do not begin to
+deplete until Econ Phase 13.
+REVEAL: At the start of Economic Phase 10.
+62. Improved Gunnery: The Replicator Flagship and all Type
+XIII and Type XV ships are equipped with Second Salvo. When
+they start a turn with 4 RP, all of their ships have their Tactics
+level increased by 1 and type V ships gain +1 Attack.
+REVEAL: When entering combat, including Aliens, with a Type
+V, XIII, XV or the Flagship, or when a ship reveals a higher
+Tactics level for any reason.
+63. Warp Gates: Replicator Explore Ships and the Flagship
+are equipped with Warp Gates. Explore ships still have a Hull
+Size of 2, but only take one hull to produce (and only count as
+one hull if converted to a different ship).
+REVEAL: The first time a Warp Gate is used, or a ship equipped
+with one is in combat.
+64. Advanced Research: Replicators begin the game with one
+extra RP. Buying RP costs only 25.
+REVEAL: At the end of the game.
+65. Replicator Capitol: The Replicator Homeworld
+may produce an additional Hull every odd Economic Phase
+(in addition to any other increases e.g. from spending CP).
+The Replicators also start with 10 extra CP.
+REVEAL: At the end of the game.
+Empire Advantage Cards
+6 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+Alien Technology Card List
+1. Soylent Purple: SC and DD pay 1/2 maintenance (round
+down the total).
+REVEAL: At the end of the game.
+2. Anti-Matter Warhead: DDs get +1 to their Attack Strength.
+REVEAL: when a DD is present in combat.
+3. Interlinked Targeting Computer: Unlimited attack
+technology on Destroyers.
+REVEAL: when a DD is present in combat. Existing DDs
+instantly get the ability to have Attack technology greater
+than their Hull Size because of this card, but they still must be
+retrofitted with that technology normally (Attack 2 or Attack 3).
+4. Polytitanium Alloy: DDs cost 2 less.
+REVEAL: At the end of the game.
+5. Long Lance Torpedo: All of this player’s DDs fire as
+B-Class instead of D-Class (Alternate Empire DDs fire as
+B-Class instead of C-Class). This doesn’t apply in terrain where
+they would fire as E-Class (5.8).
+REVEAL: when a DD is present in combat.
+6. Central Computer: CA and BC pay 1/2 maintenance
+(round down the total).
+REVEAL: At the end of the game.
+7. Resupply Depot: BB and DN pay 1/2 maintenance (round
+down the total).
+REVEAL: At the end of the game.
+8. Holodeck: CV and F pay 1/2 maintenance (round down
+the total).
+REVEAL: At the end of the game.
+9. Cold Fusion Drive: Rs and SWs pay 1/2 maintenance
+(round down the total).
+REVEAL: At the end of the game.
+10. Emissive Armor: CAs take 1 extra hit to kill. However,
+their Hull Size does not increase because of this card: it is still
+considered 2 (barring other card effects). This does not help
+them against boarding attacks.
+REVEAL: when a CA is present in combat.
+11. Electronic Warfare Module: CAs get +1 to their
+Attack Strength.
+REVEAL: when a CA is present in combat.
+12. Microwarp Drive: BCs get +1 to their Attack Strength.
+REVEAL: when a BC is present in combat.
+13. Combat Sensors: BBs get +1 to their Attack Strength.
+REVEAL: when a BB is present in combat.
+14. Afterburners: After researching Fighters, all of your
+Fighters get +1 on their Attack when firing on ships with a Hull
+Size of 1 (or less, if playing with the Insectoids).
+REVEAL: when a Fighter is present in combat.
+15. Photon Bomb: After researching Fighters, all of your
+Fighters get +1 on their Attack when firing on ships with a Hull
+Size greater than 1.
+REVEAL: when a Fighter is present in combat.
+16. Stim Packs: All Ground Units get +1 to their
+Attack Strength.
+REVEAL: in ground combat.
+17. Improved Crew’s Quarters: CAs cost 3 less.
+REVEAL: At the end of the game.
+18. Phased Warp Coil: BCs cost 3 less.
+REVEAL: At the end of the game.
+19. Advanced Ordnance Storage System: BBs cost 4 less.
+REVEAL: At the end of the game.
+20. The Captain’s Chair: DNs cost 4 less.
+REVEAL: At the end of the game.
+21. Efficient Factories: Non-Barren, Non-Homeworld
+Colonies that will produce 5 CP this Economic Phase produce 6
+CP instead. The max gain is 8 CP on normal maps. In situations
+where one of these fully grown colonies would produce
+something other than 5 CP, the colony produces 1 extra CP
+when fully grown.
+REVEAL: At the end of the game.
+Alien Technology Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 7
+© 2024 GMT Games, LLC
+29. Mobile Analysis Bay: You can gain technology from
+captured ships in any Economic Phase after they are captured
+without having to scrap them. They do not have to be at a
+Shipyard. May only be used one time on each captured ship.
+REVEAL: At the end of the game.
+30. Adaptive Cloaking Device: If your enemy does not have
+Scanners equal to or greater than your Cloaking, your Raiders
+fire with a +2 to their Attack Strength (instead of the usual +1) in
+the 1st Round. If they do have Scanners equal to your Cloaking
+then your Cloak is nullified, but in the 1st Round they fire as
+A-Class, 2nd Round as B-Class, 3rd Round as C-Class, 4th &
+later as D-Class. This card only impacts Raiders, even if you
+also have the Cloaking Geniuses Empire Advantage.
+REVEAL: when a Raider is present in combat.
+56. On Board Workshop: Each CV, BV, and Titan may be
+used to build one Fighter during the Economic Phase as long
+as there is room to store the Fighter built. This includes Fighter
+technology that has just been researched. The Fighter costs the
+same as if it was produced at a Shipyard. No other ships that
+carry Fighters (like Unique ships) can do this except Alternate
+Empire BBs and DNs. During a Movement Turn, one Fighter
+may be refitted and the ship carrying it may move as long as the
+FTR accompanies it for the entire movement phase.
+REVEAL: when a CV/BV/Titan is present in combat.
+57. Superhighway: Each ship that spends its entire move on
+an MS Pipeline chain may move two extra hexes instead of one.
+The flavor text on the card comes from an old German slogan
+against speed limits on the autobahn—roughly, “Free roads for
+free citizens”.
+REVEAL: the first time it is used.
+22. Omega Crystals: All the player’s CAs, BCs, BBs, DNs,
+and Titans are equipped with the Omega Crystal. If a ship with
+the Omega Crystal is present in battle the player may activate
+it after a Group has fired (enemy or friendly). That Group must
+reroll ALL of its dice. The first set of results from that Group is
+undone and replaced by the new rolls. The new results must be
+accepted, even if worse for the Omega Crystal player. No matter
+how many ships with the Omega Crystal are present, the player
+may only ever do this once during the entire battle. If the ships
+retreat and then subsequently engage in battle, they may again
+use the Omega Crystal.
+REVEAL: when first used.
+23. Cryogenic Stasis Pods: Boarding Ships & Transports
+pay 1/2 maintenance.
+REVEAL: At the end of the game.
+24. Minesweep Jammer: Minesweepers used against you are
+treated as having one level less of Minesweeping technology.
+So Minesweepers with only level 1 would not sweep any Mines
+at all.
+REVEAL: at the start of combat.
+25. Air Support: Transports function in ground combat as
+B6-2-x2 units. (They must survive the space combat to be used
+this way.) Only the modifiers for Ground Units are applied to
+Transports being used as Air Support. Any damage that they took
+during the space battle is considered repaired before the start of
+the ground combat. They may be fired at by opposing Ground
+Units. They may not be removed to garrison the planet. If no
+other Ground Units are available to be removed to garrison the
+planet, the planet is not captured.
+REVEAL: when first used.
+26. Hidden Turret: Minesweepers fire as E3 units.
+REVEAL: when a SW is present in combat.
+27. Stealth Field Emitter: Your ships go back to their
+unrevealed side after combat.
+REVEAL: when first used.
+28. Advanced Comm Array: If a ship otherwise qualifies
+for the Reaction Move ability, they may react into an adjacent,
+non-battle hex when an opponent moves into that hex. This stops
+the other player’s movement. During combat, the reacting player
+is considered the attacker in that battle.
+REVEAL: when first used.
+180. Self-Sustaining Power Source: Titans pay 1/2
+maintenance (round down the total).
+REVEAL: At the end of the game.
+181. Advanced Shipyards: Shipyards produce an extra
+half Hull Point each. (1.5 at level one, 2 at level 2, 2.5 at
+level three.)
+REVEAL: At the end of the game.
+182. Lorelei System: Allows a player to designate their
+SC, SCX, DD, and DDX as the target of Mines that were
+not swept after technology was revealed in combat (17.1.3).
+REVEAL: when first used.
+Alien Technology Cards
+8 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+183. Ancient Weapons Cache: In the following
+Economic Phase, the player gains 2 Cyber Armor (38.7)
+at one of their Colonies even if they do not have the
+appropriate technology.
+REVEAL: when any Cyber Armor is revealed.
+184. Quantum Computing: All of this player’s Unique
+Ships may now mount a 3rd Unique Technology and they
+no longer pay 5 CP to redesign UNs. Immediately add a 3rd
+tech to your current UN design (do not change any other
+aspect). All UNs currently on the board gain this third tech
+(at your current tech level if applicable) at no cost.
+REVEAL: when gained.
+185. Focused Phasers: Unique Ships get +1 to their
+Attack Strength.
+REVEAL: When a UN is present in combat.
+186. Skipper Missiles: All Missiles (24.4) strike their
+targets as C-Class instead of E-Class.
+REVEAL: When a MB is present in combat.
+281. Bioweapons: All DDs are instantly upgraded to have
+Bioweapons. They automatically hit when bombarding a
+planet.
+REVEAL: When first used.
+Unique Ship Cards (282-283) – These cards require the
+Unique Ship counters to play. If already playing with
+Unique Ships, or if a Unique Ship Card is already in use
+by this empire when a Unique Ship Card is drawn, the new
+card may be discarded to draw another. There are no Ship
+Size requirements for Unique Ship designs given by cards.
+282. Aegis Frigate: You have the plans to build Aegis
+Frigates (use Unique Ship counters). They are E1-3 x2 and
+are equipped with Shield Projectors (regardless of whether
+they have been researched). They cost 11 CP.
+REVEAL: When a UN is present in combat.
+283. War Frigate: You have the plans to build War
+Frigates (use Unique Ship counters). They are E5-1 x2 and
+have Design Weakness). They cost 10 CP.
+REVEAL: When a UN is present in combat.
+204. Governor: The Group gets 2 attacks in the first
+combat round only. If on a Flagship or Titan, this applies
+to all combat rounds. If on a Titan, each hit from the Group
+also does 3 Damage, but every time a ship in the Group is hit
+by a fighter, roll a die. On a roll of 10 a Titan is destroyed.
+205. Security Officer: Regardless of whether the
+Security Officer survives, all friendly crew in the same
+Fleet as this officer get -2 to all survival rolls. All ships in
+the Group get +1 defense against Boarding Ships. If on a
+Flagship, select one additional Group at the beginning of
+combat that will receive this benefit.
+206-207. Damage Control Officer: If this Group has
+any damage, after each round of combat it may attempt
+repairs. On a roll of a 1 or less, repair all damage. On a
+roll of a 2-5, repair 1 Damage. If on the Flagship or a BB,
+subtract 2 from the die roll.
+208-209. Ensign Expendable: This Crew Card can be
+discarded to cancel one hit against this Group.
+210-213. Hero: One ship in this Group gets +1 to Attack
+Strength. If on a Group with a Hull Size of 1, it gets +2
+and ignores the first hit against it in combat.
+214-215. Engineer: This Group’s Movement Tech
+operates at one level higher than currently installed, even
+if that higher level has not been researched. It can’t operate
+at a level above the maximum of 7.
+216-217. Asteroid Navigator: This Group can ignore
+Asteroids when moving. If playing with Thick Asteroids,
+this Group does not take damage from the Asteroids. If on
+a SC, DD, or Flagship, it also ignores Black Holes (unless
+using Slingshot).
+218-219. Nebula Navigator: This Group can ignore
+Nebulae when moving. If on a SC, DD, or the Flagship,
+it may also ignore Black Holes (unless using Slingshot,
+31.0). If on a MB, it also ignores Asteroids when moving.
+220-221. Helmsmen: This Group may fire and then
+immediately retreat in the same round (they may still not
+retreat on round 1 unless permitted by some other effect).
+If on a Raider, the Group may also fire and retreat in round
+1. The group retreats prior to any other effects e.g. Splash
+Damage.
+Crew Card List
+Alien Technology Cards Crew Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 9
+© 2024 GMT Games, LLC
+222-223. Supply Officer: Each ship in the Group pays
+1 less maintenance. This is applied prior to any other
+reductions due to experience, alien technologies, empire
+advantages, etc.
+224-225. Defender: Once per battle, after the first round,
+at the start of a round, this Group may announce that it
+is setting its defenses to “Area Mode.” For that round,
+or until all ships in this Group are destroyed, all attacks
+against other friendly Groups suffer an additional penalty
+equal to the defense technology of the Defender Group (if
+in a Nebula, this would be zero). However, attacks against
+the Defender Group suffer no penalty due to its defense
+technology. This may be used even if the Group is screened.
+If on a BC, this benefit may be used in the first round.
+226-227. Tactician: After the first round, during a single
+round of combat, if your fleet in the combat contains
+Groups of at least three different Hull Sizes, your ships
+gain +1 Attack or +1 Defense for the round. This bonus is
+determined at the start of the round and stays in effect even
+if all ships of one hull size are destroyed partway through
+the round. If on a BB or DN, this benefit may be used in
+the first round.
+228-229. Strategist: Once in each combat, choose four
+enemy ships (not Groups) and decide which one of your
+Groups they will fire against in that round. If that Group
+is destroyed, they are free to choose their next target. The
+designated Group must be a legal target (not screened, not a
+CV with Fighters, etc.). If on a SC, DD, or MB, six enemy
+ships may be chosen in that round.
+230-231. First Officer: This Group gets +2 to its Tactics
+level (to a max of 3). If on an SC or a DD, this Group also
+improves its Weapon Class by one letter, even in terrain
+(SC would fire as D-Class in Asteroids, etc.). This is in
+addition to any other benefits like Longbowmen or Long
+Lance Torpedo. If on the Flagship, this ship always fires
+or retreats before all other ships in the combat, regardless
+of technology or terrain.
+232-233. Tactical Officer: Once during each battle,
+this ship (not Group) may fire (or retreat if eligible) as
+A-Class, even in terrain. If on an SC or DD this applies to
+the entire Group. All ships in the Group get +1 to defense
+against boarding. If on a Flagship, this applies to one other
+group as well.
+234-235. Captain: May reroll one attack from the Group
+or have one attack against it rerolled once per combat
+round. The decision must be made immediately after the
+die is rolled. The first result is undone and the second roll
+must be used. If on an SC, DD, CA, or MB, it may reroll
+2 attacks per round.
+236-237. Weapons Officer: Natural attack rolls of 1
+by ships in this Group grant the attacking ship a second
+attack roll (against the same or a different Group as the first
+attack). If on an SC, DD, Raider, or Flagship, the second
+attack roll is granted on 1 or 2.
+238-239. Heavy Weapons Officer: All ships in this
+Group do 2 damage every time they hit a Colony, any type
+of Base, Shipyard, or Defense Satellite Network.
+240-241. Science Officer: This Group cannot be targeted
+by Mines in the same way as Anti-Sensor Hull. If on a
+SW, this Group also sweeps one more Mine per ship.
+242. Marine Captain: The Group can carry one extra
+Ground Unit total even if it normally could not carry
+Ground Units. If on a CA, each ship in the Group can carry
+one Ground Unit. If on a Flagship, the Group may carry 4
+Ground Units total. Ships in the Group carrying Ground
+Units cannot be boarded.
+243-244. Planetary Admiral: Group gets +1 Attack
+Strength if fighting in a hex with a planet. If on a BB, DN,
+or Titan, all ships in the fleet get this bonus.
+245-246. Admiral of the Navy: This fleet gets a Fleet Size
+Bonus when it has at least one more combat-capable ship
+than the opponent. The opposing fleet does not get a Fleet
+Size Bonus unless this Crew Card’s fleet is outnumbered
+by 3:1. If the opposing fleet is Expert Tacticians or has
+Agent Smith or has an Admiral of the Navy (or any
+combination thereof), everything cancels each other out
+and the Fleet Size Bonus is given at 2:1.
+247-248. Fleet Admiral: This Group and 2 others get +1
+Attack on the first round of combat only. If on a Titan, then
+one additional Group gets this benefit.
+249-250. Admiral: This Group and 2 others fight as one
+Weapon Class higher for the first round of combat only.
+If on a DN, then one additional Group gets this benefit.
+Crew Cards
+10 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+251-252. Commander: If this fleet has more ships than
+the opponent, it can designate one Group in this fleet that
+cannot be shot at the first round unless all other ships are
+destroyed (i.e., for target selection treat one Group as if they
+were a Carrier with unscreened fighters the first round). If
+on a BB, then one additional Group gets this benefit.
+253. Rear Admiral: This Group and 1 other have their
+Defense Strength increased by one for the first round of
+combat only. If on a DN, then one additional Group gets
+this benefit.
+254-255. General Staff: In each combat, this Crew can
+choose one hex that the enemy can’t retreat into as long as
+the General Staff’s Group is in the combat. The decision
+of which hex is forbidden is made when an enemy Group
+announces intent to retreat for the first time and applies
+to all enemy retreats in that combat. The Group may be
+screened and still take advantage of this effect.
+256. Ordnance Technician/ECCM Officer: If on a
+CV or BV, all Fighters in the same fleet that would fire as
+B-Class fire instead as A-Class. If on an MB, when this
+Group fires on CAs with Jamming Technology, the Missiles
+ignore all jamming. On any Group other than CV, BV or
+MB, this Crew Card can be discarded to cancel one hit
+against the Group.
+257. Warrant Officer/ECCM Specialist: If on a CV
+or BV, ships in this Group can carry 1 extra Fighter each. If
+on an MB, all ships in this Group may fire ECCM Missiles
+instead of using their normal attack. These Missiles do no
+damage and do not attack enemy ships. For each ship that
+fires ECCM Missiles each round, two Missiles fired by
+other MBs ignore all jamming. On any group other than
+CV, BV or MB, this Crew Card can be discarded to cancel
+one hit against this Group.
+258-260. Squadron Leader: Ships in this Group get +1
+Attack Strength. If on a Fighter, the ships in this Group also
+get +1 Defense Strength and fire as A-Class (regardless
+of terrain).
+261. CAG: If on a CV or BV, one Group of Fighters in
+the fleet fires as A-Class and gets +1 to Attack Strength
+each round, regardless of terrain. A different Group may
+be chosen each round. On any group other than CV or BV,
+this Crew Card can be discarded to cancel one hit against
+this Group.
+262. Deck Crew Chief: If on a CV or BV, at the end of a
+round of combat, roll a die. On a roll of a 1-4, one friendly
+Fighter that was destroyed that round is returned to service
+(no benefit if no fighter was destroyed that round). If on a
+BV, subtract 3 from the roll. If playing with Experience,
+the Fighters that are returned are Skilled. On any group
+other than CV or BV, this Crew Card can be discarded to
+cancel one hit against this Group.
+263-264. Gunnery Officer: Group fires at its normal
+Weapon Class regardless of terrain. If on a BC, this applies
+to one other Group as well.
+265. Commodore: At the start of combat select one enemy
+Group. This Group cannot split and cannot retreat until
+round 3. If on a BB, this applies to all opposing Groups.
+266. Marine Commander: If on a Transport, this Group
+can drop Ground Units before space combat starts when
+attacking another player (not NPAs). Ground combat is
+still resolved after Space combat. On any group other than
+Transport, this Crew Card can be discarded to cancel one
+hit against his Group.
+267. Marine Lieutenant: A Transport with this Crew
+Card has “Suppressing Fire”: if this Group is present in a
+hex where there is ground combat, pick one type of enemy
+unit. All enemy units of that type get -2 Attack Strength on
+the first round of ground combat. On any other ship this
+Crew Card can be discarded to cancel one hit against this
+group (this discard effect cannot be used on a Transport).
+268-269. Special Warfare Technician: This Group’s
+Point Defense, Cloaking, Scanners, Mine Sweeping,
+Boarding, Exploration, Missile Boat, or Jammer
+technologies operate as if they were one level higher than
+currently installed, even if that technology has not been
+researched. It cannot operate at a level above the maximum.
+EXAMPLE: A Raider with Cloaking 2 gets no benefit from
+this Crew Card.
+270-271. Chief Engineer: This Group gets instant
+technology upgrades, just like Bases or Shipyards.
+272. Patrol Leader: If a Group with this Crew Card
+spends its entire time between Economic Phases on
+MS Pipelines that connect Colonies, the player gets an
+additional 3 CP in the next Economic Phase. If this Crew
+Card is on a DD, the player gets an additional 5 CP instead.
+Crew Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 11
+© 2024 GMT Games, LLC
+273-274. Astrometrics Officer: Once per Economic
+Phase, immediately before new ships are placed, the player
+may peek at one face down Group belonging to another
+player within one hex of the Group with this Crew Card.
+The Group remains face down after peeking. If this Crew
+Card is on a CA, it may peek at a Group within three hexes.
+275-276. Operations Officer: Once between Economic
+Phases, the Group with this Crew Card may do one of the
+following:
+• Ignore the movement effect of one (and only one) hex
+containing Nebula, Asteroids, Quantum Filament, Plasma
+Storm, or a Black Hole (survival is automatic, but may
+not use Black Hole Slingshot).
+• All ships on this Group get either +1 Attack Strength or
++1 Defense Strength for one round.
+Turn this Crew Card sideways to show that it has been
+used and return it to vertical in the next Economic Phase.
+REPLICATOR CREW CARDS
+192. Mycroft: Natural attack rolls of “1” by ships in this
+Group grant the attacking ship a second attack roll (these
+may be against the same or different Groups). If on a ship
+with Hull Size of 1, the second attack roll is granted on
+rolls of 1-2.
+193. Hive Queen: This Group gets +1 Defense Strength.
+All OTHER Replicator Groups in the fleet get +1 Attack
+Strength and -1 Defense Strength. This is not optional!
+194. Hal 10K: This Group fires at its normal Weapon
+class, regardless of terrain. Movement Rules are unaffected
+by this.
+195. ROMmie: Every time a ship in this Group suffers a
+hit, roll a die. On a roll of 1, the hit is ignored.
+196. WOPR: Once per round, this Group may reroll one
+Attack die or choose one Attack die against the Group to
+be rerolled. The decision must be made immediately after
+the die is rolled. The first result is undone and the second
+roll must be used.
+197. Data: During movement only, this Group ignores
+Asteroids, Nebulae, and Black Holes.
+198. Skynet: During the first round of combat only, this
+Group and 2 others of the Replicator player’s choice fight
+as one Weapon Class higher.
+199. Quorra: This Group cannot be targeted by Mines as
+if equipped with Anti-Sensor Hull.
+200. Agent Smith: This fleet gets a Fleet Size Bonus
+when it has at least one more combat-capable ship than
+the opponent. The opposing fleet does not get a Fleet Size
+Bonus unless this Crew Card’s fleet is outnumbered by
+3:1. If the opposing fleet is Expert Tacticians or has an
+Admiral of the Navy (or both), everything cancels each
+other out and the Fleet Size Bonus is given at 2:1.
+201. Ash: In each combat, choose one hex into which
+the enemy cannot retreat. The decision of which hex is
+forbidden is made when an enemy Group announces intent
+to retreat for the first time and applies to all enemy retreats
+in that combat. The restriction is immediately lifted if this
+Group is destroyed or retreats. The Group may be screened
+and still take advantage of this effect.
+202. Alexa: This Group’s Movement technology operates
+as if it was one level higher than currently installed, even if
+that higher level has not been researched. It can’t operate
+at a level above the maximum of Movement 7.
+203. Sonny: One ship in this Group gets +1 to Attack
+Strength. If on a Group with a Hull Size of 1, it gets +2
+and ignores the first hit against it in combat.
+Crew Cards
+12 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+4. Dilithium Crystals 5/2: At the end of every Economic
+Phase during which there is a full-strength Colony on this
+planet, place a Dilithium counter on the planet if there isn’t
+one already (if all Dilithium counters are already on the
+map no additional one is placed). The player who owns this
+Colony may use a Transport (21.1) to carry one counter
+(and nothing else) to their Homeworld. If successfully
+transported, the Dilithium counter provides a number of CP
+equal to the distance from this planet to the Homeworld.
+Use the shortest possible route when calculating distance,
+taking into effect Warp Points (28.2) and Folds in Space
+(25.2) but not Warp Gates. If Replicators grow a Colony
+on this planet to full-strength, they remove this Attribute
+and gain 10 CP. If a player’s Colony on this planet is
+conquered or destroyed (including if a Titan destroys the
+planet), any existing Dilithium counters carried by that
+player’s Transports which originated from this planet may
+still provide CP upon arrival to their Homeworld.
+5. Abundant 5/2 (2 of these): This planet produces 2 extra
+CP each Economic Phase during which there is a Colony
+here, even if the Colony is new. Replicators treat this as
+Mineral CP (40.6.1)
+6. Wealthy 4/1 (2 of these): This planet produces 1 extra
+CP each Economic Phase during which there is a Colony
+here, even if the Colony is new. If a Replicator Colony is
+placed here, remove this Attribute (the wealth comes from
+the native economy; Replicators would ignore it).
+7. Poor 2/0 (2 of these): This planet produces 1 less CP
+each Economic Phase during which there is a Colony here,
+to a minimum of 0. If a Replicator Colony is placed here,
+remove this Attribute (the lack of wealth comes from the
+native economy; Replicators would ignore it).
+8. Desolate 1/0: This planet produces 4 less CP each
+Economic Phase during which there is a Colony here,
+to a minimum of 0. Replicators do not produce a ship at
+this planet during an Economic Phase unless the Colony
+is at Full and they pay 3 CP, but a Replicator Colony at
+full strength may always be used to join/split/reconfigure
+Replicator ships without cost (40.3.2).
+9. Sparta 0/3: At the end of any Economic Phase during
+which there is a full-strength Colony on this planet, that
+Colony additionally produces either one Space Marine or
+one Heavy Infantry (if the Colony’s owner does not have
+Ground Combat 2 no unit is produced) If a Replicator
+Colony is placed on this planet, remove this Attribute.
+Deep Space Planet
+Attribute List
+1. Aggressive 4/0 (2 of these): Immediately reveal all NPA
+ships in this hex when the counter is flipped. These ships
+attack units that end their move in an adjacent hex, then
+instantly move back to their own planet afterwards. During
+any combat phase Aggressive NPAs will defend against
+attacks on their own planet first, then will attack units in
+adjacent hexes one by one (choose the order randomly if
+multiple hexes eligible, colony hexes last, see below) until
+they are destroyed or no enemy units remain in eligible
+adjacent hexes. These attacks do not trigger Reaction
+Movement (35.0). Aggressive NPAs will never attack units
+in home systems or Thick Asteroids. They will also not
+attack NPAs except ones captured by players (they will
+attack solo Alien Empire opponent units).
+They will only attack units in hexes with deep space colonies
+once no units remain in hexes without colonies. If the
+defending units are destroyed any colony is automatically
+destroyed too without bombardment. Aggressive NPAs
+do not cause mines to be detonated (this is an exception to
+17.1.4); however, they lose this feature if they are captured
+or join Amazing Diplomats. If all Aggressive NPA ships
+are destroyed while in a hex adjacent to their own planet,
+randomly draw one NPA ship and place it on their planet,
+this ship will not perform any more attacks until the next
+combat phase. This Attribute is removed when the planet
+is colonized.
+2. Spice 0/4: This planet can only be taken via Ground
+Combat (21.8); it can never be colonized with a Colony
+Ship. If an attempt to take this planet fails, the next invasion
+force will again face 4 Heavy Infantry and 5 Militia. Once
+conquered by a player, future invasions will only need to
+defeat that player’s Ground Units (without the replenished
+Heavy Infantry). If a player’s Colony is destroyed by
+bombardment, the now empty planet will once again be
+guarded by 4 HI and 5 Militia. If a full-strength Colony
+is on the planet at the end of an Economic Phase, all that
+player’s ships (in supply, 36.5) move at a rate 1 technology
+level higher until the next Economic Phase. Replicators
+(40.0) also receive this benefit. If a Replicator Colony is
+removed from this planet, remove this Attribute.
+3. Organia 0/0: This planet cannot be conquered,
+colonized, or connected to a player’s trade network
+(13.2.2). No combat can occur in this planet’s hex, but it
+may be moved or retreated into even if enemy ships are
+present in the hex. Treat this space as a Galactic Capitol
+(28.1) for purposes of movement restrictions. Because
+combat is forbidden, Replicators do not gain RPs from other
+ships in this hex, even for encountering an NPA (18.0).
+Deep Space Planet Attributes
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 13
+© 2024 GMT Games, LLC
+10. Defensible 4/0: All defending Ground Units (including
+Militia) on this planet get +1 Defense Strength. There is no
+extra effect on colony bombardment rolls.
+11. Dampening 4/1: Because of a strong dampening field
+that interferes with FTL travel, all ships must stop after
+entering this planet hex. All ships must also stop after
+leaving this hex. Nothing can remove this movement
+restriction, including MS Pipelines (13.2.1). However, an
+MS Pipeline can still connect to the Colony and provide
+its standard increase to CP.
+12. Ambush 4/1: All attacking ships in this hex fire as if
+they are E-Class (this supersedes any effects from cards).
+Boarding Ships still fire as F-Class. If a Replicator Colony
+is placed on this planet, remove this Attribute.
+13. Doomed 1/0: When this planet is revealed, place a
+numeral marker with a 6 in the hex. Reduce the numerical
+marker by 1 each Economic Phase. When the numeral
+marker should be reduced from 1 to 0, remove it instead.
+The planet explodes and destroys all units in the hex;
+replace it with an Asteroid counter (or terrain tile.) If
+this planet is removed for any other reason (Titan attack,
+Replicator Colony depletion), remove this Attribute and
+the numerical countdown marker.
+14. Builder 5/0: Any colony on the planet is treated as
+having a shipyard capacity of 3 in addition to any shipyard
+in the hex. This is not modified by technology and provides
+no benefit in combat. Ships can be retrofitted in this hex as
+if an SY was present. If a Replicator Colony is placed on
+this planet, remove this Attribute.
+15. Spaceport 0/0: This planet is a neutral spaceport
+and cannot be colonized or fired upon, though it can be
+connected to a player’s trade network as if it were a Colony.
+It may not have Fighters or Ground Units on the planet.
+Combat occurs normally in the hex, but the planet is always
+unaffected. A player who has a unit in this hex at the start of
+the Economic Phase may build one ship of Ship Size 1 in
+this hex for 2 CP more than that ship’s usual cost. A Raider
+using Cloak to avoid combat does not allow a player the
+ability to build a ship here. A Replicator player with units
+in this hex may move a newly-built Size 1 ship to this hex
+for 1 CP at the end of the Economic Phase.
+16. Research 5/0: When colonized for the first time (only),
+this planet gives one level of technology. Roll on the Space
+Wreck table. If a Replicator Colony is placed on this planet,
+remove this Attribute and treat the Replicators as if they
+consumed a Space Wreck, gaining 1 RP.
+17. Minor Technology 4/0: Instead of drawing two Alien
+Technology Cards and choosing one (11.0), the player draws
+three and chooses one. Replicators gain no additional benefit;
+they draw one card and immediately discard it, gaining 10
+CP as normal.
+18. Major Technology 5/1: Instead of drawing two Alien
+Technology Cards and choosing one (11.0), the player
+draws three and chooses two. Replicators draw two cards
+and immediately discard both, gaining 20 CP (10 CP per
+card as normal).
+19. Cloaked 4/0: All NPA ships in this planet hex have
+Cloaking 2 but will not cloak to avoid combat. Replicators
+entering combat with these NPAs are treated as encountering
+Cloaking, thereby unlocking Scanners.
+20. Ranged 4/1: All NPA ships here fire as if they are one
+Weapon Class better. When this planet is first colonized, the
+player gets 10 CP off the next level of Tactics Technology
+they research (the counter is removed and kept as a
+reminder). Replicators entering combat with these NPAs
+are treated as encountering Tactics 2, potentially gaining an
+RP. If a Replicator Colony is placed on this planet, remove
+this Attribute without further effect.
+21. Accurate 4/1: All NPA ships here have +1 to their Attack
+Strength. When this planet is first colonized, the player gets 10
+CP off the next Attack Technology they research (the counter
+is removed and kept as a reminder). Replicators entering
+combat with these NPAs are treated as encountering Attack
+1, potentially gaining an RP. If a Replicator Colony is placed
+on this planet, remove this Attribute without further effect.
+22. Shielded 4/1: All NPA ships here have +1 to their
+Defense Strength. When this planet is first colonized, the
+player gets 10 CP off the next Defense Technology they
+research (the counter is removed and kept as a reminder).
+Replicators entering combat with these NPAs are treated
+as encountering Defense 1, potentially gaining an RP. If
+a Replicator Colony is placed on this planet, remove this
+Attribute without further effect.
+23. Giant 4/1: All NPA ships here have +1 Hull Points except
+for determining if they are equipped with Scanner or Point
+Defense technology. When this planet is first colonized, the
+player gets 10 CP off the next Ship Size Technology they
+research (the counter is removed and kept as a reminder).
+Replicators entering combat with these NPAs are treated
+as encountering a Cruiser, potentially gaining an RP. If a
+Replicator Colony is placed on this planet, remove this
+Attribute without further effect.
+Deep Space Planet Attributes
+14 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+28. Time Dilation 6/2: Time moves twice as fast on this
+planet. During the Economic Phase, a Colony on this planet
+grows twice and produces twice. A Colony with a 1 marker
+on it would produce 1 CP, grow to a 3 marker, produce 3
+CP, and then grow to a 5 marker in one Economic Phase.
+Twice as many Shipyards or Bases can be produced in
+one Economic Phase as is normally allowed and each
+existing Shipyard can produce twice as many ships. The
+first (or only) Shipyard built on this planet during any one
+Economic Phase may produce a normal number of ships
+in that Economic Phase. After combat, the planet may be
+bombarded by each ship twice. Replicator Colonies are
+not affected as described above. Replicator Colonies that
+begin an Economic Phase at full growth may build a single
+Hull Size 2 ship directly instead of creating two Hull Size
+1 ships.
+111. Carthage: The Barren Planet in each Home System
+is occupied by a hostile alien race. It is treated like a Deep
+Space planet, complete with NPAs, drawing Technology
+Cards, etc. It cannot have the Aggressive Deep Space
+Planet Attribute. If that attribute is revealed on that planet,
+discard it, and immediately draw another. Each player
+cannot explore or enter Deep Space until they defeat
+these NPAs in their home system. They are the major
+competing power in your region and must be defeated
+before conquering the universe.
+112. Fruitful: Barren Planets in a Home System do not
+need Terraforming to colonize, but are still considered
+Barren for the purpose of other cards.
+113. Worth the Effort: If a Colony on a Barren Planet
+produces any CP, it produces 2 extra CP (or the appropriate
+type of point if a Facility is present). Do not use (draw
+another card) if Replicators are in the game.
+114. Extinct Alien Empire: The Barren Planet in each
+player’s Home System has no NPAs but provides Alien
+Technology Cards when colonized; Draw 4 cards and keep
+2. Do not use (draw another card) if Replicators are in the
+game. The Xeno-Archeology Resource Card may not be
+used when colonizing this planet.
+115. Expert Empires: When drawing Empire Advantage
+cards, draw 4 and keep 2. Warning – there can be some
+crazy combinations when playing with this variant, but it
+is fun.
+Scenario Modifier Card List
+24. Military Geniuses 4/1: All NPA ships here have +1
+Attack and +1 Defense. When this planet is colonized, the
+player draws two Crew Cards (12.0) and keeps one, which
+can be used immediately or at the next Econ Phase. In
+addition, whenever a Crew Card is used, it may be placed
+on a ship in this hex, if colonized.
+25. Jedun 5*/2: All NPA ships here have +1 Attack, +1
+Defense, and +1 Tactics. When this planet has a Colony,
+the owner may place one group (ships or Ground Units)
+with up to 8 Hull Points under this counter; the group is
+studying at the Jedun Temple. Only one group may be
+studying at the Jedun Temple at a time and that group
+may not simultaneously upgrade their ships. If it does not
+move for three consecutive turns, the group is marked with
+a Jedun counter for the rest of the game. This group gets
++1 Attack, +1 Defense, +1 Tactics to its base stats. These
+bonuses are not considered technological, but rather a
+consequence of the disciplined training the crew received
+at the temple. It is possible for a group to have an effective
+rating of Tactics 4 because of this. No units may be added
+to this group unless they also have a Jedun counter and any
+Group split off gains a Jedun counter. Jedun ships that are
+captured are no longer Jedun (due to the change in crew).
+If a Replicator Colony is placed on this planet or the planet
+is destroyed, remove this Attribute without further effect;
+preexisting groups with Jedun counters retain their bonuses.
+26. Telepathic 5/1: If a player has a Colony on this planet,
+their ships that start in the hex and do not move may be
+placed under the Telepathic counter. At the end of another
+player’s movement phase (before ships are revealed in
+combat), ships under the Telepathic counter may be placed
+in any battle hex within range of what they could have
+moved to in their previous turn. They are considered part
+of the defending forces from the start of the battle. They
+may also be placed in a hex adjacent to the Colony with
+no enemy combat units present. They may do this even if
+their hex has an attacking fleet in it. This represents the
+people of the planet warning them of where enemy units
+are going to move and thereby being able to intercept or
+avoid them. If a Replicator Colony is placed on this planet,
+remove this Attribute without further effect.
+27. Scanning 6/2: There is a massive scanning array built
+into this planet which is far beyond the technology of the
+players. If a player has a Colony on this planet, all enemy
+ships within 2 hexes of the planet are flipped to their
+revealed side (immediately when the colony is placed and
+immediately when ships enter later). If a Replicator Colony
+is on the planet, they receive the same benefit.
+Deep Space Planet Attributes Scenario Modifier Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 15
+© 2024 GMT Games, LLC
+116. No Sensor Lock Possible: No combat can occur in
+Nebulae, all other rules remain the same. It is a neutral
+space. Both combat and non-combat ships of all players
+may enter and end their turn in the hex, ignoring the units
+of other players. Replicators do not gain RPs from enemy
+units in this hex.
+117. Thick Asteroids: All other rules for Asteroids are
+the same, except all ships take one damage in Asteroids.
+Non-combat ships and ships with one Hull are destroyed;
+all other ships have one damage on them while in the
+Asteroids (this is an exception to the rule that only one
+ship in a group may have damage). They are immediately
+healed upon exiting Asteroids. This applies to the Space
+Pilgrims Empire Advantage as well. Missiles cannot
+be fired in Asteroids. The Insectoids, Giant Race, and
+Industrious Race Empire Advantages cannot be used if
+this is in effect.
+118. Advanced Navigation: Ships do not have to start
+adjacent in order to enter Asteroids or Nebulae but must
+still stop upon entering. All other rules are the same.
+119. Expensive Ships: All units except Ground Units cost
+1 CP extra to build. For the Replicator player the first 15
+CP of Minerals collected provide no income.
+120. Planetary Gates: All planets within 3 hexes are
+connected by Planetary Gates (see CSB 9.0 but do not
+place extra Barren Planets at setup).
+121. A Way Through: All rules for Super Novas are the
+same except they can be entered by specific type(s) of ship,
+and anything being carried by that ship (Fighters, Ground
+Units, etc. on board). For that type of ship the Super Nova
+is like an empty hex. During setup, roll a die: 1-2 SC, 3-4
+DD, 5 CA, 6 BC, 7 BB, 8 Raiders, 9 MB & CV & BV,
+10 Flagship & Transport. Indicate the result of the roll
+by placing ship(s) from an unused empire on this card or
+writing a note on scratch paper. Do not use (draw another
+card) if Replicators are in the game.
+122. Better Homes: Home Planets produce 10 CP more
+if at full strength. The Replicator Homeworld produces 2
+extra Hull Points if at full strength.
+123. Improved Colony Ships: When colonizing a planet
+(4.4) the colony starts at 1 CP. Bombardment and other
+game effects can reduce colonies to 0 as normal.
+124. Close Quarters: Some ships have lower Weapon
+classes:
+• DD, CA, Raiders with nullified cloak are E-Class.
+• BC and Fighters are D-Class.
+• BB are C-Class.
+• DN are B-Class.
+These classes can be increased by Alien Tech Cards, Empire
+Advantages, and other effects. Unique Ships cannot be used.
+Do not use (draw another card) if Replicators are in the game.
+125. Big Ships and Tractor Beams: All players start with
+Ship Size 4. Replicators start with SC/DD/CA already
+checked off. All players start with Tractor Beams, and
+all BBs and Type XI Replicator Ships are automatically
+equipped with them. Do not draw a Special Ability for
+BBs if using an Alternate Empire; they get this instead.
+The cost to research Ship Size 7 is 50 CP instead of 30 CP.
+126. Big Ships and Shield Projectors: All players start
+with Ship Size 5. Replicators start with SC/DD/CA/
+BC already checked off. All players start with Shield
+Projectors and all DNs and Type XIIIs Replicator Ships
+are automatically equipped with them. Do not draw a
+Special Ability for DNs in an Alternate Empire; they get
+this instead. The cost to research Ship Size 7 is 60 instead
+of 30. If the Big Ships and Tractor Beams card is also
+drawn, each player gets both Tractor Beams and Shield
+Projectors, but use the higher values for Ship Size, ships
+checked off, and cost to research Ship Size 7.
+127. Advanced Destroyers: All DDs are DDX. Replicators
+get +1 RP at start.
+128. Battlecarrier Universica: BVs can be built as soon
+as Fighter 2 tech is researched. Replicators get +1 RP at
+start. Do not use (draw another card) if an Alternate Empire
+is in the game.
+129. Raiders: All Raiders are Raider Xs (38.9), but each
+player gets Scanner 2 for free the moment Scanner 1 is
+researched (buying Scanner 1 allows you to detect all
+raiders). NPAs with Scanners still only have Scanner 1.
+Replicators get +1 RP at start.
+130. Advanced Bases: All players may build Advanced
+Bases (38.4) at start. Replicators get +1 RP at start.
+Scenario Modifier Cards
+16 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+determine randomly which one it will enter. It will avoid
+moving into a hex with combat-capable ships and Bases
+if doing so does not increase the number of hexes to reach
+the Homeworld. Warning: This drastically changes the
+game. It is a real danger to explore Deep Space when this
+is in effect.
+137. Space Amoebas: Play according to the rules for the
+Space Amoeba scenario (CSB 10.0).
+138. Heavy Terrain: Place 2 System markers in each
+Deep Space hex. If there are not enough markers to do
+this, place them so that they evenly cover rows between
+the players starting in the center. For example, if there were
+6 rows of Deep Space between the players and there was
+only enough to cover 5 rows, then only the center 4 rows
+of Deep Space get a second marker. Both are revealed and
+explored simultaneously (If using Exploration Technology
+both are looked at simultaneously by one ship and it is not
+possible to reveal only one marker). If a Super Nova or Fold
+in Space is revealed, then remove the other marker. If a hex
+has both a Super Nova and a Fold in Space, remove the
+Fold in Space. If a Cosmic Storm (25.1) is flipped, remove
+it if the other marker is something a Storm cannot enter.
+Otherwise, if there are two permanent terrain markers, they
+both remain. Use the terrain tile from one of them and put
+the other counter on top of it.
+EXAMPLE: If an Asteroid and Nebula were revealed in
+the same hex, then everyone fires as E-Class; there is no
+Cloak, no Attack Tech, and no Defense Tech.
+139. Safer Space: Whenever a Danger! marker is flipped,
+one die is rolled for each ship in that hex. They are only
+eliminated on a roll of 7-10. On a roll of 1-6, there is no
+effect.
+140. Smart Scientists: The research cost of all technologies
+is decreased by 5 CP before any Empire Advantage is
+applied. Replicators also get +1 RP at start.
+141. Trained Defenders: When invaded, every Colony
+gets 2 Heavy Infantry Militia in addition to any other
+Militia or Ground Units from other sources. These two
+are represented by a separate HI counter and are removed
+at the end of ground combat, regardless of who wins (All
+other HI is targeted first i.e. at the end of combat remove
+2 HI or 1 if it’s the only HI left. No effect if no HI are left
+at the end of combat). Do not use (draw another card) if
+Replicators are in the game.
+131. Tough Planets: Planetary Defense Strength from
+Ground Units present is doubled.
+EXAMPLE: if 4 Ground Units are present, the planet has
+a Defense Strength of 4 and not 2.
+Ships attacking Replicator colonies get -1 to their Attack
+Strength.
+132. Tough Shipyards: All Shipyards, regardless of
+Empire Advantage, have Hull Size 2 (C3-0-2) and can
+mount Attack 2 and Defense 2 technology. Maintenance
+and all other SY rules remain the same. When this is in
+play, the Empire Advantage On the Move can’t be used.
+Replicators get +1 RP at start.
+133. Stealth Transports: If no type of Base or Defense
+Satellite Network is present, Ground Units can be landed
+before resolving space combat or after any round during
+which the Base or DSN that prevented landing was
+destroyed. Ion Cannons do not prevent the early landing
+of Ground Units.
+134. Ion Cannons: All player Colonies are equipped with
+Ion Cannons. Similar to the Militia counter, the Ion Cannon
+counter is added to the defending force for space combat.
+There is no penalty for their destruction. They do not benefit
+from nor provide rolls for experience. A Colony, regardless
+of size (even a new one), will have 3 Ion Cannons. Even if
+destroyed, there will be three available at the start of the
+next combat. These count towards the Fleet Size Bonus and
+automatically upgrade tech to the limit of their Hull Size
+(similar to a Base). No maintenance cost needs to be paid
+for the Ion Cannons and they cannot be boarded. They are
+A5-0-x1 regardless of Empire Advantage.
+135. We Need the White: At the start of the 6th Econ
+Phase, each player selects their Home System Colony that
+is farthest in hexes from their Homeworld. If there is a tie,
+each player may choose between their own tied colonies.
+Mark that colony with a Key Planet counter. If that Colony
+is ever destroyed or captured, that player loses the game
+(as if they lost their Homeworld).
+136. Doomsday Machines: Whenever a Doomsday
+Machine (29.0) is discovered in Deep Space it attacks the
+ship that discovered it. If Exploration Technology (9.8)
+was used, the DM is revealed and placed in the hex with
+the ship that discovered it; ships in that hex cannot move
+that turn and no other ships may enter that hex. If the DM
+survives the battle it will move one hex per turn by the
+fastest route to attack the Homeworld of the player that
+discovered it. It will remove planets and Asteroids along
+the way. If two hexes are equidistant to the Homeworld,
+Scenario Modifier Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 17
+© 2024 GMT Games, LLC
+142. Know the Weakness: All Unique Ships are equipped
+with Design Weakness ability. However, instead of giving
+an opponent’s randomly rolled ship type a +2 Attack against
+the Unique Ships, the Unique Ships get +2 against the
+randomly rolled ship type. Roll on the usual table when a
+UN from a given player first enters combat to determine
+the ship type. There are no cost savings for Unique Ships
+having this installed and it does not count towards the
+other techs they can have installed. The standard version
+of Design Weakness cannot be chosen when using this
+Scenario Modifier. Discard and draw another card if not
+playing with Unique Ships.
+143. No Temporal Prime Directive: When spending
+Temporal Points (36.6), everything costs half of normal
+(rounded up). Discard and draw another card if not playing
+with Facilities. Beware End of Empire!
+144. Bloody Combat: All units except Ground Units have
+their Attack Strength increased by one.
+145. Experienced Crew: At the start of the game, all
+Players draw 6 Crew Cards (12.0) and keep 3. Set them
+aside. These Crew are held in reserve and not assigned to
+a group until the player chooses to do so. They can only
+be assigned to a newly built group during an Economic
+Phase. No other Crew Cards are used in this game (except
+if drawn by Resource Card).
+146. Life is Complicated: Discard this card and draw 2
+in its place. A total of 3 Scenario Modifier Cards will be
+in effect for this game.
+147. Rich Minerals: The income from all Minerals is
+doubled. If Minerals +5/-3 is being used to change the
+value of the Mineral, that change happens before the
+doubling.
+148. Technology Head Start: Each player starts the game
+with 75 CP that can only be spent on technology. This is
+spent before receiving starting units so it is possible that a
+player’s original units may start with additional technology.
+No more than two levels of Ship Size or Movement tech and
+no more than one level of any other tech may be purchased
+at start. Up to 10 of these CP may be carried over into the
+start of the game (and used as normal CP in the game) - if
+playing with Facilities, these are RP and not CP. Do not
+use (draw another card) if Replicators are in the game.
+149. Low Maintenance: All maintenance costs are
+halved. When calculating maintenance, add up the total
+maintenance cost that you would normally pay (including
+modifiers from e.g. experience) and then divide it in half
+(rounded down). When tracking the change in maintenance
+on the Production Sheet, extra notes will have to be kept on
+the pre-halved value to prevent having to recount all of your
+maintenance costs every Economic Phase. If Robot Race
+is being used, that player would pay no maintenance. Do
+not use (draw another card) if Replicators are in the game.
+277. Weak NPAs: All deep space Barren planets have one
+less ship and one less Heavy Infantry (minimum 0).
+278. Hardy Empires: All Empires start with Terraforming
+1. Replicators get +1 RP at start.
+279. Second Salvo: CAs are automatically equipped with
+Second Salvo at no extra cost as per the Unique Ship
+Rules. Prior to Economic Phase 8 Flagships are treated
+as having Second Salvo while in combat in the Home
+System of their owner. After Economic Phase 8, they are
+automatically and permanently equipped with it. Do not
+use (draw another card) if Replicators are in the game. Do
+not use Cloaking Geniuses if this card is in play.
+280. Recon Ships: In addition to the normal starting forces,
+each player receives 6 Recon Ships (use Unique Ship
+counters). They are E1-0 x1, but cost no maintenance. They
+may be upgraded, but not built. Do not use the normal UN
+rules. If a player draws Alien Tech Cards 282 or 283, the
+player may remove any remaining Recon Ships in order
+to build the new design, but may not build other designs.
+66. Red Squadron (Cancel Card) Value: 4/2
+Effect: Play before the battle begins, but after ships are revealed.
+One FTR Group currently in battle gets an additional +1 to attack
+for the remainder of the battle.
+67. Sensor Blind Spot (Cancel Card) Value: 4/2
+Effect: Play before the battle begins, but after ships are revealed.
+A single unit with a cloak that has been nullified by Scanners
+during combat may hide in the sensor blind spot of a unit with
+Hull Size x3 or greater. The Raider immediately makes a retreat
+from battle. This doesn’t need to be a hex closer to a friendly
+Colony than the hex the battle was in.
+Resource Card List
+Scenario Modifier Cards Resource Cards
+18 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+case the Replicator could theoretically build a Type XIII or XV
+AND another Hull Size 1 ship.
+74-75. Heroic Ground Unit Value: 4/2
+Effect: Play before the first round of a ground battle begins. Select
+one of your non-Militia Ground Units (one unit, not an entire
+Group). It will be Heroic for the rest of the game or until it is
+destroyed. Heroic Ground Units get +1 to their Attack/Defense/
+Hull Size. This card may not be combined with Defending
+Familiar Terrain to create a Heroic Heavy Infantry Militia.
+74. Flavor Text: “For the Honor of the Regiment!” The art used
+for this card is the crest of the regiment that Oliver Upshaw, this
+game’s developer, served in.
+Replicator Effect: Extra Hull. See the note for Card #70.
+76. Defending Familiar Terrain Value: 3/1
+Effect: Play before the first round of a ground battle to upgrade a
+planet’s Militia to Heavy Infantry for the duration of the combat
+(21.10). May even be played if the defender is only at Ground
+Combat 1. May be played when another player attacks NPAs.
+A counter is provided so that the players can keep separate any
+real defending Infantry/Heavy Infantry.
+Replicator Effect: Extra Move. Play this card before moving
+to move one Replicator ship (not a Group), one extra space this
+turn. Additionally, for each other Resource Card you discard
+unused from your hand, one additional Replicator ship that is
+part of the same Group can also move one extra space. Two
+of these cards cannot be used in combination to make one
+Replicator ship move two extra spaces in one move.
+77. Research Breakthrough Value: 2/1
+Effect: Play this card to allow you to research two levels of the
+same technology in the same Economic Phase at the combined
+cost of the technologies in question plus 5 CP. If you are using
+IC/RC rules (36.0), the extra cost is 5 RP. This is the only card
+effect that cannot be canceled when played. When you discard
+it, you do not have to announce if it was played for its effect
+or for CP.
+Replicator Effect: Extra Move. See the note for Card #76.
+78. Quick Study Value: 3/1
+Effect: Play before a friendly or enemy Group rolls for
+Experience. Shift the dice result by +/–2. This affects all
+Experience die rolls made by that Group this round.
+Replicator Effect: Extra Move. See the note for Card #76.
+79. Discover Member of Ancient Race Value: 4/2
+Effect: Play at the start of an Econ Phase where you will roll
+on the Space Wreck Technology Table. After you roll, you may
+68. Self Destruct (Cancel Card) Value: 4/2
+Effect: Play after one of your ships is captured. Immediately
+destroy it. The enemy gains no knowledge of your abilities from
+capturing this ship. The ship still counts as captured for the
+purpose of Ship Experience Promotion Rolls (37.3.2).
+69. Concealed Minefield (Cancel Card) Value: 4/2
+Effect: Play before the battle begins, but after ships are revealed.
+Before Enemy Minesweepers sweep your Mines, one of your Mines
+may detonate as normal – even against a Minesweeper (17.0).
+70-73. Heroic Ships Value: 5/3
+Effect: Play before the battle begins, but after ships are revealed.
+Select one of the ships listed on the card title (a single ship, not
+a Group). It is Heroic for the rest of the game. Heroic ships
+get +1 to their Attack and Defense. They also take one more hit
+to destroy (this is cumulative with the Legendary bonus; 37.0).
+They do not pay maintenance. Heroic status is lost if the ship
+is captured or destroyed. Instead of using a number counter
+under the ship, use one of the Heroic counters with a star on
+it. If the ship ever gets flipped face down again, it will look like
+any other ship. In the very rare case where a player may have
+2 Heroic ships of the same type in the same hex, they may flip
+the Heroic counter to the 2-star side.
+When playing with Crew Cards (12.0), these Resource Cards
+cannot be used to make ships Heroic. Instead, they can be played
+at any time to draw 2 Crew Cards and keep 1. They may be
+immediately assigned or assigned during the next Econ Phase.
+70. Flavor Text: “There will always be a Rodger Young in
+the Federation fleet.” Inspired by Admiral Ernest J. King who
+stated that “There’ll always be an England in the United States
+Navy.” This was in response to DE-635 USS England’s sinking
+six Japanese Submarines between 18-27 May 1944.
+71. Flavor Text: “All Hands to General Quarters! ECM to
+Maximum! Hard a Port! Prepare to engage a major portion of
+the enemy fleet.” Inspired by the orders given by Commander
+Evans aboard DD-557 USS Johnston at the Battle of Leyte Gulf.
+72. Flavor Text: “The Empire expects every member of this
+crew to do his duty today!” Inspired by Admiral Nelson’s speech
+before the Battle of Trafalgar.
+Replicator Effect: Play this card to build an extra Hull on the
+Replicator Homeworld. Only one of these cards may be played
+at the start of an Economic Phase. This card may be combined
+with buying an extra Hull and with the Replicator Capitol
+Empire Advantage so that up to 4 Hulls could theoretically be
+produced in one Economic Phase. Since it only takes three ships
+of Hull Size 1 to build a Type XIII or Type XV, in this extreme
+Resource Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 19
+© 2024 GMT Games, LLC
+add or subtract up to 2 to the dice, even looping through the
+results. For example, a 10 can be shifted to a 2 and a 2 can be
+shifted to a 10.
+Replicator Effect: Extra Move. See the note for Card #76.
+80. Overload Weapons Value: 5/3
+Effect: For this effect, an additional Resource card must be
+discarded unused from your hand. Play before one of your ships
+(not Group) fires. When calculating the number needed to get
+a hit, double the Attack tech that is on the ship. For example, a
+BC with Attack 1 would have an Attack Strength of 7. If a hit is
+scored the target takes an extra 2 points of damage. This means
+a SC could one shot kill a DN/BB/Base with this card. If used
+on a Missile Boat, the card must be played when placing the
+Missile, doubles the Missiles attack tech, and the Missile would
+do 4 damage if it hits. For the rest of the battle the selected ship’s
+Attack Strength is considered to be zero. The Ship Selected must
+mount at least Attack 1.
+Replicator Effect: Extra Move. See the note for Card #76.
+81. Unconventional Boarding Value: 5/3
+Effect: For this effect, an additional Resource card must be
+discarded unused from your hand. Play this card instead of
+performing your ship’s normal attacks. Select an enemy ship and
+attack it with a boarding strength of 5. Subtract the Hull Size
+of the targeted ship from this Attack Strength. Security Forces
+have no effect on this die roll. And We Still Carry Swords
+(Empire Advantage #47) gives the +1/–1 bonus as normal.
+Experience, except for the extra Hull of a Legendary/Heroic
+Ship, has no effect on this roll. Add 2 to this Attack Strength
+if you have researched Boarding 1. Add 2 more if you have
+researched Boarding 2. This can only be used against ships that
+normally can be boarded. If you are not playing with Boarding
+Ships (19.0), then this card cannot be played for its effect. This
+effect can’t be used against Replicators and cannot be used by
+or against Alternate Empires or Immortals.
+Replicator Effect: Extra Move. See the note for Card #76.
+82-83. Xeno-Archeology Value: 2/1
+Effect: If you spend 10 CP in the next Econ Phase, you may
+keep the second Alien Tech card that you drew when capturing
+a planet (11.1). This card must be played before discarding one
+of the Alien Tech cards. If played, the 10 CP must be spent in
+the next Econ Phase. If playing without non-player Aliens, the
+player must normally spend 10 CP to keep one Alien Technology
+Card. Xeno-Archeology could be played to allow the player
+to spend an additional 10 CP to keep the other card. If this card
+is canceled the 10 CP does not have to be paid.
+Replicator Effect: After having earned an Alien Technology
+Card, gain an RP instead of 10 CP. Replicator player plays this
+immediately upon earning an Alien Tech Card. If this card is
+canceled, the Replicator player still gets to turn in the Alien
+Tech Card for 10 CP.
+84. Missed Rendezvous Value: 2
+Effect: Play before ships are revealed in battle. If the other
+side has units participating in this battle that entered the hex
+from at least two different hex sides or via Reaction Movement
+(35.0), all ships entering through a selected hexside do not
+show up until the second round of combat. These ships
+cannot retreat until the third round. For the delayed units,
+the second round is treated as the first round, the third round
+as the second, etc. in all respects (including when using the
+Empire Advantages #31 Fearless Race, #38 Hive Mind, etc.)
+Minesweepers that arrive on the second round of combat cannot
+sweep any remaining Mines. Ships with Shield Projectors
+that arrive on the second round of combat can only protect ships
+that also arrived in the second round of combat.
+85. Activate Space Monstrosity Value: 4/2
+Effect: Play before Doomsday Machines (29.0) move or Space
+Amoebas spread (SSB 3.0 and CSB 10.0). Choose a Doomsday
+Machine or Space Amoeba. You determine where it moves/
+spreads to, not the normal rules of the game. Though you cannot
+select a Black Hole hex for a Space Amoeba to spread to and you
+cannot move the DM/SA into a player’s Home System hexes.
+The DM can still only move up to two hexes and the SA will
+still only spread to one hex. If not playing with either Doomsday
+Machines or Space Amoebas, this card can’t be used for its event.
+86. Spawn Doomsday Machine Value: 4
+Effect: For this effect, an additional Resource card must be
+discarded unused from your hand. This card must be played at
+the start of your turn prior to your movement. Place a Doomsday
+Machine (29.0) in a Deep Space hex that is adjacent to one of
+your SC/SCXs and does not contain any terrain or unit counters.
+This does not cause an unrevealed SC/SCX to become revealed.
+It is not under any player’s control and will operate according
+to the rules in section 29.0. If not playing with DMs, the card
+cannot be played for its effect. If this card is played successfully
+for its effect, it does not go into your discard pile; it is set aside
+and is unusable for the rest of the game. For this card Replicator
+Type 0, II, and IV ships are considered a SC/SCX.
+87-88. Spy on Board Value: 4
+Effect: Play at the start of your turn or the start of an Econ
+Phase to flip over all the enemy units or NPA Aliens in one hex.
+89. Provide Cover Value: 3
+Effect: Play after an enemy Group targets one of your Groups.
+Designate another one of your Groups as the target of the attack.
+The target you choose may not be a Titan, any Base, Defense
+Satellite Network, Ion Cannon, Shipyard, or CV/BV (if you
+have Fighters present), or be protected by Shield Projector. It
+must be a legal target. All ships in the enemy Group must fire
+at the designated Group for this round of battle. They gain a
++1 to their attack. If your Group is destroyed before the last
+Resource Cards
+20 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+• At the start of your player turn, select one Nebula, Asteroid
+hex, or Black Hole. All your ships that start their movement
+beside this hex this turn may move through it (provided they
+have enough movement) without having to stop or having to
+roll a Black Hole survival check (6.3). This card cannot be
+combined with a Black Hole Slingshot Maneuver (31.0).
+98-99. Planetary Bombardment Value: 2
+Effect: Play before bombardment of a Colony starts (5.10). If
+played by the defender, give +2 to all of the attacker’s die rolls.
+If played by the attacker, give -2 to all their die rolls. Titans
+are not affected by this card. Transports using Anti-Replicator
+technology against a Start-level Replicator Colony are not
+affected by this card (40.2.5).
+100-101. Update Your Charts Value: 3
+Effect: Play at the start of your turn or the start of an Econ Phase.
+Can be played in one of two ways:
+• Select a hex that is beside an unrevealed Deep Space marker
+and that does not contain a System marker or a player unit.
+Add a random Deep Space marker that was set aside at the
+beginning of the game to that hex.
+• Select two unrevealed Deep Space markers and exchange their
+positions on the board.
+102. Play Dead Value: 5/3
+Effect: To play this card, an additional Resource card must
+be discarded unused from your hand. Play after one of your
+non-Titan ships is destroyed. Treat this ship as screened for the
+rest of the battle. It cannot be targeted for the rest of the battle.
+In cannot fire nor can it retreat. If you win the battle, the ship
+recovers all damage and rejoins your other ships. If you lose
+the battle, the enemy will destroy it at no cost. The enemy does
+get to roll for Experience when they “kill” the ship during the
+battle (37.0). Experience gained by this roll is not lost if the ship
+survives the battle. This effect cannot be used to save a Missile.
+103. Overconfidence Value: 3
+Effect: Play during combat, after fleets are revealed but before
+the first round starts. Enemy ships in this battle may not retreat
+(5.9) until one round later than normal (Round 3 for most ships,
+round 4 if combined with #84 Missed Rendezvous, etc.).
+104. Hidden Power Value: 3
+Effect: Play at the start of your turn or the start of an Econ Phase.
+Immediately draw up to 3 Resource Cards.
+105. Sanctions Value: 3
+Effect: Play at the start of your turn. Choose one opponent,
+randomly select one Resource Card from their hand (without
+looking), and place it face up in their discard pile.
+enemy ship in the Group has fired the remaining ships can pick
+new targets and do not get the +1. If the Group selected has not
+fired yet and it survives it must fire at the enemy Group that it
+blocked for this round. It will also gain a +1. If it destroys the
+enemy Group, it can switch remaining shots to new targets and
+doesn’t get the +1.
+90. Alien Reinforcements Value: 2
+Effect: Play at the start of your turn, the start of an Economic
+Phase or the start of combat before ships are revealed. Select
+one un-colonized Deep Space planet that has at least one NPA
+ship and randomly add 3 NPA ships to it (18.0). If you are not
+playing with NPAs then this card cannot be played for its effect.
+If the Replicators are in combat with the NPAs, these added ships
+may make it possible for them to mark off having encountered
+a Fleet Size of 5 or greater on their Production Sheet.
+91-92. Deep Cover Operative Value: 4
+Effect: Play at the start of your turn or the start of an Economic
+Phase. Choose an opponent. You may look through that player’s
+face up Resource Cards (excluding Missions), pick one card,
+and add it to your hand. Removing the card from a player’s face
+up Resource Cards does not change any of the effects that the
+card has already generated.
+93. Amazing Diplomats Value: 4
+Effect: Play when one of your ships enters a Deep Space
+planet’s hex for the first time. The NPAs in this hex will treat
+you as if your Empire Advantage is Amazing Diplomats for the
+rest of the game. If your Empire Advantage Card is Amazing
+Diplomats, then the first time one of your ships goes to that
+hex place a Colony 5 marker on the planet. Once a player has
+used either version of Amazing Diplomats to affect a planet,
+no other player may use either effect on that planet for the rest
+of the game.
+94-95. Forced System Shutdown Value: 4/2
+Effect: Play during combat, after fleets are revealed but before
+the first round starts. Select one enemy unit. For the first three
+battle rounds, treat this unit as not having any Attack, Defense,
+and Tactics upgrades. If the enemy does not have a spare
+Group counter, then they have the choice of either destroying
+the effected ship or having this card effect the entire Group. If
+played against Replicators, the ship gets –2 to its attack (min of
+1) and defense (min of 0), Tactics is not affected.
+96-97. Smuggler’s Route Value: 2
+Effect: Can be played in one of two ways.
+• At the start of your player turn or the start of an Economic
+Phase select any unrevealed System marker. Remove the
+marker from the board.
+Resource Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 21
+© 2024 GMT Games, LLC
+106. Coup Value: 4/2
+Effect: Play on a player after a battle where they lost 6+ Hull
+Points of combat-capable units. In the next Econ Phase, their
+Homeworld produces half the usual income (round down).
+The Hull Points must be lost in combat where dice are rolled
+to take out the ships.
+• Ships lost to Doomsday Machines or Space Amoebas DO count.
+• Bases, Starbases, DSN, and Shipyards DO count.
+• Ships that are captured DO count.
+• Ships lost to Mines DO NOT count.
+• Mines DO NOT count.
+• Ground Units DO NOT count.
+• Missiles DO NOT count.
+For the purpose of counting Hull Points for this card, ignore all
+special rules, Empire Advantages, and Alien Tech Cards. Count
+the Hull Points as shown on the counter. In the case of Unique
+Ships (41.0), count the Hull Size that was paid for. There is no
+negative effect when played against the Replicators; instead,
+the player that destroyed the Hull Points has their Homeworld
+produce 50% greater income (round down) in the next Economic
+Phase. (Representing a surge in loyalty and hope from getting
+an important victory.)
+107. Retreat When Engaged Value: 3
+Effect: Play during a battle before ships are revealed. ALL
+of your mobile units MUST retreat. This includes Decoys,
+Mines, Titans, Miners, Colony Ships, Pipelines and your Bases/
+Shipyards if they can move. If you have a Colony in that space,
+you may leave as many Fighters or Ground Units as you wish
+at the Colony.
+108. Collateral Damage Value: 2
+Effect: Play when a combat-capable unit of either side is
+destroyed in space combat at a planet. Drop the growth level of
+the planet by one level. This cannot cause the Colony to drop
+below the Colony marker’s lowest value, e.g., 0, Start, or 5 (for
+Homeworlds).
+109. Minerals +5/–3 Value: 2
+Effect: Play at the start of an Economic Phase. Designate one
+Mineral on a planet or a Miner in a Nebula harvesting resources
+(34.0) during the Economic Phase. That Mineral/Miner will
+be worth 5 more or 3 less than normal (your choice – you can
+either increase your own/teammates’ income or decrease your
+opponents’). If played on Replicators, play this card when the
+Replicator Player picks up the Mineral.
+150. Where No Man Has Gone Before (Mission) Value: 2
+Effect: This card may only be played during your turn. This
+card may be played face up in front of a player while there
+are still unexplored Deep Space System markers. Every
+player’s ship with Exploration tech may explore twice each
+turn. Once every Deep Space System marker is revealed,
+(only) the player who played this card gets to roll on the
+Mission Benefit Table.
+151. Time Travel Slingshot (Mission) Value: 2
+Effect: Play when one of your CAs performs a Black Hole
+Slingshot in Deep Space without being destroyed. Leave
+this card face up. Discard it to reveal all enemy groups/
+counters in one hex that could be moved into by at least
+one of your combat-capable ships.
+152. Journey to Babel (Mission) Value: 2
+Effect: Play when one of your CAs moves by itself into the
+same hex as an unconquered Deep Space NPA Planet; it
+has picked up a diplomatic delegation. Instead of a normal
+battle, one random NPA ship from the planet attacks the
+CA, which may not retreat. The NPA ship is on a suicide
+mission and gets +1 attack and defense. Regardless of the
+outcome, the NPA ship is eliminated. Any other NPA ships
+at that planet will not attack the CA. The CA must leave
+the hex next turn. If the CA defeats the ship and reaches
+its Homeworld, in the following Economic Phase the NPA
+Planet (if still unconquered) becomes allies to that player
+as if they had the Empire Advantage Amazing Diplomats.
+Place a 5 CP colony on that planet.
+110. Splash Damage Value: 2
+Effect: Play when a combat-capable unit is destroyed in space
+combat. Deal 1 damage to X other non-screened enemy combatcapable units (including Missiles) in this space battle, where X is
+the Hull Size of the destroyed ship. For each ship that is damaged
+by this, roll a die. On a 6-10 they ignore the damage. Titans,
+Doomsday Machines, Space Amoebas, CVs/BVs protected by
+Fighters, and Units protected by Shield Projectors cannot
+be selected as targets of the splash damage. Ships destroyed
+by Splash Damage do not generate an Experience Roll (37.0).
+Resource Cards
+22 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+157. Easy Planet Survey (Mission) Value: 2
+Effect: Play during your turn. Select any planet without
+a colony or Non-Player Aliens and mark it with the Easy
+Survey counter. It cannot be colonized unless 2 SCs are in
+the same hex as the planet at the time the Colony Ship lands.
+When colonized, this planet will grow 2 steps (instead of 1)
+during the next Economic Phase, then remove the counter.
+158. Scientific Survey (Mission) Value: 2
+Effect: Play this card face up when one of your CAs is
+adjacent to a Super Nova. Turn the CA face up. If this
+CA subsequently moves adjacent to 2 other Super Novas,
+discard this card and roll on the Mission Benefit Table. If
+the player turns the CA face down at a Colony or if it is
+destroyed, discard this card.
+159. Stellar Anomaly Investigation (Mission) Value: 2
+Effect: Play this card face up when you have 2 of your
+combat ships of different types in the same Deep Space
+hex containing at least one Nebula marker. Turn those ships
+face up. At the end of each turn (including this one), roll
+the die. On a roll of 1-3, discard this card and roll on the
+Mission Benefit Table. If one or both ships leave the hex
+discard this card for no effect.
+160. Distress Call (Mission) Value: 2
+Effect: Play when a ship you control is eliminated in battle.
+Instead of being destroyed, it is placed in a hex adjacent
+to the battle that is farther from your Homeworld than the
+battle hex (your choice). The chosen hex must contain one
+or more unexplored system markers if possible. When this
+hex is explored, remove and ignore the system markers.
+The player cannot move this ship until the turn after another
+of their ships ends their turn in the hex, but the ship may
+defend itself normally. This card may be played on a ship
+that had the Play Dead Resource Card played on it if you
+lose the battle and that ship is going to be destroyed.
+153. Balance of Terror (Mission) Value: 2
+Effect: Play during your turn. Select one other player. The
+two players each select one of their ships (a Group may be
+split to facilitate this) located in Deep Space, regardless of
+each ship’s location in relation to one another. If a player
+has no ships in Deep Space, that player may choose any
+one of their ships. If the ship can carry fighters and has
+fighters in the same hex, up to the amount of fighters the
+ship may carry are chosen too. These two chosen units then
+have an immediate battle to the death in open space with no
+possibility of retreat. The winner of this battle may attack
+a hex with a colony belonging to a player involved in the
+battle of his choice (not a Homeworld) with the chosen units
+regardless of location. After the attack and any possible
+bombardment, the units are returned to their previous hex
+if they survive. The Temporal Engine Benefit Temporal
+Maneuver may not be used during this Mission.
+154. Creature from Below (Mission) Value: 2
+Effect: Play during your turn. Select a non-Homeworld
+Colony in a Home System, friendly or enemy, and place the
+Creature token (A5-2-x4, 3 attacks each round) on it. This
+Creature does no damage to the planet, but the Colony is
+treated as if it is blockaded until the Creature is defeated in
+ground combat (Militia do not participate). Troops on the
+same planet must attack the Creature during their owner’s
+next combat phase. If the Creature defeats the Troops, all
+damage to it is healed and the Colony is still considered
+blockaded. When it is defeated, that player gets a one-time
+bonus of 15 CP.
+155. Arena (Mission) Value: 2
+Effect: Play at the start of a battle involving exactly one
+ship of each side. An advanced entity stops the battle and
+decides it is more civilized to have the captains of each ship
+fight to the death (how that is actually more advanced or
+civilized is unclear). Regardless of the ships involved, the
+player that played the card wins the battle on a roll of 1-6,
+their opponent on a roll of 7-10. The ship on the losing
+side is destroyed.
+156. Difficult Planet Survey (Mission) Value: 2
+Effect: Play during your turn. Select any planet without
+a Colony or NPAs and mark it with the Difficult Survey
+counter. This planet is difficult to settle. Every time at least
+one CA or Flagship ends its turn in the planet’s hex, roll a
+die. On a roll of a 1-2, the marker is taken by the owner of
+the ships, and the planet may be colonized. If the colony
+is placed by the player with the counter they draw 1 Alien
+Tech card and keep it. This is in addition to any other Alien
+Tech Cards drawn for colonizing the planet.
+Resource Cards
+Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes 23
+© 2024 GMT Games, LLC
+161. Quell Riots (Mission) Value: 2
+Effect: Play during your turn. Select a non-Homeworld
+Colony in a Home System, friendly or enemy, and mark it
+with the Riot counter. While the counter is at the Colony
+it is considered blockaded. If at least 4 Hull Points worth
+of combat-capable units except Shipyards, any Bases, and
+Defense Satellite Networks belonging to the Colony’s
+owner end their move at that Colony that player rolls a
+die (reveal all combat-capable units involved to prove it):
+• 1-5 – Remove Riot counter and roll twice on the
+Mission Benefit Table. The counter remains until this
+result is rolled.
+• 6-8 – No effect.
+• 9-10 – Reduce Colony one step. This can reduce
+the Colony to start, but never destroy it.
+If less than 4 Hull Points worth of ships are at the Colony
+during an Economic Phase, roll the die but there is only
+an effect on 9-10 as per above. This counts any modifiers
+to hull size, e.g. Giant Race and Insectoids.
+162. Police State (Mission) Value: 2
+Effect: Play during your turn. Select a Deep Space Colony,
+friendly or enemy, and mark it with the Police State counter.
+Very valuable resources have been discovered on this
+planet, but the indigenous population does not want to
+make them available. The Colony is considered blockaded
+unless the owner has at least 4 Space Marines and/or
+Heavy Infantry and 6 Hull Points of combat-capable units
+(including any Bases, Shipyards, DSN) revealed in that hex
+(This counts any modifiers to hull size, e.g. Giant Race and
+Insectoids). If they do, the Colony produces 10 additional
+CP that Economic Phase. If playing with Facilities (36.0),
+the additional income is always CP regardless of the
+Facility present. As soon as less than required units are
+present the colony is considered blockaded again.
+163. New FTL Test (Mission) Value: 2
+Effect: Play during your turn. Reveal a ship with at least
+2 Hull Points in Deep Space in a hex with no other ships.
+It must have the highest level of Movement Technology
+that you have researched. The Technology Level does not
+need to be revealed. Roll a die one time:
+• 1-7 – The test is a success! The next Movement technology
+purchased is discounted by 15 CP.
+• 8-9 – The test fails.
+• 10 – Calamity! The test ship is destroyed.
+164. Dimensional Anomaly (Mission) Value: 2
+Effect: Play during your Exploration Phase when a CA is
+your only ship (not Group) in a hex that had a system marker
+explored by that CA this phase (after resolving any system
+marker effects, including combat against NPAs) The CA is
+then shifted to another dimension and is removed from the
+board. At the beginning of each Economic Phase, roll a die.
+On 1-3, the CA is placed back on the board at a friendly Base
+or Shipyard. Subtract 2 from the die roll for each successive
+Econ Phase (e.g., in the third Econ Phase it would be -4 to
+the roll). The CA does not pay maintenance while off board.
+Roll on Mission Benefit Table when it returns to the board.
+The System marker may have been previously peeked at
+(but not flipped), using Exploration technology.
+165. Asteroid Strike (Mission) Value: 2
+Effect: Play during your turn. Place the Rogue Asteroid
+counter in an Asteroid hex and place the Asteroid Target
+counter in the same hex as an enemy non - Homeworld
+Colony at least two hexes away. Each Economic Phase
+the Rogue Asteroid moves one hex closer to the Colony
+(your choice if two hexes are equidistant). If it enters the
+same hex as the Colony, remove both the Colony and the
+Rogue Asteroid. If any player ends the movement phase in
+the same hex as the Rogue Asteroid with ships that have a
+combined Attack Strength of 3 or more (not counting attack
+technology), the player may remove the Rogue Asteroid
+counter (being in a hex when the Rogue Asteroid moves
+into the hex is not sufficient). Boarding Ships count as
+having an Attack Strength of 1 for this, Missile Boats count
+as having an Attack Strength of 6. If the units in the hex
+do not have a combined total of at least 3 Attack Strength,
+nothing happens.
+166. Urgent Deep Space Survey (Mission) Value: 2
+Effect: Play when one of your ships that is worth 12+ CP
+ends its turn in one of the following types of terrain in
+Deep Space – Nebula, Asteroids, Black Hole, Warp Point,
+Plasma Storm, Ion Storm, Quantum Filament, Quasar, or
+Pulsar. The ship must then subsequently end its turn in 3
+more of the listed terrain types (it must be different hexes,
+but not necessarily different terrain types) and then get
+back to one of your Colonies that has a Shipyard, Base, or
+Starbase. If successful, roll on the Mission Benefit Table.
+The ship performing this Mission must be revealed when
+the card is played. You may use your Flagship to complete
+this mission. If the designated ship is destroyed or the ship
+is flipped face down, discard this card.
+Resource Cards
+24 Space Empires: All Good Things - Card Manifest & Deep Space Planet Attributes
+© 2024 GMT Games, LLC
+167. Survivors (Mission) Value: 2
+Effect: Play during your turn. A shuttle containing one of
+your enemy’s people (choose an opponent at random) has
+crash-landed on a revealed but uncolonized NPA planet
+(choose randomly). Mark the planet with a counter from
+that Empire. If you colonize the planet while it has the
+counter you capture the survivors and ransom them back for
+10 CP (gained by you as if it was mineral income and lost
+by that enemy during the next Economic Phase) and get to
+look at the technology portion of that Empire’s Production
+Sheet (immediately) and the counter is removed. If another
+player colonizes this planet, the counter is removed without
+any effect.
+168. Sins of the Father (Mission) Value: 2
+Effect: Play during your turn. Select one of your ships
+of Hull Size 2 or greater in a Deep Space hex. A crew
+member from that ship must resolve a familial dispute on
+your Homeworld. If this ship begins and ends a turn at the
+Homeworld, draw a Crew Card (12.0). Do this even if not
+playing with Crew Cards. The Crew Card must be played
+as normal during the next Economic Phase or is discarded.
+169. Defend an Outpost (Mission) Value: 2
+Effect: Play at the end of your turn. Choose one of your
+own non-Homeworld Deep Space Colonies. The opponent
+of your choice MUST immediately attack it with between
+2 and 10 of their Ground Units (if possible). These Ground
+Units can be taken from anywhere on the board, including
+Transports, and are instantly placed on the planet and may
+fire normally during the first round (unlike normal rules,
+21.8.3). The defender does not get Militia. There is no space
+battle, but all units in the hex are revealed. If the attacker
+wins, they may decide to capture this Colony by removing
+one surviving Ground Unit as normal. If the defender (the
+person that played the card) defeats the attack, they roll on
+the Mission Benefit Table. If the player chosen does not
+have at least 2 Ground Units, no attack takes place, and the
+defender gets to roll on the Mission Benefit Table. Neither
+player involved can be Replicator.
+170. Defending Familiar Terrain (Duplicate - See Card 76)
+171. Minerals +5/–3 (Duplicate – See Card 109)
+172. Privateers Value: 3
+Effect: Can be played for one of two effects:
+• Play when peeking at a Space Pirate using Exploration
+Technology or Regional Map to hire that Space Pirate as if
+the counter was revealed during the Exploration Phase. In
+the case of using Exploration technology, the Space Pirate
+is hired before movement and may therefore be moved
+under the player’s control that turn.
+• Play when revealing a Space Pirate during the Exploration
+Phase while already in control of a Space Pirate to ignore
+the restriction and hire the newly revealed Space Pirate
+as normal.
+173. Hidden Power (Duplicate - See Card 104)
+174-175. Virus Value: 2
+Effect: Play during your turn. Select any non-Homeworld
+Colony. Place a Virus counter on it. In the next Economic
+Phase, that Colony is treated as if it is blockaded. Remove
+the counter at the end of that Economic Phase.
+176-178. Sabotage Value: 2
+Effect: Play at the beginning of your first turn after an
+Economic Phase. A player of your choice must destroy
+one Defense Satellite Network or any type of Base of their
+own choice. Replicators must destroy one ship not in their
+Home System. If the player does not have one of those,
+then this card is discarded for no effect.
+179. Population +/- Value: 2
+Effect: Play during an Economic Phase after adjusting
+Colony income. Choose one non-Homeworld Colony.
+That Colony either grows an extra level or goes down one
+level. This cannot cause a Colony to be eliminated but can
+reduce it to 0.
+Resource Cards

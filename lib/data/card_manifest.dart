@@ -820,9 +820,9 @@ final List<CardEntry> kAllCards = (() {
         description: ea.description,
         revealCondition: ea.revealCondition,
         supportStatus: switch (ea.supportStatus) {
-          'implemented' => CardSupportStatus.supported,
-          'partial' => CardSupportStatus.partial,
-          _ => CardSupportStatus.referenceOnly,
+          EaSupportStatus.implemented => CardSupportStatus.supported,
+          EaSupportStatus.partial => CardSupportStatus.partial,
+          EaSupportStatus.referenceOnly => CardSupportStatus.referenceOnly,
         },
       ),
     ...kAlienTechCards,

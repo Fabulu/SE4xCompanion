@@ -255,7 +255,6 @@ void main() {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 53);
       expect(ea.startingTechOverrides[TechId.move], 7);
       expect(ea.blockedTechs, contains(TechId.cloaking));
-      expect(ea.maxTechLevels, isEmpty);
     });
 
     test('has no other mechanical fields encoded', () {
@@ -269,11 +268,6 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('Expert Tacticians EA (#45)', () {
-    test('has no encoded tactics bonus', () {
-      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
-      expect(ea.techLevelBonuses, isEmpty);
-    });
-
     test('has no starting tactics override', () {
       final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
       expect(ea.startingTechOverrides, isEmpty);
@@ -289,12 +283,7 @@ void main() {
   // Gifted Scientists CP Rebate
   // ═══════════════════════════════════════════════════════════════════════════
 
-  group('Gifted Scientists EA (#41) — cpPerUnitBuilt', () {
-    test('EA does not encode unit-cost rebates', () {
-      final ea = kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 41);
-      expect(ea.cpPerUnitBuilt, 0);
-    });
-
+  group('Gifted Scientists EA (#41)', () {
     test('ship purchase cost uses only the tech multiplier', () {
       final config = GameConfig(selectedEmpireAdvantage: 41);
       final ps = ProductionState(

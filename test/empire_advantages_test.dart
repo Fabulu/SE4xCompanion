@@ -17,12 +17,7 @@ void main() {
             reason: 'EA #${ea.cardNumber} has empty name');
         expect(ea.description.isNotEmpty, true,
             reason: 'EA #${ea.cardNumber} has empty description');
-        expect(
-          {'implemented', 'partial', 'referenceOnly'}
-              .contains(ea.supportStatus),
-          true,
-          reason: 'EA #${ea.cardNumber} has invalid supportStatus',
-        );
+        // supportStatus is an enum — compile-time exhaustive, no runtime check needed.
       }
     });
 
@@ -91,7 +86,6 @@ void main() {
       expect(houseOfSpeed.name, 'House of Speed');
       expect(houseOfSpeed.startingTechOverrides[TechId.move], 7);
       expect(houseOfSpeed.blockedTechs, contains(TechId.cloaking));
-      expect(houseOfSpeed.maxTechLevels, isEmpty);
     });
 
     test('Immortals (#44) has blockedTechs containing boarding', () {
@@ -105,7 +99,6 @@ void main() {
       final tacticians =
           kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 45);
       expect(tacticians.startingTechOverrides, isEmpty);
-      expect(tacticians.techLevelBonuses, isEmpty);
     });
 
     test('Horsemen of the Plains (#46) has no starting tech override', () {
@@ -150,6 +143,122 @@ void main() {
         kEmpireAdvantages.where((ea) => ea.cardNumber == 57),
         isEmpty,
       );
+    });
+
+    test('Quick Learners (#40) starts with Military Academy 1 and has no '
+        'blocked techs', () {
+      final quickLearners =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 40);
+      expect(quickLearners.name, 'Quick Learners');
+      expect(quickLearners.startingTechOverrides[TechId.militaryAcad], 1);
+      expect(quickLearners.blockedTechs, isEmpty);
+    });
+
+    test('Master Engineers (#42) starts with Move 2', () {
+      final masterEngineers =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 42);
+      expect(masterEngineers.name, 'Master Engineers');
+      expect(masterEngineers.startingTechOverrides[TechId.move], 2);
+    });
+
+    test('Fast Replicators (#60) is a replicator with no starting tech '
+        'overrides encoded on the EA schema', () {
+      final fastReplicators =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 60);
+      expect(fastReplicators.name, 'Fast Replicators');
+      expect(fastReplicators.isReplicator, true);
+      // Starting Move 2 is applied at replicator tracker setup time, not via
+      // the EmpireAdvantage startingTechOverrides map. Pin that contract.
+      expect(fastReplicators.startingTechOverrides, isEmpty,
+          reason: 'Fast Replicators starting movement is set by the '
+              'replicator tracker, not the EA schema');
+    });
+
+    test('Advanced Research (#64) is a replicator and leaves starting RP '
+        'unmodelled in the EA schema', () {
+      final advancedResearch =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 64);
+      expect(advancedResearch.name, 'Advanced Research');
+      expect(advancedResearch.isReplicator, true);
+      // EmpireAdvantage has no starting-RP field. The extra starting RP is
+      // handled by the replicator tracker, so no mechanical EA fields are
+      // populated here.
+      expect(advancedResearch.startingTechOverrides, isEmpty);
+      expect(advancedResearch.costModifiers, isEmpty);
+      expect(advancedResearch.blockedTechs, isEmpty);
+      expect(advancedResearch.hullSizeModifier, 0);
+      expect(advancedResearch.globalBuildCostModifier, 0);
+    });
+
+    test('Traders (#49) is partial and documents pipeline handling in '
+        'implementationNote', () {
+      final traders =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 49);
+      expect(traders.name, 'Traders');
+      expect(traders.supportStatus, EaSupportStatus.partial);
+      expect(traders.implementationNote, isNotNull);
+      final note = traders.implementationNote!.toLowerCase();
+      expect(note.contains('pipeline') || note.contains('traders'), isTrue,
+          reason: 'Traders implementationNote should reference pipelines/'
+              'Traders: was "${traders.implementationNote}"');
+    });
+
+    test('Giant Race (#34) is pinned to partial with hull-size-only path', () {
+      final giantRace =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 34);
+      expect(giantRace.supportStatus, EaSupportStatus.partial,
+          reason: 'Giant Race should be partial until hull-size propagation '
+              'is complete');
+      expect(giantRace.hullSizeModifier, isNot(0),
+          reason: 'Giant Race uses the hull-size path');
+      expect(giantRace.costModifiers, isEmpty,
+          reason: 'Giant Race must not apply any direct cost modifier');
+    });
+
+    test('Insectoids (#43) is pinned to partial with hull-size-only path', () {
+      final insectoids =
+          kEmpireAdvantages.firstWhere((ea) => ea.cardNumber == 43);
+      expect(insectoids.supportStatus, EaSupportStatus.partial,
+          reason: 'Insectoids should be partial until hull-size propagation '
+              'is complete');
+      expect(insectoids.hullSizeModifier, isNot(0),
+          reason: 'Insectoids uses the hull-size path');
+      expect(insectoids.costModifiers, isEmpty,
+          reason: 'Insectoids must not apply any direct cost modifier');
+    });
+  });
+
+  group('Empire Advantages supportStatus invariants', () {
+    test('referenceOnly EAs have NO populated mechanical fields', () {
+      final referenceOnly = kEmpireAdvantages
+          .where((ea) => ea.supportStatus == EaSupportStatus.referenceOnly);
+      expect(referenceOnly, isNotEmpty,
+          reason: 'Expected at least one referenceOnly EA to exist');
+      for (final ea in referenceOnly) {
+        final tag = '#${ea.cardNumber} ${ea.name}';
+        expect(ea.hullSizeModifier, 0,
+            reason: '$tag: referenceOnly EA must not set hullSizeModifier');
+        expect(ea.maintenancePercent, 100,
+            reason: '$tag: referenceOnly EA must leave maintenancePercent '
+                'at the default 100');
+        expect(ea.startingTechOverrides, isEmpty,
+            reason: '$tag: referenceOnly EA must not set startingTechOverrides');
+        expect(ea.costModifiers, isEmpty,
+            reason: '$tag: referenceOnly EA must not set costModifiers');
+        expect(ea.globalBuildCostModifier, 0,
+            reason: '$tag: referenceOnly EA must not set '
+                'globalBuildCostModifier');
+        expect(ea.blockedTechs, isEmpty,
+            reason: '$tag: referenceOnly EA must not set blockedTechs');
+        expect(ea.colonyShipCostModifier, 0,
+            reason: '$tag: referenceOnly EA must not set '
+                'colonyShipCostModifier');
+        expect(ea.techCostMultiplier, 1.0,
+            reason: '$tag: referenceOnly EA must leave techCostMultiplier '
+                'at the default 1.0');
+        expect(ea.roundTechCostsUp, false,
+            reason: '$tag: referenceOnly EA must not set roundTechCostsUp');
+      }
     });
   });
 }

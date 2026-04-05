@@ -160,25 +160,6 @@ class ShipTechPage extends StatelessWidget {
     );
   }
 
-  /// EA tech level bonuses and starting levels for stamping/upgrading.
-  Map<TechId, int> get _techBonuses =>
-      config.empireAdvantage?.techLevelBonuses ?? const {};
-  Map<TechId, int> get _techStartLevels {
-    final ea = config.empireAdvantage;
-    if (ea == null) return const {};
-    // Merge EA starting overrides with cost table start levels.
-    final starts = <TechId, int>{};
-    for (final id in ea.techLevelBonuses.keys) {
-      starts[id] = ea.startingTechOverrides[id] ??
-          (config.useFacilitiesCosts
-                  ? kFacilitiesTechCosts
-                  : kBaseTechCosts)[id]
-              ?.startLevel ??
-          0;
-    }
-    return starts;
-  }
-
   /// Build a counter by stamping current tech levels.
   void _buildCounter(ShipType type, int number) {
     final idx = _indexOfCounter(type, number);
@@ -189,8 +170,6 @@ class ShipTechPage extends StatelessWidget {
       number,
       techState,
       facilitiesMode: config.useFacilitiesCosts,
-      techLevelBonuses: _techBonuses,
-      techStartLevels: _techStartLevels,
       advancedMunitions: shipSpecialAbilities[type] == 11,
     );
 
@@ -208,9 +187,7 @@ class ShipTechPage extends StatelessWidget {
     final upgraded = counter.upgradeToTech(
       techState,
       facilitiesMode: config.useFacilitiesCosts,
-      techLevelBonuses: _techBonuses,
       advancedMunitions: shipSpecialAbilities[type] == 11,
-      techStartLevels: _techStartLevels,
     );
     if (upgraded == null) return;
 
