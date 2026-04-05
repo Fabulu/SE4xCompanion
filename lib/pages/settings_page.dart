@@ -238,8 +238,35 @@ class SettingsPage extends StatelessWidget {
           title: 'Unpredictable Research',
           value: config.enableUnpredictableResearch,
           enabled: true,
-          onChanged: (v) =>
-              onConfigChanged(config.copyWith(enableUnpredictableResearch: v)),
+          // QW-5: Mid-game toggling of Unpredictable Research can corrupt
+          // research state. Require explicit confirmation after turn 1.
+          onChanged: (v) async {
+            if (turnNumber > 1) {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Change Research Mode?'),
+                  content: const Text(
+                    'Changing the research mode mid-game can corrupt your '
+                    'research state. Are you sure?\n\n'
+                    '(Consider starting a new game instead.)',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Change Anyway'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true) return;
+            }
+            onConfigChanged(config.copyWith(enableUnpredictableResearch: v));
+          },
         ),
         _RuleToggle(
           title: 'Alternate Empire',

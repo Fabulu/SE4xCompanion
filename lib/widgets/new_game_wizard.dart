@@ -198,11 +198,51 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
 
   // ── Step 0: Name, Expansions, Rules, Game Mode ──
 
+  void _applyRecommendedFirstGame() {
+    setState(() {
+      // Base expansion only: no CE, no Replicators, no AGT.
+      _ce = false;
+      _replicators = false;
+      _agt = false;
+      // No optional rules.
+      _facilities = false;
+      _altEmpire = false;
+      _advCon = false;
+      _shipExp = false;
+      _unpredictableResearch = false;
+      // No scenario / no EA so players learn the base map & rules.
+      _scenario = null;
+      _selectedEA = null;
+      // Solo / co-op: off.
+      _alienPlayerCount = 0;
+      _isReplicatorGame = false;
+      _playerControlsReplicators = false;
+      // Jump straight to the confirmation step for a 1-tap start.
+      _step = 2;
+    });
+  }
+
   Widget _buildStep0(ThemeData theme) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // M-5: Recommended first-game preset — beginner-friendly defaults.
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _applyRecommendedFirstGame,
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: const Text(
+              'Use recommended first-game settings',
+              style: TextStyle(fontSize: 13),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _nameController,
           decoration: const InputDecoration(labelText: 'Game Name'),

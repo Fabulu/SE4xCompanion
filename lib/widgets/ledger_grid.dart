@@ -22,6 +22,10 @@ class LedgerRow {
   /// Receives the display value and the default value TextStyle.
   final Widget Function(int displayValue, TextStyle valueStyle)? trailingBuilder;
 
+  /// Optional tap handler for the row. When set, the row becomes tappable and
+  /// a small indicator icon is shown before the trailing value.
+  final VoidCallback? onTap;
+
   const LedgerRow({
     required this.label,
     this.value,
@@ -35,6 +39,7 @@ class LedgerRow {
     this.step = 1,
     this.trailing,
     this.trailingBuilder,
+    this.onTap,
   });
 }
 
@@ -99,6 +104,31 @@ class LedgerGrid extends StatelessWidget {
           : theme.colorScheme.onSurface,
     );
 
+    final rowInner = SizedBox(
+      height: row.isEditable ? 48 : 44,
+      child: Row(
+        children: [
+          const SizedBox(width: 8),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(child: Text(row.label, style: labelStyle)),
+                if (row.onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          _buildValueArea(row, valueStyle, displayValue),
+        ],
+      ),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -114,39 +144,43 @@ class LedgerGrid extends StatelessWidget {
             thickness: 0.5,
             color: theme.dividerColor.withValues(alpha: 0.5),
           ),
-        SizedBox(
-          height: row.isEditable ? 48 : 44,
-          child: Row(
-            children: [
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(row.label, style: labelStyle),
-              ),
-              // Use trailingBuilder if provided (replaces default value)
-              if (row.trailingBuilder != null)
-                row.trailingBuilder!(displayValue, valueStyle)
-              else if (row.isEditable && row.onChanged != null)
-                NumberInput(
-                  value: displayValue,
-                  onChanged: row.onChanged!,
-                  min: row.min,
-                  max: row.max,
-                  step: row.step,
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Text(
-                    displayValue.toString(),
-                    style: valueStyle,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              // Trailing widget (e.g. bid reveal button)
-              if (row.trailing != null) row.trailing!,
-            ],
+        row.onTap != null
+            ? InkWell(onTap: row.onTap, child: rowInner)
+            : rowInner,
+      ],
+    );
+  }
+
+  Widget _buildValueArea(
+    LedgerRow row,
+    TextStyle valueStyle,
+    int displayValue,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Use trailingBuilder if provided (replaces default value)
+        if (row.trailingBuilder != null)
+          row.trailingBuilder!(displayValue, valueStyle)
+        else if (row.isEditable && row.onChanged != null)
+          NumberInput(
+            value: displayValue,
+            onChanged: row.onChanged!,
+            min: row.min,
+            max: row.max,
+            step: row.step,
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Text(
+              displayValue.toString(),
+              style: valueStyle,
+              textAlign: TextAlign.right,
+            ),
           ),
-        ),
+        // Trailing widget (e.g. bid reveal button)
+        if (row.trailing != null) row.trailing!,
       ],
     );
   }

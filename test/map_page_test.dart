@@ -55,7 +55,7 @@ void main() {
     expect(find.text('Terrain'), findsNothing);
   });
 
-  testWidgets('a selected hex only opens editing when Edit is pressed', (tester) async {
+  testWidgets('tapping a selected hex opens the inspector', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 

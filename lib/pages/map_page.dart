@@ -265,7 +265,11 @@ class _MapPageState extends State<MapPage> {
     if (_pipelinePlacementMode) {
       final hex = _state.hexAt(coord);
       if (hex != null) _togglePipelineAt(hex);
+      return;
     }
+    // Opening the inspector on tap restores the pre-regression behaviour:
+    // one tap both selects the hex and surfaces its contents.
+    _openInspector();
   }
 
   Future<void> _openInspector() async {
@@ -499,8 +503,9 @@ class _MapPageState extends State<MapPage> {
                   ),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 14,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       _ToolbarActionButton(
                         icon: Icons.public,
@@ -1550,6 +1555,11 @@ class _ToolbarActionButton extends StatelessWidget {
       onPressed: onPressed,
       icon: Icon(icon, size: 18),
       label: Text(label),
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
     );
   }
 }

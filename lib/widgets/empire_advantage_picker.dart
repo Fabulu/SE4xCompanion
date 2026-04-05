@@ -39,6 +39,99 @@ class EmpireAdvantagePicker extends StatelessWidget {
     this.scrollController,
   });
 
+  // QW-6: Expand a card's full text so players can read descriptions before
+  // committing. Shows name, card number, full description, reveal condition,
+  // support status badge and implementation notes.
+  static void _showFullCardDialog(BuildContext context, EmpireAdvantage ea) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        Color badgeColor;
+        String badgeText;
+        switch (ea.supportStatus) {
+          case EaSupportStatus.implemented:
+            badgeColor = theme.colorScheme.primary;
+            badgeText = 'Implemented';
+            break;
+          case EaSupportStatus.partial:
+            badgeColor = theme.colorScheme.tertiary;
+            badgeText = 'Partial';
+            break;
+          case EaSupportStatus.referenceOnly:
+            badgeColor = theme.colorScheme.outline;
+            badgeText = 'Reference only';
+            break;
+        }
+        return AlertDialog(
+          title: Text('#${ea.cardNumber} ${ea.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: badgeColor, width: 0.5),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: badgeColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(ea.description, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 12),
+                Text(
+                  'Reveal:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface
+                        .withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(ea.revealCondition,
+                    style: const TextStyle(fontSize: 12)),
+                if (ea.implementationNote != null &&
+                    ea.implementationNote!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Implementation note:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(ea.implementationNote!,
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   List<EmpireAdvantage> _filtered() {
     return kEmpireAdvantages
         .where((ea) => ea.isReplicator == showReplicatorAdvantages)
@@ -77,6 +170,14 @@ class EmpireAdvantagePicker extends StatelessWidget {
                 selectedCardNumber == ea.cardNumber,
                 () => onChanged(ea.cardNumber),
                 subtitle: _truncate(ea.description),
+                trailing: Builder(
+                  builder: (ctx) => IconButton(
+                    icon: const Icon(Icons.info_outline, size: 20),
+                    tooltip: 'Read full description',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _showFullCardDialog(ctx, ea),
+                  ),
+                ),
               ),
           ],
         );
@@ -118,6 +219,14 @@ class EmpireAdvantagePicker extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
+              trailing: Builder(
+                builder: (ctx) => IconButton(
+                  icon: const Icon(Icons.info_outline, size: 20),
+                  tooltip: 'Read full description',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _showFullCardDialog(ctx, ea),
+                ),
+              ),
               selected: selectedCardNumber == ea.cardNumber,
               onTap: () => onChanged(ea.cardNumber),
             );
@@ -132,6 +241,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
     bool selected,
     VoidCallback onTap, {
     String? subtitle,
+    Widget? trailing,
   }) {
     return ListTile(
       leading: Icon(
@@ -148,6 +258,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             )
           : null,
+      trailing: trailing,
       dense: true,
       visualDensity: VisualDensity.compact,
       onTap: onTap,

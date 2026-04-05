@@ -634,11 +634,13 @@ class ProductionState {
   /// CP after maintenance, bid, and LP penalty.
   int subtotalCp(GameConfig config, List<ShipCounter> shipCounters,
       [List<GameModifier> modifiers = const [], GameMapState? mapState]) {
-    int sub = totalCp(config, modifiers, mapState, shipCounters) - turnOrderBid;
+    // Per rulebook: maintenance (rule 7.3) is paid before the turn order bid (rule 7.4).
+    int sub = totalCp(config, modifiers, mapState, shipCounters);
     if (!config.enableFacilities) {
       // Base mode: maintenance comes from CP
       sub -= maintenanceTotal(shipCounters, config, modifiers);
     }
+    sub -= turnOrderBid;
     sub -= penaltyLp(config, shipCounters, modifiers);
     return sub;
   }

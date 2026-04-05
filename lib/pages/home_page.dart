@@ -124,6 +124,100 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (idx >= 0) setState(() => _currentTabIndex = idx);
   }
 
+  // QW-1: Material spec caps a fixed BottomNavigationBar at 5 items. When we
+  // exceed that, show the first 4 as primary items and fold the rest into a
+  // "More" overflow sheet.
+  static const int _kMaxPrimaryTabs = 5;
+
+  Widget _buildBottomNav() {
+    final tabs = _visibleTabs;
+    if (tabs.length <= _kMaxPrimaryTabs) {
+      return BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentTabIndex.clamp(0, tabs.length - 1),
+        onTap: (index) {
+          setState(() => _currentTabIndex = index);
+          _turnWiggleController.forward(from: 0);
+        },
+        items: [
+          for (final tab in tabs)
+            BottomNavigationBarItem(
+              icon: Icon(tab.icon, size: 24),
+              label: tab.label,
+            ),
+        ],
+      );
+    }
+
+    // Split: first 4 tabs as primary, rest under "More".
+    const int primaryCount = _kMaxPrimaryTabs - 1; // 4
+    final primary = tabs.sublist(0, primaryCount);
+    final overflow = tabs.sublist(primaryCount);
+    final currentIdx = _currentTabIndex.clamp(0, tabs.length - 1);
+    final isOverflowActive = currentIdx >= primaryCount;
+    // Active overflow tab so we can highlight "More" with the overflow tab's
+    // icon/label when the user is on one of those pages.
+    final activeOverflowTab = isOverflowActive ? tabs[currentIdx] : null;
+
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: isOverflowActive ? primaryCount : currentIdx,
+      onTap: (index) {
+        if (index == primaryCount) {
+          _showMoreTabsSheet(overflow);
+        } else {
+          setState(() => _currentTabIndex = index);
+          _turnWiggleController.forward(from: 0);
+        }
+      },
+      items: [
+        for (final tab in primary)
+          BottomNavigationBarItem(
+            icon: Icon(tab.icon, size: 24),
+            label: tab.label,
+          ),
+        BottomNavigationBarItem(
+          icon: Icon(
+            activeOverflowTab?.icon ?? Icons.more_horiz,
+            size: 24,
+          ),
+          label: activeOverflowTab?.label ?? 'More',
+        ),
+      ],
+    );
+  }
+
+  void _showMoreTabsSheet(List<_TabDef> overflow) {
+    final tabs = _visibleTabs;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final tab in overflow)
+                ListTile(
+                  leading: Icon(tab.icon),
+                  title: Text(tab.label),
+                  selected: _currentTabId == tab.id,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    final idx = tabs.indexWhere((t) => t.id == tab.id);
+                    if (idx >= 0) {
+                      setState(() => _currentTabIndex = idx);
+                      _turnWiggleController.forward(from: 0);
+                    }
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _locateShipOnMap(String shipId) {
     final fleetId = _gameState.mapState.fleetIdForShip(shipId);
     if (fleetId == null) {
@@ -1431,21 +1525,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       ),
       body: _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentTabIndex.clamp(0, _visibleTabs.length - 1),
-        onTap: (index) {
-          setState(() => _currentTabIndex = index);
-          _turnWiggleController.forward(from: 0);
-        },
-        items: [
-          for (final tab in _visibleTabs)
-            BottomNavigationBarItem(
-              icon: Icon(tab.icon, size: 24),
-              label: tab.label,
-            ),
-        ],
-      ),
+      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -1486,6 +1566,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 onDrawnHandChanged: _onDrawnHandChanged,
                 onPlayCardAsEvent: _onPlayCardAsEvent,
                 onPlayCardForCredits: _onPlayCardForCredits,
+                turnSummaries: _gameState.turnSummaries,
               ),
       _TabId.map => MapPage(
         state: _gameState.mapState.hexes.isEmpty
