@@ -671,6 +671,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Mid-turn trigger to colonize Colony Ships now instead of waiting for
+  /// End Turn. Reuses the same dialog + apply flow as [_onEndTurn], just
+  /// without advancing the turn.
+  void _openColonizeNowDialog() {
+    if (!mounted) return;
+    final candidates = _findColonyShipColonizeCandidates();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text('No Colony Ships are on a colonizable hex.'),
+        ),
+      );
+      return;
+    }
+    _promptColonyShipColonization(candidates).then((decisions) {
+      if (!mounted || decisions == null) return;
+      _applyColonyShipColonization(decisions);
+    });
+  }
+
   void _onEndTurn() {
     if (_gameState.config.playerControlsReplicators) {
       _finishEndTurn();
@@ -1672,6 +1693,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         pipelineAssetIds: _gameState.production.pipelineAssetIds,
         focusShipId: _mapFocusShipId,
         focusRequestId: _mapFocusRequestId,
+        terraformingLevel: _gameState.production.techState.getLevel(
+          TechId.terraforming,
+          facilitiesMode: _gameState.config.useFacilitiesCosts,
+        ),
+        onColonizeCandidatesTapped: _openColonizeNowDialog,
         onChanged: _onMapChanged,
       ),
       _TabId.shipTech => ShipTechPage(

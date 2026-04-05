@@ -118,6 +118,19 @@ class ProductionState {
   final int maintenanceIncrease;
   final int maintenanceDecrease;
 
+  /// CP explicitly reserved (earmarked) to carry over to next turn, above
+  /// the normal 30-CP carry-over cap. This is subtracted from remaining CP
+  /// during the current turn (so players can't spend it), clamped separately
+  /// at turn transition, and added back as a line item next turn.
+  /// See [prepareForNextTurn].
+  final int reservedCpForNextTurn;
+
+  /// CP that was reserved on the previous turn and released as a separate
+  /// income line this turn ("+ Reserved from prev turn"), above the 30-cap
+  /// carry-over. Populated by [prepareForNextTurn] and consumed back to 0
+  /// on the following turn transition.
+  final int reservedCpFromPrevTurn;
+
   // --- LP (facilities mode only) ---
   final int lpCarryOver;
   final int lpPlacedOnLc;
@@ -163,6 +176,8 @@ class ProductionState {
     this.upgradesCp = 0,
     this.maintenanceIncrease = 0,
     this.maintenanceDecrease = 0,
+    this.reservedCpForNextTurn = 0,
+    this.reservedCpFromPrevTurn = 0,
     this.lpCarryOver = 0,
     this.lpPlacedOnLc = 0,
     this.rpCarryOver = 0,
@@ -639,7 +654,11 @@ class ProductionState {
     GameMapState? mapState,
     List<ShipCounter> shipCounters = const [],
   ]) {
-    int total = cpCarryOver + colonyCp(config) + mineralCp() + pipelineCp(config);
+    int total = cpCarryOver +
+        reservedCpFromPrevTurn +
+        colonyCp(config) +
+        mineralCp() +
+        pipelineCp(config);
     if (config.enableFacilities) {
       total += facilityCp(config);
     }
@@ -807,7 +826,8 @@ class ProductionState {
         techSpendingCpDerived(config, modifiers) -
         researchGrantsCp -
         effectiveShipSpending(config, modifiers, shipSpecialAbilities) -
-        upgradesCp;
+        upgradesCp -
+        reservedCpForNextTurn;
   }
 
   // ---------------------------------------------------------------------------
@@ -1059,8 +1079,13 @@ class ProductionState {
     List<GameModifier> modifiers = const [],
     Map<ShipType, int> shipSpecialAbilities = const {},
   ]) {
-    // 1. Calculate carry-overs (CP capped at 30, RP capped at 30, LP/TP unlimited)
-    final cpRemain = remainingCp(config, shipCounters, modifiers, shipSpecialAbilities).clamp(0, 30);
+    // 1. Calculate carry-overs (CP capped at 30, RP capped at 30, LP/TP unlimited).
+    // remainingCp() already subtracts [reservedCpForNextTurn], so the clamped
+    // value represents the implicit carry-over. The reserved earmark flows
+    // into next turn's [reservedCpFromPrevTurn] line item (bypasses the 30-cap).
+    final cpRemain =
+        remainingCp(config, shipCounters, modifiers, shipSpecialAbilities).clamp(0, 30);
+    final nextReservedFromPrev = reservedCpForNextTurn;
     final rpRemain =
         config.enableFacilities ? remainingRp(config, modifiers).clamp(0, 30) : 0;
     final lpRemain =
@@ -1127,6 +1152,8 @@ class ProductionState {
       upgradesCp: 0,
       maintenanceIncrease: 0,
       maintenanceDecrease: 0,
+      reservedCpForNextTurn: 0,
+      reservedCpFromPrevTurn: nextReservedFromPrev,
       lpPlacedOnLc: 0,
       techSpendingRp: 0,
       tpSpending: 0,
@@ -1239,6 +1266,8 @@ class ProductionState {
     int? upgradesCp,
     int? maintenanceIncrease,
     int? maintenanceDecrease,
+    int? reservedCpForNextTurn,
+    int? reservedCpFromPrevTurn,
     int? lpCarryOver,
     int? lpPlacedOnLc,
     int? rpCarryOver,
@@ -1264,6 +1293,10 @@ class ProductionState {
             maintenanceIncrease ?? this.maintenanceIncrease,
         maintenanceDecrease:
             maintenanceDecrease ?? this.maintenanceDecrease,
+        reservedCpForNextTurn:
+            reservedCpForNextTurn ?? this.reservedCpForNextTurn,
+        reservedCpFromPrevTurn:
+            reservedCpFromPrevTurn ?? this.reservedCpFromPrevTurn,
         lpCarryOver: lpCarryOver ?? this.lpCarryOver,
         lpPlacedOnLc: lpPlacedOnLc ?? this.lpPlacedOnLc,
         rpCarryOver: rpCarryOver ?? this.rpCarryOver,
@@ -1291,6 +1324,8 @@ class ProductionState {
         'upgradesCp': upgradesCp,
         'maintenanceIncrease': maintenanceIncrease,
         'maintenanceDecrease': maintenanceDecrease,
+        'reservedCpForNextTurn': reservedCpForNextTurn,
+        'reservedCpFromPrevTurn': reservedCpFromPrevTurn,
         'lpCarryOver': lpCarryOver,
         'lpPlacedOnLc': lpPlacedOnLc,
         'rpCarryOver': rpCarryOver,
@@ -1332,6 +1367,8 @@ class ProductionState {
       upgradesCp: json['upgradesCp'] as int? ?? 0,
       maintenanceIncrease: json['maintenanceIncrease'] as int? ?? 0,
       maintenanceDecrease: json['maintenanceDecrease'] as int? ?? 0,
+      reservedCpForNextTurn: json['reservedCpForNextTurn'] as int? ?? 0,
+      reservedCpFromPrevTurn: json['reservedCpFromPrevTurn'] as int? ?? 0,
       lpCarryOver: json['lpCarryOver'] as int? ?? 0,
       lpPlacedOnLc: json['lpPlacedOnLc'] as int? ?? 0,
       rpCarryOver: json['rpCarryOver'] as int? ?? 0,

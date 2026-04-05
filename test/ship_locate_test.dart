@@ -65,10 +65,14 @@ void main() {
       find.byType(Scrollable).first,
       const Offset(0, -300),
     );
+    await tester.ensureVisible(find.text('FLEET ROSTER'));
+    await tester.pump();
     await tester.tap(find.text('FLEET ROSTER'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 400));
 
+    await tester.ensureVisible(find.byTooltip('Locate built destroyers'));
+    await tester.pump();
     await tester.tap(find.byTooltip('Locate built destroyers'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));

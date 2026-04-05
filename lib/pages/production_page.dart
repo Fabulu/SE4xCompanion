@@ -1058,6 +1058,33 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   // ===========================================================================
+  // Reserved CP info
+  // ===========================================================================
+
+  void _showReservedCpTooltip(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reserved CP'),
+        content: const Text(
+          'Reserved CP carries forward above the 30-cap, for planned upgrade '
+          'purchases next turn.\n\n'
+          'Normally any CP remaining at End Turn is clamped to 30 and the rest '
+          'is lost. CP you earmark here is subtracted from your available CP '
+          'this turn (so you can\'t spend it), and is added back on top of '
+          'the normal carry-over next turn as "+ Reserved from prev turn".',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
   // M-2: Turn Log modal
   // ===========================================================================
 
@@ -1371,6 +1398,11 @@ class _ProductionPageState extends State<ProductionPage>
           max: 30,
           onChanged: (v) => _update((s) => s.copyWith(cpCarryOver: v)),
         ),
+        if (production.reservedCpFromPrevTurn > 0)
+          LedgerRow(
+            label: '+ Reserved from prev turn',
+            computedValue: production.reservedCpFromPrevTurn,
+          ),
         LedgerRow(label: '+ Colony CPs', computedValue: colonyCp),
         LedgerRow(label: '+ Mineral CPs', computedValue: mineralCp),
         LedgerRow(label: '+ MS Pipeline CPs', computedValue: pipelineCp),
@@ -1443,6 +1475,17 @@ class _ProductionPageState extends State<ProductionPage>
           isEditable: true,
           min: 0,
           onChanged: (v) => _update((s) => s.copyWith(upgradesCp: v)),
+        ),
+        LedgerRow(
+          label: '- Reserved for next turn (upgrades)',
+          value: production.reservedCpForNextTurn,
+          isEditable: true,
+          min: 0,
+          onChanged: (v) =>
+              _update((s) => s.copyWith(reservedCpForNextTurn: v)),
+          onTap: () => _showReservedCpTooltip(context),
+          onTapTooltip:
+              'Reserved CP carries forward above the 30-cap, for planned upgrade purchases next turn.',
         ),
         LedgerRow(
           label: 'Maintenance Inc (buys)',
@@ -1552,6 +1595,11 @@ class _ProductionPageState extends State<ProductionPage>
           max: 30,
           onChanged: (v) => _update((s) => s.copyWith(cpCarryOver: v)),
         ),
+        if (production.reservedCpFromPrevTurn > 0)
+          LedgerRow(
+            label: '+ Reserved from prev turn',
+            computedValue: production.reservedCpFromPrevTurn,
+          ),
         LedgerRow(label: '+ Colony/Facility CP', computedValue: colonyCp),
         LedgerRow(
             label: '+ Mineral/Resource Card CP', computedValue: mineralCp),
@@ -1620,6 +1668,17 @@ class _ProductionPageState extends State<ProductionPage>
           isEditable: true,
           min: 0,
           onChanged: (v) => _update((s) => s.copyWith(upgradesCp: v)),
+        ),
+        LedgerRow(
+          label: '- Reserved for next turn (upgrades)',
+          value: production.reservedCpForNextTurn,
+          isEditable: true,
+          min: 0,
+          onChanged: (v) =>
+              _update((s) => s.copyWith(reservedCpForNextTurn: v)),
+          onTap: () => _showReservedCpTooltip(context),
+          onTapTooltip:
+              'Reserved CP carries forward above the 30-cap, for planned upgrade purchases next turn.',
         ),
         LedgerRow(
           label: 'REMAINING CP (30 Max)',
@@ -3913,20 +3972,43 @@ class _ProductionPageState extends State<ProductionPage>
     final remainingRp = config.enableFacilities ? production.remainingRp(config, modifiers) : null;
     final rpLost = (remainingRp != null && remainingRp > 30) ? remainingRp - 30 : 0;
     final warnColor = Theme.of(context).colorScheme.tertiary;
+    final colonyPreview = _buildColonyChangePreview();
+    final monoStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 12,
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
+    );
 
     showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('End Turn?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text(
               'Finalize turn ${widget.turnNumber} and advance to turn ${widget.turnNumber + 1}.\n'
               'Pending tech purchases will be applied, colonies will grow, '
               'and carry-overs will be computed.',
             ),
+            if (colonyPreview.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Colony changes:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              for (final line in colonyPreview)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 1),
+                  child: Text('• $line', style: monoStyle),
+                ),
+            ],
             if (cpLost > 0) ...[
               const SizedBox(height: 12),
               Text(
@@ -3942,6 +4024,7 @@ class _ProductionPageState extends State<ProductionPage>
               ),
             ],
           ],
+          ),
         ),
         actions: [
           TextButton(
@@ -3960,6 +4043,62 @@ class _ProductionPageState extends State<ProductionPage>
         widget.onEndTurn();
       }
     });
+  }
+
+  /// Build a list of human-readable lines describing what each colony's CP
+  /// will be after [ProductionState.prepareForNextTurn] runs, without
+  /// mutating any state. Used in the End Turn confirm dialog.
+  List<String> _buildColonyChangePreview() {
+    if (production.worlds.isEmpty) return const [];
+    // Run prepareForNextTurn on a temp copy to get the projected worlds.
+    final previewState = production.prepareForNextTurn(
+      config,
+      shipCounters,
+      modifiers,
+      abilities,
+    );
+    final previewById = {
+      for (final w in previewState.worlds) w.id: w,
+    };
+    final lines = <String>[];
+    // Compute the max colony name width for alignment.
+    int maxNameLen = 0;
+    for (final w in production.worlds) {
+      if (w.name.length > maxNameLen) maxNameLen = w.name.length;
+    }
+    // Cap alignment width so the dialog doesn't get too wide.
+    final padW = maxNameLen > 18 ? 18 : maxNameLen;
+    String pad(String s) {
+      if (s.length >= padW) return s;
+      return s + ' ' * (padW - s.length);
+    }
+
+    for (final w in production.worlds) {
+      final next = previewById[w.id];
+      if (next == null) continue;
+      final nameCol = pad(w.name);
+      if (w.isHomeworld) {
+        final curCp = w.homeworldValue;
+        final nextCp = next.homeworldValue;
+        if (curCp == nextCp) {
+          lines.add('$nameCol: $curCp CP -> $nextCp CP');
+        } else {
+          lines.add('$nameCol: $curCp CP -> $nextCp CP (recovering)');
+        }
+      } else {
+        final curLvl = w.growthMarkerLevel;
+        final nextLvl = next.growthMarkerLevel;
+        final curCp = w.cpValue;
+        final nextCp = next.cpValue;
+        final curLabel = 'Level $curLvl ($curCp CP)';
+        final nextLabel = nextLvl >= 3
+            ? 'MAX ($nextCp CP)'
+            : 'Level $nextLvl ($nextCp CP)';
+        final suffix = (curLvl == nextLvl && curLvl >= 3) ? ' (max)' : '';
+        lines.add('$nameCol: $curLabel -> $nextLabel$suffix');
+      }
+    }
+    return lines;
   }
 }
 

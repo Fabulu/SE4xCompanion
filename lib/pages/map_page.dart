@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../data/ship_definitions.dart';
 import '../models/map_state.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
@@ -19,6 +20,8 @@ class MapPage extends StatefulWidget {
   final List<String> pipelineAssetIds;
   final String? focusShipId;
   final int focusRequestId;
+  final int terraformingLevel;
+  final VoidCallback? onColonizeCandidatesTapped;
   final MapStateChanged onChanged;
 
   const MapPage({
@@ -29,6 +32,8 @@ class MapPage extends StatefulWidget {
     this.pipelineAssetIds = const [],
     this.focusShipId,
     this.focusRequestId = 0,
+    this.terraformingLevel = 0,
+    this.onColonizeCandidatesTapped,
     required this.onChanged,
   });
 
@@ -482,6 +487,23 @@ class _MapPageState extends State<MapPage> {
         _availablePipelineAssets(excludeHexId: selectedHex?.coord.id);
     final builtShipCount = widget.shipCounters.where((counter) => counter.isBuilt).length;
 
+    // Find fleets that contain a built Colony Ship on a colonizable hex.
+    // These get a green pulse marker on the canvas and drive the
+    // "Ready to colonize" chip in the toolbar.
+    final builtColonyShipIds = <String>{
+      for (final c in widget.shipCounters)
+        if (c.isBuilt && c.type == ShipType.colonyShip) c.id,
+    };
+    final colonizeCandidates = builtColonyShipIds.isEmpty
+        ? const <ColonizeCandidate>[]
+        : _state.findColonizeCandidates(
+            candidateShipIds: builtColonyShipIds,
+            terraformingLevel: widget.terraformingLevel,
+          );
+    final colonizeReadyFleetIds = <String>{
+      for (final c in colonizeCandidates) c.fleetId,
+    };
+
     final theme = Theme.of(context);
     return Column(
       children: [
@@ -594,6 +616,13 @@ class _MapPageState extends State<MapPage> {
                         ),
                         const SizedBox(width: 4),
                         _AssetPill(label: 'Pipelines', value: availablePipelines.length),
+                        if (colonizeCandidates.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _ColonizeReadyChip(
+                            count: colonizeCandidates.length,
+                            onTap: widget.onColonizeCandidatesTapped,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -643,6 +672,7 @@ class _MapPageState extends State<MapPage> {
                       key: _mapCanvasKey,
                       state: _state,
                       productionWorlds: widget.productionWorlds,
+                      colonizeReadyFleetIds: colonizeReadyFleetIds,
                       onHexTap: _onHexTapped,
                       onFleetTap: _selectFleet,
                       onFleetDrop: (fleetId, target) {
@@ -707,6 +737,7 @@ class _MapPageState extends State<MapPage> {
 class _MapCanvas extends StatefulWidget {
   final GameMapState state;
   final List<WorldState> productionWorlds;
+  final Set<String> colonizeReadyFleetIds;
   final ValueChanged<HexCoord> onHexTap;
   final ValueChanged<String> onFleetTap;
   final void Function(String fleetId, HexCoord target) onFleetDrop;
@@ -717,6 +748,7 @@ class _MapCanvas extends StatefulWidget {
     super.key,
     required this.state,
     required this.productionWorlds,
+    this.colonizeReadyFleetIds = const {},
     required this.onHexTap,
     required this.onFleetTap,
     required this.onFleetDrop,
@@ -1020,9 +1052,12 @@ class _MapCanvasState extends State<_MapCanvas> {
                     final pos = positions[fleet.coord.id]!;
                     final fanOffset = fanOffsets[fleet.id] ?? Offset.zero;
                     final selected = widget.state.selectedFleetId == fleet.id;
+                    final colonizeReady =
+                        widget.colonizeReadyFleetIds.contains(fleet.id);
                     final marker = _FleetMarker(
                       fleet: fleet,
                       selected: selected,
+                      colonizeReady: colonizeReady,
                       onTap: () => widget.onFleetTap(fleet.id),
                     );
                     return Positioned(
@@ -1035,6 +1070,7 @@ class _MapCanvasState extends State<_MapCanvas> {
                           child: _FleetMarker(
                             fleet: fleet,
                             selected: true,
+                            colonizeReady: colonizeReady,
                             onTap: () {},
                           ),
                         ),
@@ -1535,11 +1571,13 @@ String _formatComposition(Map<String, int> composition) {
 class _FleetMarker extends StatelessWidget {
   final FleetStackState fleet;
   final bool selected;
+  final bool colonizeReady;
   final VoidCallback onTap;
 
   const _FleetMarker({
     required this.fleet,
     required this.selected,
+    this.colonizeReady = false,
     required this.onTap,
   });
 
@@ -1634,6 +1672,15 @@ class _FleetMarker extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.7),
                 ),
               ),
+              if (colonizeReady)
+                Positioned(
+                  top: -4,
+                  left: -4,
+                  child: Tooltip(
+                    message: 'Colony Ship ready to colonize this hex',
+                    child: _ColonizePulseIndicator(),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1694,6 +1741,122 @@ class _AssetPill extends StatelessWidget {
           color: Colors.transparent,
           alignment: Alignment.center,
           child: ExcludeSemantics(child: pillVisual),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pulsing green dot overlaid on fleet markers that contain a Colony
+/// Ship sitting on a colonizable hex. Signals "you can colonize here now".
+class _ColonizePulseIndicator extends StatefulWidget {
+  @override
+  State<_ColonizePulseIndicator> createState() =>
+      _ColonizePulseIndicatorState();
+}
+
+class _ColonizePulseIndicatorState extends State<_ColonizePulseIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        final scale = 0.9 + 0.4 * t;
+        final alpha = 0.55 + 0.45 * (1 - t);
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: Colors.greenAccent.withValues(alpha: alpha),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.greenAccent.withValues(alpha: 0.6 * alpha),
+                  blurRadius: 6,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Text(
+                '\u{1F331}',
+                style: TextStyle(fontSize: 8),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Toolbar chip that signals how many Colony Ships are ready to colonize.
+/// Tapping opens the colonize-now dialog (same flow as End Turn prompt).
+class _ColonizeReadyChip extends StatelessWidget {
+  final int count;
+  final VoidCallback? onTap;
+
+  const _ColonizeReadyChip({required this.count, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = 'Ready to colonize: $count';
+    final visual = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.greenAccent, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('\u{1F331}', style: TextStyle(fontSize: 12)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Semantics(
+      button: onTap != null,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          color: Colors.transparent,
+          alignment: Alignment.center,
+          child: ExcludeSemantics(child: visual),
         ),
       ),
     );
