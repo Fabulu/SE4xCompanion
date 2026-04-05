@@ -466,100 +466,134 @@ class _MapPageState extends State<MapPage> {
         _availablePipelineAssets(excludeHexId: selectedHex?.coord.id);
     final builtShipCount = widget.shipCounters.where((counter) => counter.isBuilt).length;
 
+    final theme = Theme.of(context);
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButton<MapLayoutPreset>(
-                          isExpanded: true,
-                          value: _state.layoutPreset,
-                          onChanged: (value) {
-                            if (value != null) _changePreset(value);
-                          },
-                          items: const [
-                            DropdownMenuItem(
-                              value: MapLayoutPreset.standard4p,
-                              child: Text('Standard 4P Map'),
-                            ),
-                            DropdownMenuItem(
-                              value: MapLayoutPreset.special5p,
-                              child: Text('Special 5P Map'),
-                            ),
-                          ],
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              children: [
+                PopupMenuButton<MapLayoutPreset>(
+                  tooltip: 'Map preset',
+                  initialValue: _state.layoutPreset,
+                  onSelected: _changePreset,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: MapLayoutPreset.standard4p,
+                      child: Text('Standard 4P Map'),
+                    ),
+                    PopupMenuItem(
+                      value: MapLayoutPreset.special5p,
+                      child: Text('Special 5P Map'),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.map, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          _state.layoutPreset == MapLayoutPreset.standard4p ? '4P' : '5P',
+                          style: theme.textTheme.labelMedium,
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '${_state.hexes.length} hexes | ${_state.fleets.length} fleets'
-                          '${selectedHex == null ? '' : ' | ${selectedHex.coord.id}'}',
-                          textAlign: TextAlign.end,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                        const Icon(Icons.arrow_drop_down, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${_state.hexes.length}h/${_state.fleets.length}f'
+                  '${selectedHex == null ? '' : ' · ${selectedHex.coord.id}'}',
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ToolbarActionButton(
+                          icon: Icons.public,
+                          label: 'Place World',
+                          onPressed: selectedHex == null ? null : () => _placeWorld(selectedHex),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        _ToolbarActionButton(
+                          icon: Icons.directions_boat,
+                          label: 'Add Fleet',
+                          onPressed: selectedHex == null
+                              ? null
+                              : () => _addFriendlyFleet(selectedHex.coord),
+                        ),
+                        const SizedBox(width: 4),
+                        _ToolbarActionButton(
+                          icon: Icons.alt_route,
+                          label: _pipelinePlacementMode ? 'Pipeline On' : 'Pipeline',
+                          onPressed: _togglePipelineAtSelected,
+                        ),
+                        const SizedBox(width: 4),
+                        _ToolbarActionButton(
+                          icon: Icons.tune,
+                          label: 'Edit',
+                          onPressed: selectedHex == null ? null : _openInspector,
+                        ),
+                        const SizedBox(width: 8),
+                        _AssetPill(label: 'Worlds', value: availableWorlds.length),
+                        const SizedBox(width: 4),
+                        _AssetPill(
+                          label: 'Ships',
+                          value: builtShipCount,
+                          onTap: _showShipInventory,
+                        ),
+                        const SizedBox(width: 4),
+                        _AssetPill(label: 'Pipelines', value: availablePipelines.length),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.spaceBetween,
-                    children: [
-                      _ToolbarActionButton(
-                        icon: Icons.public,
-                        label: 'Place World',
-                        onPressed: selectedHex == null ? null : () => _placeWorld(selectedHex),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'More actions',
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  padding: EdgeInsets.zero,
+                  iconSize: 20,
+                  onSelected: (value) {
+                    if (value == 'add_enemy' && selectedHex != null) {
+                      _addEnemyFleet(selectedHex.coord);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'add_enemy',
+                      enabled: selectedHex != null,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.visibility_off, size: 18),
+                          SizedBox(width: 8),
+                          Text('Add Enemy'),
+                        ],
                       ),
-                      _ToolbarActionButton(
-                        icon: Icons.directions_boat,
-                        label: 'Add Fleet',
-                        onPressed:
-                            selectedHex == null ? null : () => _addFriendlyFleet(selectedHex.coord),
-                      ),
-                      _ToolbarActionButton(
-                        icon: Icons.visibility_off,
-                        label: 'Add Enemy',
-                        onPressed:
-                            selectedHex == null ? null : () => _addEnemyFleet(selectedHex.coord),
-                      ),
-                      _ToolbarActionButton(
-                        icon: Icons.alt_route,
-                        label: _pipelinePlacementMode ? 'Pipeline On' : 'Pipeline',
-                        onPressed: _togglePipelineAtSelected,
-                      ),
-                      _ToolbarActionButton(
-                        icon: Icons.tune,
-                        label: 'Edit',
-                        onPressed: selectedHex == null ? null : _openInspector,
-                      ),
-                      _AssetPill(label: 'Worlds', value: availableWorlds.length),
-                      _AssetPill(
-                        label: 'Ships',
-                        value: builtShipCount,
-                        onTap: _showShipInventory,
-                      ),
-                      _AssetPill(label: 'Pipelines', value: availablePipelines.length),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF0A1226),
@@ -1459,14 +1493,14 @@ class _AssetPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('$label: $value'),
+              Text('$label: $value', style: const TextStyle(fontSize: 11)),
               if (onTap != null) ...[
-                const SizedBox(width: 6),
-                Icon(Icons.chevron_right, size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right, size: 12, color: theme.colorScheme.primary),
               ],
             ],
           ),
@@ -1492,10 +1526,11 @@ class _ToolbarActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton.tonalIcon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
+      icon: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
       style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+        minimumSize: const Size(0, 28),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
