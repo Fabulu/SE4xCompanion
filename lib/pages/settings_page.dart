@@ -7,6 +7,8 @@ import '../data/ship_definitions.dart';
 import '../data/special_abilities.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
+import '../data/tech_costs.dart';
+import '../models/research_event.dart';
 import '../models/turn_summary.dart';
 import '../widgets/empire_advantage_picker.dart';
 
@@ -955,6 +957,38 @@ class _TurnSummaryTile extends StatelessWidget {
       }
     }
 
+    if (summary.researchLog.isNotEmpty) {
+      details.add(const SizedBox(height: 4));
+      details.add(Text('Research log:', style: dimStyle));
+      for (final evt in summary.researchLog) {
+        details.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(_researchEventLine(evt), style: dimStyle),
+          ),
+        );
+      }
+    }
+
+    if (summary.productionSnapshot != null) {
+      details.add(const SizedBox(height: 4));
+      details.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _showSnapshotDialog(context),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            label: const Text('View details'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+      );
+    }
+
     return ExpansionTile(
       title: Text(
         'Turn ${summary.turnNumber}',
@@ -969,6 +1003,121 @@ class _TurnSummaryTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  static String _techName(TechId id) => id.name;
+
+  static String _researchEventLine(ResearchEvent evt) {
+    switch (evt.kind) {
+      case ResearchEventKind.techPurchased:
+        final e = evt as TechPurchasedEvent;
+        final costStr = e.cpCost > 0
+            ? '${e.cpCost} CP'
+            : (e.rpCost > 0 ? '${e.rpCost} RP' : 'free');
+        return '${_techName(e.techId)} ${e.fromLevel}->${e.toLevel} ($costStr)';
+      case ResearchEventKind.grantRolled:
+        final e = evt as GrantRolledEvent;
+        final tag = e.success ? 'breakthrough' : 'miss';
+        return 'Rolled ${e.dieResult} on ${_techName(e.techId)} L${e.targetLevel} '
+            '(${e.outcomeCpSpent} CP, $tag)';
+      case ResearchEventKind.grantReassigned:
+        final e = evt as GrantReassignedEvent;
+        return 'Reassigned ${e.accumulatedCp} from ${_techName(e.fromTechId)} '
+            'to ${_techName(e.toTechId)}';
+      case ResearchEventKind.techGrantedByCard:
+        final e = evt as TechGrantedByCardEvent;
+        return '${_techName(e.techId)} L${e.targetLevel} granted by '
+            '${e.sourceCardName}';
+    }
+  }
+
+  void _showSnapshotDialog(BuildContext context) {
+    final snap = summary.productionSnapshot;
+    if (snap == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final labelStyle = TextStyle(
+          fontSize: 13,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+        );
+        final valueStyle = const TextStyle(fontSize: 14);
+        Widget row(String label, String value) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 160,
+                    child: Text(label, style: labelStyle),
+                  ),
+                  Expanded(child: Text(value, style: valueStyle)),
+                ],
+              ),
+            );
+        final worldSummaries = snap.worlds
+            .map((w) =>
+                '${w.id.isEmpty ? "?" : w.id}${w.isHomeworld ? " (HW)" : ""} '
+                'g${w.growthMarkerLevel}'
+                '${w.isBlocked ? " BLOCK" : ""}'
+                '${w.stagedMineralCp > 0 ? " min+${w.stagedMineralCp}" : ""}')
+            .join('\n');
+        return AlertDialog(
+          title: Text('Turn ${summary.turnNumber} snapshot'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                row('CP carry-over', '${snap.cpCarryOver}'),
+                row('Turn order bid', '${snap.turnOrderBid}'),
+                row('Ship spending (CP)', '${snap.shipSpendingCp}'),
+                row('Upgrades (CP)', '${snap.upgradesCp}'),
+                row('Maint. +/-',
+                    '+${snap.maintenanceIncrease} / -${snap.maintenanceDecrease}'),
+                row('Research grants (CP)', '${snap.researchGrantsCp}'),
+                row('RP carry-over', '${snap.rpCarryOver}'),
+                row('Tech spending (RP)', '${snap.techSpendingRp}'),
+                row('LP carry-over', '${snap.lpCarryOver}'),
+                row('LP on LC', '${snap.lpPlacedOnLc}'),
+                row('TP carry-over', '${snap.tpCarryOver}'),
+                row('TP spending', '${snap.tpSpending}'),
+                row('Pipeline colonies',
+                    '${snap.pipelineConnectedColonies}'),
+                row('Ship purchases',
+                    snap.shipPurchases.isEmpty
+                        ? '(none)'
+                        : snap.shipPurchases
+                            .map((p) => '${p.quantity}x ${p.type.name}')
+                            .join(', ')),
+                row('Pending tech',
+                    snap.pendingTechPurchases.isEmpty
+                        ? '(none)'
+                        : snap.pendingTechPurchases.entries
+                            .map((e) => '${e.key.name}->${e.value}')
+                            .join(', ')),
+                const SizedBox(height: 8),
+                Text('Worlds (${snap.worlds.length})', style: labelStyle),
+                if (worldSummaries.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(worldSummaries,
+                        style: valueStyle.copyWith(
+                            fontFamily: 'monospace', fontSize: 12)),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

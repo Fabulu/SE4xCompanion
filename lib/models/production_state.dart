@@ -4,6 +4,8 @@ import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import 'game_config.dart';
 import 'game_modifier.dart';
+import 'map_state.dart';
+import 'research_event.dart';
 import 'ship_counter.dart';
 import 'technology.dart';
 import 'world.dart';
@@ -13,7 +15,26 @@ class ShipPurchase {
   final ShipType type;
   final int quantity;
 
-  const ShipPurchase({required this.type, this.quantity = 1});
+  /// Hex (by MapHex coord id) the purchase is assigned to for shipyard
+  /// capacity accounting. Nullable for backward compatibility with legacy
+  /// saves; such purchases display in an "Unassigned" bucket.
+  final String? shipyardHexId;
+
+  /// HP already contributed toward building the ship (multi-turn builds).
+  /// RAW mode leaves this at 0 every turn.
+  final int buildProgressHp;
+
+  /// Total HP required to complete the ship. When null, assumed equal to
+  /// per-unit hull size (legacy compat).
+  final int? totalHpNeeded;
+
+  const ShipPurchase({
+    required this.type,
+    this.quantity = 1,
+    this.shipyardHexId,
+    this.buildProgressHp = 0,
+    this.totalHpNeeded,
+  });
 
   int get cost {
     final def = kShipDefinitions[type];
@@ -28,19 +49,39 @@ class ShipPurchase {
     return def.effectiveBuildCost(isAlternateEmpire, facilitiesMode: facilitiesMode) * quantity;
   }
 
-  ShipPurchase copyWith({ShipType? type, int? quantity}) => ShipPurchase(
+  ShipPurchase copyWith({
+    ShipType? type,
+    int? quantity,
+    String? shipyardHexId,
+    bool clearShipyardHexId = false,
+    int? buildProgressHp,
+    int? totalHpNeeded,
+    bool clearTotalHpNeeded = false,
+  }) =>
+      ShipPurchase(
         type: type ?? this.type,
         quantity: quantity ?? this.quantity,
+        shipyardHexId:
+            clearShipyardHexId ? null : (shipyardHexId ?? this.shipyardHexId),
+        buildProgressHp: buildProgressHp ?? this.buildProgressHp,
+        totalHpNeeded:
+            clearTotalHpNeeded ? null : (totalHpNeeded ?? this.totalHpNeeded),
       );
 
   Map<String, dynamic> toJson() => {
         'type': type.name,
         'quantity': quantity,
+        if (shipyardHexId != null) 'shipyardHexId': shipyardHexId,
+        'buildProgressHp': buildProgressHp,
+        if (totalHpNeeded != null) 'totalHpNeeded': totalHpNeeded,
       };
 
   factory ShipPurchase.fromJson(Map<String, dynamic> json) => ShipPurchase(
         type: _shipTypeFromName(json['type'] as String),
         quantity: json['quantity'] as int? ?? 1,
+        shipyardHexId: json['shipyardHexId'] as String?,
+        buildProgressHp: json['buildProgressHp'] as int? ?? 0,
+        totalHpNeeded: json['totalHpNeeded'] as int?,
       );
 
   static ShipType _shipTypeFromName(String name) {
@@ -93,6 +134,11 @@ class ProductionState {
   // Order techs were bought this turn. Kept for ledger UX/history.
   final List<TechId> techPurchaseOrder;
 
+  /// Audit log of research activity this turn (rolls, grants, purchases,
+  /// reassignments). Reset every turn transition. Frozen into
+  /// [TurnSummary.researchLog] at end-of-turn.
+  final List<ResearchEvent> researchLog;
+
   const ProductionState({
     this.cpCarryOver = 0,
     this.turnOrderBid = 0,
@@ -114,6 +160,7 @@ class ProductionState {
     this.accumulatedResearch = const {},
     this.researchGrantsCp = 0,
     this.techPurchaseOrder = const [],
+    this.researchLog = const [],
   });
 
   // ---------------------------------------------------------------------------
@@ -247,6 +294,94 @@ class ProductionState {
     ];
     return changed ? copyWith(worlds: nextWorlds) : this;
   }
+
+  // ---------------------------------------------------------------------------
+  // Shipyard capacity (per-hex) — T2-A
+  // ---------------------------------------------------------------------------
+
+  /// HP produced per shipyard at a given ShipYard tech level (rule 9.6).
+  /// Lvl 1 → 1, Lvl 2 → 1.5 (stored doubled), Lvl 3 → 2. Returned as a double
+  /// so callers can floor/round at their aggregation boundary.
+  static double hullPointsPerShipyard(int shipYardTechLevel) {
+    switch (shipYardTechLevel) {
+      case 1:
+        return 1.0;
+      case 2:
+        return 1.5;
+      default:
+        if (shipYardTechLevel >= 3) return 2.0;
+        return 1.0;
+    }
+  }
+
+  /// Returns the HP build budget for a specific hex this turn, taking the
+  /// ShipYard tech level, shipyard count and blockade status into account.
+  /// Blocked hexes contribute 0 (rule 7.1.2). Floors the fractional lvl-2
+  /// contribution at the aggregation boundary (e.g. 2 yards × 1.5 = 3).
+  int shipyardCapacityForHex(
+    HexCoord hex,
+    GameMapState map,
+    TechState tech, {
+    bool facilitiesMode = false,
+  }) {
+    final mapHex = map.hexAt(hex);
+    if (mapHex == null) return 0;
+    if (mapHex.shipyardCount <= 0) return 0;
+    final worldId = mapHex.worldId;
+    if (worldId != null && worldId.isNotEmpty) {
+      // Check if the corresponding world is blockaded (rule 7.1.2).
+      for (final w in worlds) {
+        if (w.id == worldId && w.isBlocked) return 0;
+      }
+    }
+    final lvl = tech.getLevel(TechId.shipYard, facilitiesMode: facilitiesMode);
+    final hpPerYard = hullPointsPerShipyard(lvl);
+    return (mapHex.shipyardCount * hpPerYard).floor();
+  }
+
+  /// Sum of hull points currently assigned to a given hex across all
+  /// purchases (and their quantities), factoring in partial multi-turn builds.
+  int hullPointsSpentInHex(HexCoord hex, {bool facilitiesMode = false}) {
+    final hexId = hex.id;
+    int total = 0;
+    for (final p in shipPurchases) {
+      if (p.shipyardHexId != hexId) continue;
+      final def = kShipDefinitions[p.type];
+      if (def == null) continue;
+      final hull = def.effectiveHullSize(facilitiesMode);
+      // totalHpNeeded when present overrides hull * quantity.
+      final need = p.totalHpNeeded ?? (hull * p.quantity);
+      // Remaining HP needed this turn = need - already contributed.
+      final remaining = (need - p.buildProgressHp).clamp(0, 99999);
+      total += remaining;
+    }
+    return total;
+  }
+
+  /// Returns true if a new purchase of [hpNeeded] HP can be assigned to [hex]
+  /// without exceeding the hex's capacity this turn.
+  bool canAssignPurchaseTo(
+    HexCoord hex,
+    int hpNeeded,
+    GameMapState map,
+    TechState tech, {
+    bool facilitiesMode = false,
+  }) {
+    final cap = shipyardCapacityForHex(hex, map, tech,
+        facilitiesMode: facilitiesMode);
+    final used = hullPointsSpentInHex(hex, facilitiesMode: facilitiesMode);
+    return used + hpNeeded <= cap;
+  }
+
+  /// Purchases that have been partially built (buildProgress > 0 and not
+  /// complete). Useful for the "In Progress" UI section under multi-turn mode.
+  List<ShipPurchase> get inProgressBuilds => [
+        for (final p in shipPurchases)
+          if (p.buildProgressHp > 0 &&
+              p.totalHpNeeded != null &&
+              p.buildProgressHp < p.totalHpNeeded!)
+            p,
+      ];
 
   // ---------------------------------------------------------------------------
   // Maintenance
@@ -554,7 +689,7 @@ class ProductionState {
             ? remainingTp(config)
             : 0;
 
-    // 2. Apply pending tech purchases and clean up accumulated research
+    // 2. Apply pending tech purchases and clean up accumulated research.
     TechState newTech = techState;
     final newAccumulated = Map<String, int>.from(accumulatedResearch);
     for (final entry in pendingTechPurchases.entries) {
@@ -620,7 +755,88 @@ class ProductionState {
       accumulatedResearch: newAccumulated,
       researchGrantsCp: 0,
       techPurchaseOrder: const [],
+      researchLog: const [],
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Research audit log helpers
+  // ---------------------------------------------------------------------------
+
+  /// Append a research event to the log and return a new state.
+  ProductionState appendResearchEvent(ResearchEvent event) {
+    return copyWith(researchLog: [...researchLog, event]);
+  }
+
+  /// Build TechPurchasedEvents for everything currently in
+  /// [pendingTechPurchases]. Used when building a [TurnSummary] just
+  /// before calling [prepareForNextTurn] so the summary includes every
+  /// tech that actually lands this turn.
+  List<ResearchEvent> emitPendingTechPurchaseEvents(
+    GameConfig config, [
+    List<GameModifier> modifiers = const [],
+  ]) {
+    final out = <ResearchEvent>[];
+    for (final entry in pendingTechPurchases.entries) {
+      final baseLevel = techState.getLevel(
+        entry.key,
+        facilitiesMode: config.useFacilitiesCosts,
+      );
+      final costs = _techPurchaseCostFor(
+        entry.key,
+        baseLevel,
+        entry.value,
+        config,
+        modifiers,
+      );
+      out.add(TechPurchasedEvent(
+        techId: entry.key,
+        fromLevel: baseLevel,
+        toLevel: entry.value,
+        cpCost: costs.$1,
+        rpCost: costs.$2,
+      ));
+    }
+    return out;
+  }
+
+  /// Compute the (cpCost, rpCost) for acquiring levels
+  /// (fromLevel, toLevel] of [id] under the current mode & modifiers.
+  (int, int) _techPurchaseCostFor(
+    TechId id,
+    int fromLevel,
+    int toLevel,
+    GameConfig config,
+    List<GameModifier> modifiers,
+  ) {
+    if (toLevel <= fromLevel) return (0, 0);
+    final ea = config.empireAdvantage;
+    final eaMult = ea?.techCostMultiplier ?? 1.0;
+    final scenMult = config.techCostMultiplier;
+    final techMod = _techCostModTotal(modifiers);
+    final fm = config.useFacilitiesCosts;
+    final table = fm ? kFacilitiesTechCosts : kBaseTechCosts;
+    final costEntry = table[id];
+    if (costEntry == null) return (0, 0);
+
+    int total = 0;
+    for (int lvl = fromLevel + 1; lvl <= toLevel; lvl++) {
+      int cost = costEntry.levelCosts[lvl] ?? 0;
+      if (eaMult != 1.0) {
+        final adjusted = cost * eaMult;
+        cost = ea?.roundTechCostsUp == true
+            ? adjusted.ceil()
+            : adjusted.floor();
+      }
+      if (scenMult != 1.0) cost = (cost * scenMult).ceil();
+      cost = (cost + techMod).clamp(0, 999);
+      total += cost;
+    }
+
+    // Unpredictable research is funded by CP grants (logged separately).
+    if (config.enableUnpredictableResearch) return (0, 0);
+    if (config.enableFacilities) return (0, total);
+    return (total, 0);
   }
 
   // ---------------------------------------------------------------------------
@@ -648,6 +864,7 @@ class ProductionState {
     Map<String, int>? accumulatedResearch,
     int? researchGrantsCp,
     List<TechId>? techPurchaseOrder,
+    List<ResearchEvent>? researchLog,
   }) =>
       ProductionState(
         cpCarryOver: cpCarryOver ?? this.cpCarryOver,
@@ -675,6 +892,7 @@ class ProductionState {
             accumulatedResearch ?? this.accumulatedResearch,
         researchGrantsCp: researchGrantsCp ?? this.researchGrantsCp,
         techPurchaseOrder: techPurchaseOrder ?? this.techPurchaseOrder,
+        researchLog: researchLog ?? this.researchLog,
       );
 
   Map<String, dynamic> toJson() => {
@@ -699,6 +917,7 @@ class ProductionState {
         'accumulatedResearch': accumulatedResearch,
         'researchGrantsCp': researchGrantsCp,
         'techPurchaseOrder': techPurchaseOrder.map((id) => id.name).toList(),
+        'researchLog': researchLog.map((e) => e.toJson()).toList(),
       };
 
   factory ProductionState.fromJson(Map<String, dynamic> json) {
@@ -752,6 +971,19 @@ class ProductionState {
       techPurchaseOrder: (json['techPurchaseOrder'] as List?)
               ?.map((name) => _techIdFromName(name as String))
               .whereType<TechId>()
+              .toList() ??
+          const [],
+      researchLog: (json['researchLog'] as List?)
+              ?.map((e) {
+                if (e is Map<String, dynamic>) {
+                  return ResearchEvent.fromJson(e);
+                } else if (e is Map) {
+                  return ResearchEvent.fromJson(
+                      Map<String, dynamic>.from(e));
+                }
+                return null;
+              })
+              .whereType<ResearchEvent>()
               .toList() ??
           const [],
     ).ensureWorldIds();

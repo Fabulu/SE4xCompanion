@@ -8,10 +8,12 @@ import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/alien_economy.dart';
 import '../models/game_config.dart';
+import '../models/game_modifier.dart';
 import '../models/game_state.dart';
 import '../models/map_state.dart';
 import '../models/production_state.dart';
 import '../models/replicator_player_state.dart';
+import '../models/research_event.dart';
 import '../models/replicator_state.dart';
 import '../models/ship_counter.dart';
 import '../models/technology.dart';
@@ -408,6 +410,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _updateGameState(newState, 'Manual Override');
   }
 
+  void _onApplyCardModifiers(
+      String cardName, List<GameModifier> modifiers) {
+    if (modifiers.isEmpty) return;
+    _updateGameState(
+      _gameState.copyWith(
+        activeModifiers: [..._gameState.activeModifiers, ...modifiers],
+      ),
+      'Apply card: $cardName',
+    );
+  }
+
+  void _onActiveModifiersChanged(List<GameModifier> modifiers) {
+    _updateGameState(
+      _gameState.copyWith(activeModifiers: modifiers),
+      'Update modifiers',
+    );
+  }
+
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
     _updateGameState(
       _gameState.copyWith(alienPlayers: aliens),
@@ -469,6 +489,224 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _onEndTurn() {
+    if (_gameState.config.playerControlsReplicators) {
+      _finishEndTurn();
+      return;
+    }
+    final candidates = _findColonyShipColonizeCandidates();
+    if (candidates.isEmpty) {
+      _finishEndTurn();
+      return;
+    }
+    _promptColonyShipColonization(candidates).then((decisions) {
+      if (!mounted) return;
+      if (decisions == null) {
+        // User cancelled dialog — treat as skip all, still end the turn.
+        _finishEndTurn();
+        return;
+      }
+      _applyColonyShipColonization(decisions);
+      _finishEndTurn();
+    });
+  }
+
+  /// A Colony Ship built + parked on a friendly fleet at a colonizable hex
+  /// that doesn't yet hold a world.
+  List<_ColonyShipCandidate> _findColonyShipColonizeCandidates() {
+    final terraforming = _gameState.production.techState.getLevel(
+      TechId.terraforming,
+      facilitiesMode: _gameState.config.useFacilitiesCosts,
+    );
+    final builtColonyShips = <String, ShipCounter>{
+      for (final c in _gameState.shipCounters)
+        if (c.isBuilt && c.type == ShipType.colonyShip) c.id: c,
+    };
+    if (builtColonyShips.isEmpty) return const [];
+    final raw = _gameState.mapState.findColonizeCandidates(
+      candidateShipIds: builtColonyShips.keys.toSet(),
+      terraformingLevel: terraforming,
+    );
+    return [
+      for (final c in raw)
+        if (builtColonyShips[c.shipId] != null)
+          _ColonyShipCandidate(
+            counter: builtColonyShips[c.shipId]!,
+            fleetId: c.fleetId,
+            coord: c.coord,
+            terrain: c.terrain,
+          ),
+    ];
+  }
+
+  Future<Map<String, bool>?> _promptColonyShipColonization(
+    List<_ColonyShipCandidate> candidates,
+  ) {
+    final decisions = <String, bool>{
+      for (final c in candidates) c.counter.id: true,
+    };
+    return showDialog<Map<String, bool>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Colony Ships ready to colonize'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => setSt(() {
+                        for (final c in candidates) {
+                          decisions[c.counter.id] = true;
+                        }
+                      }),
+                      child: const Text('Colonize All'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => setSt(() {
+                        for (final c in candidates) {
+                          decisions[c.counter.id] = false;
+                        }
+                      }),
+                      child: const Text('Skip All'),
+                    ),
+                  ],
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final c in candidates)
+                          CheckboxListTile(
+                            dense: true,
+                            value: decisions[c.counter.id] ?? false,
+                            onChanged: (v) => setSt(
+                              () => decisions[c.counter.id] = v ?? false,
+                            ),
+                            title: Text(
+                              'CS #${c.counter.number} @ '
+                              '[${c.coord.q},${c.coord.r}]',
+                            ),
+                            subtitle: Text(c.terrain.displayName),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel End Turn'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, decisions),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _applyColonyShipColonization(Map<String, bool> decisions) {
+    final candidates = _findColonyShipColonizeCandidates();
+    if (candidates.isEmpty) return;
+    final candidateByShipId = {for (final c in candidates) c.counter.id: c};
+
+    var nextMap = _gameState.mapState;
+    var nextProduction = _gameState.production;
+    final nextCounters = List<ShipCounter>.from(_gameState.shipCounters);
+
+    final existingWorldIds = nextProduction.worlds.map((w) => w.id).toSet();
+    int nextSuffix = 1;
+    String mintWorldId() {
+      String id;
+      do {
+        id = 'world-cs-${DateTime.now().microsecondsSinceEpoch}-$nextSuffix';
+        nextSuffix++;
+      } while (existingWorldIds.contains(id));
+      existingWorldIds.add(id);
+      return id;
+    }
+
+    final usedCoordIds = <String>{
+      for (final h in nextMap.hexes)
+        if (h.worldId != null && h.worldId!.isNotEmpty) h.coord.id,
+    };
+
+    final worlds = List<WorldState>.from(nextProduction.worlds);
+    for (final entry in decisions.entries) {
+      if (entry.value != true) continue;
+      final candidate = candidateByShipId[entry.key];
+      if (candidate == null) continue;
+      if (usedCoordIds.contains(candidate.coord.id)) continue;
+
+      final newWorldId = mintWorldId();
+      final worldName = 'Colony [${candidate.coord.q},${candidate.coord.r}]';
+      worlds.add(
+        WorldState(
+          id: newWorldId,
+          name: worldName,
+          growthMarkerLevel: 0,
+        ),
+      );
+      usedCoordIds.add(candidate.coord.id);
+
+      // Stamp worldId onto the hex.
+      final hex = nextMap.hexAt(candidate.coord);
+      if (hex != null) {
+        nextMap = nextMap.replaceHex(hex.copyWith(worldId: newWorldId));
+      }
+
+      // Remove the CS counter from its fleet and retire (unbuild) it.
+      final fleet = nextMap.fleetById(candidate.fleetId);
+      if (fleet != null) {
+        final remainingShipIds = fleet.shipCounterIds
+            .where((id) => id != candidate.counter.id)
+            .toList();
+        if (remainingShipIds.isEmpty) {
+          nextMap = nextMap.removeFleet(fleet.id);
+        } else {
+          nextMap = nextMap.replaceFleet(
+            fleet.copyWith(
+              shipCounterIds: remainingShipIds,
+              composition: const {},
+            ),
+          );
+        }
+      }
+      for (int i = 0; i < nextCounters.length; i++) {
+        if (nextCounters[i].id == candidate.counter.id) {
+          nextCounters[i] = ShipCounter(
+            type: nextCounters[i].type,
+            number: nextCounters[i].number,
+          );
+          break;
+        }
+      }
+    }
+
+    nextProduction = nextProduction.copyWith(worlds: worlds);
+    _updateGameState(
+      _gameState.copyWith(
+        production: nextProduction,
+        mapState: nextMap,
+        shipCounters: nextCounters,
+      ),
+      'Colonize Colony Ships',
+    );
+  }
+
+  void _finishEndTurn() {
     if (_gameState.config.playerControlsReplicators) {
       final playerState =
           _gameState.replicatorPlayerState ??
@@ -554,9 +792,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final rpCarryOver = config.enableFacilities ? remainingRp.clamp(0, 30) : 0;
     final maintenancePaid = prod.maintenanceTotal(counters, config, mods);
 
+    // Build the research audit log: whatever events were recorded this
+    // turn (grant rolls, reassignments) plus synthesized TechPurchasedEvents
+    // for every pending purchase that will be applied by prepareForNextTurn.
+    final researchLog = <ResearchEvent>[
+      ...prod.researchLog,
+      ...prod.emitPendingTechPurchaseEvents(config, mods),
+    ];
+
     final summary = TurnSummary(
       turnNumber: _gameState.turnNumber,
       completedAt: DateTime.now(),
+      productionSnapshot: prod,
+      researchLog: researchLog,
       techsGained: techsGained,
       shipsBuilt: shipsBuilt,
       coloniesGrown: coloniesGrown,
@@ -1113,6 +1361,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 onEndTurn: _onEndTurn,
                 onRuleTap: _navigateToRule,
                 onGameStateOverride: _onGameStateOverride,
+                onActiveModifiersChanged: _onActiveModifiersChanged,
                 onLocateShip: _locateShipOnMap,
               ),
       _TabId.map => MapPage(
@@ -1190,7 +1439,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           );
         },
       ),
-      _TabId.rules => RulesReferencePage(key: _rulesKey),
+      _TabId.rules => RulesReferencePage(
+          key: _rulesKey,
+          onApplyCardModifiers: _onApplyCardModifiers,
+        ),
     };
 
     if (vpConfig == null) return content;
@@ -1440,4 +1692,18 @@ class _PulsingTextState extends State<_PulsingText>
       child: Text(widget.text, style: widget.style),
     );
   }
+}
+
+class _ColonyShipCandidate {
+  final ShipCounter counter;
+  final String fleetId;
+  final HexCoord coord;
+  final HexTerrain terrain;
+
+  const _ColonyShipCandidate({
+    required this.counter,
+    required this.fleetId,
+    required this.coord,
+    required this.terrain,
+  });
 }

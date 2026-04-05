@@ -153,6 +153,135 @@ void main() {
       expect(sanitized.fleets, isEmpty);
     });
   });
+
+  group('HexTerrain.isColonizable', () {
+    test('deep space is always colonizable', () {
+      expect(HexTerrain.deepSpace.isColonizable(0), isTrue);
+      expect(HexTerrain.deepSpace.isColonizable(2), isTrue);
+    });
+
+    test('asteroid belt needs Terraforming 1', () {
+      expect(HexTerrain.asteroid.isColonizable(0), isFalse);
+      expect(HexTerrain.asteroid.isColonizable(1), isTrue);
+      expect(HexTerrain.asteroid.isColonizable(2), isTrue);
+    });
+
+    test('nebula needs Terraforming 2', () {
+      expect(HexTerrain.nebula.isColonizable(0), isFalse);
+      expect(HexTerrain.nebula.isColonizable(1), isFalse);
+      expect(HexTerrain.nebula.isColonizable(2), isTrue);
+    });
+
+    test('hazards are never colonizable', () {
+      for (final t in [
+        HexTerrain.blackHole,
+        HexTerrain.supernova,
+        HexTerrain.foldInSpace,
+      ]) {
+        expect(t.isColonizable(5), isFalse, reason: 'terrain=$t');
+      }
+    });
+  });
+
+  group('GameMapState.findColonizeCandidates', () {
+    GameMapState buildState({
+      HexTerrain terrain = HexTerrain.deepSpace,
+      String? worldId,
+      bool isEnemy = false,
+      List<String> shipIds = const ['colonyShip:1'],
+    }) {
+      return GameMapState(
+        hexes: [
+          MapHexState(
+            coord: const HexCoord(2, -3),
+            terrain: terrain,
+            worldId: worldId,
+          ),
+          const MapHexState(coord: HexCoord(0, 0)),
+        ],
+        fleets: [
+          FleetStackState(
+            id: 'fleet-1',
+            coord: const HexCoord(2, -3),
+            isEnemy: isEnemy,
+            shipCounterIds: shipIds,
+          ),
+        ],
+      );
+    }
+
+    test('finds a colony ship on an empty deep-space hex', () {
+      final state = buildState();
+      final hits = state.findColonizeCandidates(
+        candidateShipIds: {'colonyShip:1'},
+        terraformingLevel: 0,
+      );
+      expect(hits, hasLength(1));
+      expect(hits.first.shipId, 'colonyShip:1');
+      expect(hits.first.fleetId, 'fleet-1');
+      expect(hits.first.coord, const HexCoord(2, -3));
+      expect(hits.first.terrain, HexTerrain.deepSpace);
+    });
+
+    test('skips hex that already has a world', () {
+      final state = buildState(worldId: 'world-1');
+      final hits = state.findColonizeCandidates(
+        candidateShipIds: {'colonyShip:1'},
+        terraformingLevel: 0,
+      );
+      expect(hits, isEmpty);
+    });
+
+    test('skips asteroid without Terraforming 1', () {
+      final state = buildState(terrain: HexTerrain.asteroid);
+      expect(
+        state.findColonizeCandidates(
+          candidateShipIds: {'colonyShip:1'},
+          terraformingLevel: 0,
+        ),
+        isEmpty,
+      );
+      expect(
+        state.findColonizeCandidates(
+          candidateShipIds: {'colonyShip:1'},
+          terraformingLevel: 1,
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('skips enemy fleets', () {
+      final state = buildState(isEnemy: true);
+      expect(
+        state.findColonizeCandidates(
+          candidateShipIds: {'colonyShip:1'},
+          terraformingLevel: 0,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('only returns ships listed in candidateShipIds', () {
+      final state = buildState(shipIds: const ['dd:1', 'colonyShip:2']);
+      final hits = state.findColonizeCandidates(
+        candidateShipIds: {'colonyShip:2'},
+        terraformingLevel: 0,
+      );
+      expect(hits, hasLength(1));
+      expect(hits.first.shipId, 'colonyShip:2');
+    });
+
+    test('skips hazard terrains regardless of terraforming', () {
+      final state = buildState(terrain: HexTerrain.blackHole);
+      expect(
+        state.findColonizeCandidates(
+          candidateShipIds: {'colonyShip:1'},
+          terraformingLevel: 9,
+        ),
+        isEmpty,
+      );
+    });
+  });
 }
 
 MapHexState stateHex(

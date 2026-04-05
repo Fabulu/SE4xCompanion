@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../data/card_manifest.dart';
+import '../data/card_modifiers.dart';
 import '../data/empire_advantages.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
@@ -547,7 +549,119 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
               ),
           ],
         ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(
+              'From Catalog',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Pick...', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: () => _showCatalogPicker(context),
+            ),
+          ],
+        ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Catalog picker dialog (cards with bound GameModifiers).
+  // ---------------------------------------------------------------------------
+
+  Future<void> _showCatalogPicker(BuildContext parentContext) async {
+    // Pre-compute bindable cards: those with at least one modifier.
+    final bindable = <CardEntry>[];
+    for (final card in kAllCards) {
+      if (cardHasModifiers(card.number)) bindable.add(card);
+    }
+
+    String query = '';
+    await showDialog(
+      context: parentContext,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setInnerState) {
+            final q = query.toLowerCase();
+            final filtered = q.isEmpty
+                ? bindable
+                : bindable
+                    .where((c) =>
+                        c.name.toLowerCase().contains(q) ||
+                        c.description.toLowerCase().contains(q) ||
+                        '#${c.number}'.contains(q))
+                    .toList();
+            return AlertDialog(
+              title: const Text('Pick Card Modifier'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        isDense: true,
+                      ),
+                      onChanged: (v) => setInnerState(() => query = v),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final card = filtered[i];
+                          final binding = cardModifiersFor(card.number)!;
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              '#${card.number} ${card.name}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            subtitle: Text(
+                              binding.modifiers
+                                  .map((m) => m.effectDescription)
+                                  .join(' • '),
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            onTap: () {
+                              setState(() {
+                                _activeModifiers = [
+                                  ..._activeModifiers,
+                                  ...binding.modifiers,
+                                ];
+                              });
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

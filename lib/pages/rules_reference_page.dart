@@ -3,14 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/card_manifest.dart';
+import '../data/card_modifiers.dart';
 import '../data/rules_data.dart';
 import '../data/rules_phases.dart';
+import '../models/game_modifier.dart';
 import '../widgets/rule_text.dart';
 
 enum _ViewMode { phase, full, cards, search }
 
 class RulesReferencePage extends StatefulWidget {
-  const RulesReferencePage({super.key});
+  /// Called when the user taps "Apply this card" on a card that has a bound
+  /// modifier set. The caller should append [modifiers] to the game's
+  /// `activeModifiers` list.
+  final void Function(String cardName, List<GameModifier> modifiers)?
+      onApplyCardModifiers;
+
+  const RulesReferencePage({super.key, this.onApplyCardModifiers});
 
   @override
   State<RulesReferencePage> createState() => RulesReferencePageState();
@@ -583,10 +591,86 @@ class RulesReferencePageState extends State<RulesReferencePage> {
                     ),
                   ),
                 ],
+                _buildCardApplyFooter(theme, card),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// "Apply this card" button + complex-behavior hint. Returns an empty
+  /// widget when there is nothing to offer for [card].
+  Widget _buildCardApplyFooter(ThemeData theme, CardEntry card) {
+    final binding = cardModifiersFor(card.number);
+    if (binding == null) return const SizedBox.shrink();
+
+    final children = <Widget>[];
+    if (binding.hasModifiers && widget.onApplyCardModifiers != null) {
+      children.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.add_circle_outline, size: 16),
+            label: const Text('Apply this card',
+                style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              widget.onApplyCardModifiers!(card.name, binding.modifiers);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Applied: ${card.name}'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+    if (binding.notes != null) {
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          'Note: ${binding.notes}',
+          style: TextStyle(
+            fontSize: 11,
+            fontStyle: FontStyle.italic,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+      ));
+    }
+    if (binding.isComplex) {
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            'Bespoke: ${binding.complexBehaviorNote}',
+            style: TextStyle(
+              fontSize: 11,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+      ));
+    }
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
       ),
     );
   }

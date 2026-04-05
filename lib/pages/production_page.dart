@@ -7,6 +7,7 @@ import '../models/game_config.dart';
 import '../models/game_modifier.dart';
 import '../models/game_state.dart';
 import '../models/production_state.dart';
+import '../models/research_event.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
 import '../widgets/empire_summary_card.dart';
@@ -182,6 +183,7 @@ class ProductionPage extends StatefulWidget {
   final VoidCallback onEndTurn;
   final void Function(String sectionId)? onRuleTap;
   final ValueChanged<GameState>? onGameStateOverride;
+  final ValueChanged<List<GameModifier>>? onActiveModifiersChanged;
   final ValueChanged<String>? onLocateShip;
 
   const ProductionPage({
@@ -196,6 +198,7 @@ class ProductionPage extends StatefulWidget {
     required this.onEndTurn,
     this.onRuleTap,
     this.onGameStateOverride,
+    this.onActiveModifiersChanged,
     this.onLocateShip,
   });
 
@@ -523,9 +526,29 @@ class _ProductionPageState extends State<ProductionPage>
     final newTotal = effectiveAccumulated + result.totalRolled;
     newAccumulated[effectiveKey] = newTotal;
 
+    // Append research audit events: the roll itself, and a reassignment
+    // marker if the roll ended up on a different tech.
+    final newLog = <ResearchEvent>[
+      ...production.researchLog,
+      GrantRolledEvent(
+        techId: effectiveId,
+        targetLevel: effectiveTargetLevel,
+        dieResult: result.totalRolled,
+        outcomeCpSpent: result.cpSpent,
+        success: result.breakthroughAchieved,
+      ),
+      if (result.reassignedFrom != null)
+        GrantReassignedEvent(
+          fromTechId: result.reassignedFrom!,
+          toTechId: effectiveId,
+          accumulatedCp: result.totalRolled,
+        ),
+    ];
+
     var newProduction = production.copyWith(
       accumulatedResearch: newAccumulated,
       researchGrantsCp: production.researchGrantsCp + result.cpSpent,
+      researchLog: newLog,
     );
 
     // If breakthrough: add to pending tech purchases and remove accumulated
@@ -564,6 +587,9 @@ class _ProductionPageState extends State<ProductionPage>
           isAlternateEmpire: config.enableAlternateEmpire,
           shipSpecialAbilities: abilities,
         ),
+
+        // Active card-derived modifiers (chips)
+        _buildActiveModifierChips(theme),
 
         // Carry-over warnings
         _buildCarryOverWarning(),
@@ -656,6 +682,44 @@ class _ProductionPageState extends State<ProductionPage>
         ],
       ),
     );
+  }
+
+  // ===========================================================================
+  // Active modifier chips (card-derived + manual)
+  // ===========================================================================
+
+  Widget _buildActiveModifierChips(ThemeData theme) {
+    final mods = modifiers;
+    if (mods.isEmpty) return const SizedBox.shrink();
+    final canRemove = widget.onActiveModifiersChanged != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          for (int i = 0; i < mods.length; i++)
+            InputChip(
+              label: Text(
+                '${mods[i].name}: ${mods[i].effectDescription}',
+                style: const TextStyle(fontSize: 11),
+              ),
+              onDeleted: canRemove ? () => _removeModifierAt(i) : null,
+              deleteIconColor:
+                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _removeModifierAt(int index) {
+    final cb = widget.onActiveModifiersChanged;
+    if (cb == null) return;
+    final newMods = List<GameModifier>.from(modifiers)..removeAt(index);
+    cb(newMods);
   }
 
   // ===========================================================================

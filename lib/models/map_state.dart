@@ -9,6 +9,45 @@ enum HexTerrain {
   foldInSpace,
 }
 
+/// Terrain colonization rules (rule 4.4 / 9.7):
+/// - Deep space planets are always colonizable.
+/// - Asteroid belts require Terraforming 1.
+/// - Nebulae require Terraforming 2.
+/// - Black holes, supernovae, and folds-in-space are never colonizable.
+extension HexTerrainColonization on HexTerrain {
+  bool isColonizable(int terraformingLevel) {
+    switch (this) {
+      case HexTerrain.deepSpace:
+        return true;
+      case HexTerrain.asteroid:
+        return terraformingLevel >= 1;
+      case HexTerrain.nebula:
+        return terraformingLevel >= 2;
+      case HexTerrain.blackHole:
+      case HexTerrain.supernova:
+      case HexTerrain.foldInSpace:
+        return false;
+    }
+  }
+
+  String get displayName {
+    switch (this) {
+      case HexTerrain.deepSpace:
+        return 'Deep Space';
+      case HexTerrain.asteroid:
+        return 'Asteroid Belt';
+      case HexTerrain.nebula:
+        return 'Nebula';
+      case HexTerrain.blackHole:
+        return 'Black Hole';
+      case HexTerrain.supernova:
+        return 'Supernova';
+      case HexTerrain.foldInSpace:
+        return 'Fold-in-Space';
+    }
+  }
+}
+
 class HexCoord {
   final int q;
   final int r;
@@ -57,6 +96,7 @@ class MapHexState {
   final List<String> pipelineIds;
   final int industryMarkers;
   final int researchMarkers;
+  final int shipyardCount;
   final String notes;
   final String? legacyWorldName;
 
@@ -72,6 +112,7 @@ class MapHexState {
     this.pipelineIds = const [],
     this.industryMarkers = 0,
     this.researchMarkers = 0,
+    this.shipyardCount = 0,
     this.notes = '',
     this.legacyWorldName,
   });
@@ -89,6 +130,7 @@ class MapHexState {
     List<String>? pipelineIds,
     int? industryMarkers,
     int? researchMarkers,
+    int? shipyardCount,
     String? notes,
   }) =>
       MapHexState(
@@ -103,6 +145,7 @@ class MapHexState {
         pipelineIds: pipelineIds ?? this.pipelineIds,
         industryMarkers: industryMarkers ?? this.industryMarkers,
         researchMarkers: researchMarkers ?? this.researchMarkers,
+        shipyardCount: shipyardCount ?? this.shipyardCount,
         notes: notes ?? this.notes,
         legacyWorldName: null,
       );
@@ -119,6 +162,7 @@ class MapHexState {
         'pipelineIds': pipelineIds,
         'industryMarkers': industryMarkers,
         'researchMarkers': researchMarkers,
+        'shipyardCount': shipyardCount,
         'notes': notes,
       };
 
@@ -148,6 +192,7 @@ class MapHexState {
       pipelineIds: pipelineIds,
       industryMarkers: json['industryMarkers'] as int? ?? 0,
       researchMarkers: json['researchMarkers'] as int? ?? 0,
+      shipyardCount: json['shipyardCount'] as int? ?? 0,
       notes: json['notes'] as String? ?? '',
       legacyWorldName: json['worldId'] == null
           ? json['worldName'] as String?
@@ -396,6 +441,37 @@ class GameMapState {
     return ids;
   }
 
+  /// Find friendly ship IDs from [candidateShipIds] that sit on a colonizable
+  /// hex without an existing world, given the current [terraformingLevel].
+  List<ColonizeCandidate> findColonizeCandidates({
+    required Set<String> candidateShipIds,
+    required int terraformingLevel,
+  }) {
+    if (candidateShipIds.isEmpty) return const [];
+    final occupiedCoordIds = <String>{
+      for (final hex in hexes)
+        if (hex.worldId != null && hex.worldId!.isNotEmpty) hex.coord.id,
+    };
+    final out = <ColonizeCandidate>[];
+    for (final fleet in fleets) {
+      if (fleet.isEnemy) continue;
+      final hex = hexAt(fleet.coord);
+      if (hex == null) continue;
+      if (occupiedCoordIds.contains(hex.coord.id)) continue;
+      if (!hex.terrain.isColonizable(terraformingLevel)) continue;
+      for (final shipId in fleet.shipCounterIds) {
+        if (!candidateShipIds.contains(shipId)) continue;
+        out.add(ColonizeCandidate(
+          shipId: shipId,
+          fleetId: fleet.id,
+          coord: hex.coord,
+          terrain: hex.terrain,
+        ));
+      }
+    }
+    return out;
+  }
+
   GameMapState assignFleetShips(String fleetId, List<String> shipIds) {
     final assignedElsewhere = assignedFriendlyShipIds(excludeFleetId: fleetId);
     final nextIds = <String>[];
@@ -554,10 +630,23 @@ class GameMapState {
 
   factory GameMapState.fromJson(Map<String, dynamic> json) {
     final layoutPreset = _presetFromName(json['layoutPreset'] as String?);
-    final storedHexes = (json['hexes'] as List?)
+    final rawHexList = json['hexes'] as List?;
+    final storedHexes = rawHexList
             ?.map((hex) => MapHexState.fromJson(hex as Map<String, dynamic>))
             .toList() ??
         const <MapHexState>[];
+    // One-time legacy migration: if no stored hex has shipyardCount key, seed
+    // any HW-bearing hex with a starting shipyard of 1.
+    final hasAnyShipyardKey = rawHexList != null &&
+        rawHexList.any((h) => h is Map<String, dynamic> && h.containsKey('shipyardCount'));
+    final migratedHexes = hasAnyShipyardKey
+        ? storedHexes
+        : [
+            for (final hex in storedHexes)
+              hex.worldId != null && hex.worldId!.isNotEmpty
+                  ? hex.copyWith(shipyardCount: 1)
+                  : hex,
+          ];
     // Canonical coord set for the active preset. Any persisted hex or fleet
     // sitting outside this set is an orphan from a prior layout revision and
     // gets dropped silently so rendering never hits a phantom/missing coord.
@@ -567,7 +656,7 @@ class GameMapState {
     final defaultsById = {
       for (final hex in defaultHexesFor(layoutPreset)) hex.coord.id: hex,
     };
-    for (final hex in storedHexes) {
+    for (final hex in migratedHexes) {
       if (!validCoordIds.contains(hex.coord.id)) continue;
       defaultsById[hex.coord.id] = hex;
     }
@@ -683,6 +772,22 @@ class GameMapState {
     final rows = counts.keys.toList()..sort();
     return [for (final row in rows) counts[row]!];
   }
+}
+
+/// Result of [GameMapState.findColonizeCandidates]: one friendly ship sitting
+/// on a colonizable hex that has no world on it yet.
+class ColonizeCandidate {
+  final String shipId;
+  final String fleetId;
+  final HexCoord coord;
+  final HexTerrain terrain;
+
+  const ColonizeCandidate({
+    required this.shipId,
+    required this.fleetId,
+    required this.coord,
+    required this.terrain,
+  });
 }
 
 class _RowSpec {
