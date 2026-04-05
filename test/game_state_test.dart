@@ -7,6 +7,7 @@ import 'package:se4x/models/game_config.dart';
 import 'package:se4x/models/game_state.dart';
 import 'package:se4x/models/map_state.dart';
 import 'package:se4x/models/production_state.dart';
+import 'package:se4x/models/replicator_player_state.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
 import 'package:se4x/models/turn_summary.dart';
@@ -41,26 +42,35 @@ void main() {
           techState: const TechState(levels: {TechId.attack: 2}),
         ),
         shipCounters: [
-          const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true, attack: 1),
+          const ShipCounter(
+            type: ShipType.dd,
+            number: 1,
+            isBuilt: true,
+            attack: 1,
+          ),
         ],
         alienPlayers: [
           const AlienPlayer(name: 'Red', color: 'red', currentTurn: 3),
         ],
-        mapState: GameMapState.initial(
-          layoutPreset: MapLayoutPreset.special5p,
-        ).copyWith(
-          selectedHex: const HexCoord(0, 0),
-          fleets: const [
-            FleetStackState(
-              id: 'fleet-1',
-              coord: HexCoord(0, 0),
-              owner: 'Blue',
-              label: 'Fleet',
-              shipCounterIds: ['dd:1'],
-              composition: {'SC': 3},
-            ),
-          ],
+        replicatorPlayerState: const ReplicatorPlayerState(
+          cpPool: 12,
+          rpTotal: 3,
+          empireAdvantageCardNumber: 60,
         ),
+        mapState: GameMapState.initial(layoutPreset: MapLayoutPreset.special5p)
+            .copyWith(
+              selectedHex: const HexCoord(0, 0),
+              fleets: const [
+                FleetStackState(
+                  id: 'fleet-1',
+                  coord: HexCoord(0, 0),
+                  owner: 'Blue',
+                  label: 'Fleet',
+                  shipCounterIds: ['dd:1'],
+                  composition: {'SC': 3},
+                ),
+              ],
+            ),
       );
 
       final json = gs.toJson();
@@ -80,6 +90,8 @@ void main() {
       expect(restored.shipCounters[0].attack, 1);
       expect(restored.alienPlayers.length, 1);
       expect(restored.alienPlayers[0].name, 'Red');
+      expect(restored.replicatorPlayerState?.cpPool, 12);
+      expect(restored.replicatorPlayerState?.empireAdvantageCardNumber, 60);
       expect(restored.mapState.layoutPreset, MapLayoutPreset.special5p);
       expect(restored.mapState.selectedHex?.id, '0,0');
       expect(restored.mapState.fleets, hasLength(1));
@@ -90,7 +102,7 @@ void main() {
         'turnNumber': 2,
         'production': {
           'worlds': [
-            {'name': 'HW', 'isHomeworld': true, 'homeworldValue': 30}
+            {'name': 'HW', 'isHomeworld': true, 'homeworldValue': 30},
           ],
         },
       });
@@ -113,7 +125,7 @@ void main() {
           'layoutPreset': 'standard4p',
           'hexes': [
             {
-              'coord': {'q': 0, 'r': 0},
+              'coord': {'q': 3, 'r': 0},
               'worldName': 'Homeworld',
               'pipelines': 2,
             },
@@ -121,7 +133,7 @@ void main() {
         },
       });
 
-      final placedHex = restored.mapState.hexAt(const HexCoord(0, 0));
+      final placedHex = restored.mapState.hexAt(const HexCoord(3, 0));
       expect(restored.production.worlds[0].id, isNotEmpty);
       expect(restored.production.worlds[1].id, isNotEmpty);
       expect(placedHex?.worldId, restored.production.worlds[0].id);
@@ -129,10 +141,10 @@ void main() {
       // synthetic IDs no longer match the new {pipeline-1, pipeline-2} pool),
       // but the connected-colony count migrates correctly.
       expect(restored.production.pipelineConnectedColonies, 2);
-      expect(
-        restored.production.pipelineAssetIds,
-        ['pipeline-1', 'pipeline-2'],
-      );
+      expect(restored.production.pipelineAssetIds, [
+        'pipeline-1',
+        'pipeline-2',
+      ]);
     });
   });
 
@@ -246,7 +258,12 @@ void main() {
           ),
         ],
         fleets: [
-          AlienFleetEntry(fleetNumber: 1, cp: 12, isRaider: false, launchTurn: 3),
+          AlienFleetEntry(
+            fleetNumber: 1,
+            cp: 12,
+            isRaider: false,
+            launchTurn: 3,
+          ),
         ],
         techsPurchased: ['Attack-1', 'Move-2'],
       );
@@ -259,7 +276,10 @@ void main() {
       expect(restored.currentTurn, 4);
       expect(restored.turnRecords.length, 1);
       expect(restored.turnRecords[0].rolls[0].dieResult, 3);
-      expect(restored.turnRecords[0].rolls[0].outcome, AlienEconOutcomeType.tech);
+      expect(
+        restored.turnRecords[0].rolls[0].outcome,
+        AlienEconOutcomeType.tech,
+      );
       expect(restored.fleets.length, 1);
       expect(restored.fleets[0].cp, 12);
       expect(restored.fleets[0].launchTurn, 3);
@@ -327,9 +347,7 @@ void main() {
     });
 
     test('GameState without turnSummaries key defaults to empty list', () {
-      final json = <String, dynamic>{
-        'turnNumber': 3,
-      };
+      final json = <String, dynamic>{'turnNumber': 3};
       final restored = GameState.fromJson(json);
       expect(restored.turnSummaries, isEmpty);
     });
@@ -348,6 +366,7 @@ void main() {
         enableTemporal: true,
         enableAdvancedConstruction: true,
         enableReplicators: true,
+        playerControlsReplicators: true,
         enableShipExperience: true,
       );
 
@@ -362,6 +381,7 @@ void main() {
       expect(restored.enableTemporal, true);
       expect(restored.enableAdvancedConstruction, true);
       expect(restored.enableReplicators, true);
+      expect(restored.playerControlsReplicators, true);
       expect(restored.enableShipExperience, true);
     });
 
@@ -375,18 +395,21 @@ void main() {
       expect(restored.enableTemporal, false);
     });
 
-    test('GameConfig with enableUnpredictableResearch round-trips correctly', () {
-      const config = GameConfig(
-        enableUnpredictableResearch: true,
-        enableFacilities: true,
-      );
-      final json = config.toJson();
-      final restored = GameConfig.fromJson(json);
+    test(
+      'GameConfig with enableUnpredictableResearch round-trips correctly',
+      () {
+        const config = GameConfig(
+          enableUnpredictableResearch: true,
+          enableFacilities: true,
+        );
+        final json = config.toJson();
+        final restored = GameConfig.fromJson(json);
 
-      expect(restored.enableUnpredictableResearch, true);
-      expect(restored.enableFacilities, true);
-      expect(restored.enableLogistics, false);
-    });
+        expect(restored.enableUnpredictableResearch, true);
+        expect(restored.enableFacilities, true);
+        expect(restored.enableLogistics, false);
+      },
+    );
 
     test('GameConfig with selectedEmpireAdvantage round-trips correctly', () {
       const config = GameConfig(selectedEmpireAdvantage: 34);
@@ -416,22 +439,31 @@ void main() {
       expect(config.empireAdvantage, isNull);
     });
 
-    test('GameConfig.shipCostModifiers returns empty map when no EA selected', () {
-      const config = GameConfig();
-      expect(config.shipCostModifiers, isEmpty);
-    });
+    test(
+      'GameConfig.shipCostModifiers returns empty map when no EA selected',
+      () {
+        const config = GameConfig();
+        expect(config.shipCostModifiers, isEmpty);
+      },
+    );
 
-    test('GameConfig.shipCostModifiers surfaces Immortals colony-ship surcharge', () {
-      // Immortals (#44): Colony Ships cost 2 more.
-      const config = GameConfig(selectedEmpireAdvantage: 44);
-      expect(config.shipCostModifiers[ShipType.colonyShip], 2);
-    });
+    test(
+      'GameConfig.shipCostModifiers surfaces Immortals colony-ship surcharge',
+      () {
+        // Immortals (#44): Colony Ships cost 2 more.
+        const config = GameConfig(selectedEmpireAdvantage: 44);
+        expect(config.shipCostModifiers[ShipType.colonyShip], 2);
+      },
+    );
 
-    test('GameConfig.shipCostModifiers surfaces Star Wolves destroyer discount', () {
-      // Star Wolves (#51): Destroyers cost 1 less.
-      const config = GameConfig(selectedEmpireAdvantage: 51);
-      expect(config.shipCostModifiers[ShipType.dd], -1);
-    });
+    test(
+      'GameConfig.shipCostModifiers surfaces Star Wolves destroyer discount',
+      () {
+        // Star Wolves (#51): Destroyers cost 1 less.
+        const config = GameConfig(selectedEmpireAdvantage: 51);
+        expect(config.shipCostModifiers[ShipType.dd], -1);
+      },
+    );
 
     test('GameConfig.shipCostModifiers is empty for hull-size-only EAs', () {
       // Giant Race (#34) and Insectoids (#43) express their cost effect via

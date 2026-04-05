@@ -2,72 +2,106 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:se4x/data/scenarios.dart';
 import 'package:se4x/data/ship_definitions.dart';
+import 'package:se4x/widgets/empire_advantage_picker.dart';
 import 'package:se4x/widgets/new_game_wizard.dart';
 
 void main() {
-  test('startingFleetForSelection adds easy-mode colony ships in replicator solitaire', () {
-    final scenario = scenarioById('replicator_standard');
-    final fleet = startingFleetForSelection(
-      scenario: scenario,
-      isReplicatorGame: true,
-      replicatorDifficulty: 'Easy',
-    );
+  test(
+    'startingFleetForSelection adds easy-mode colony ships in replicator solitaire',
+    () {
+      final scenario = scenarioById('replicator_standard');
+      final fleet = startingFleetForSelection(
+        scenario: scenario,
+        isReplicatorGame: true,
+        replicatorDifficulty: 'Easy',
+      );
 
-    expect(fleet[ShipType.colonyShip], 6);
-    expect(fleet[ShipType.scout], 3);
-  });
+      expect(fleet[ShipType.colonyShip], 6);
+      expect(fleet[ShipType.scout], 3);
+    },
+  );
 
-  test('startingFleetForSelection leaves normal replicator fleet unchanged', () {
-    final scenario = scenarioById('replicator_standard');
-    final fleet = startingFleetForSelection(
-      scenario: scenario,
-      isReplicatorGame: true,
-      replicatorDifficulty: 'Normal',
-    );
+  test(
+    'startingFleetForSelection leaves normal replicator fleet unchanged',
+    () {
+      final scenario = scenarioById('replicator_standard');
+      final fleet = startingFleetForSelection(
+        scenario: scenario,
+        isReplicatorGame: true,
+        replicatorDifficulty: 'Normal',
+      );
 
-    expect(fleet[ShipType.colonyShip], 4);
-  });
+      expect(fleet[ShipType.colonyShip], 4);
+    },
+  );
 
-  testWidgets('canceling the wizard returns null and leaves the caller state unchanged', (tester) async {
-    String currentGameName = 'Current Game';
-    NewGameResult? result;
+  testWidgets(
+    'canceling the wizard returns null and leaves the caller state unchanged',
+    (tester) async {
+      String currentGameName = 'Current Game';
+      NewGameResult? result;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            return Scaffold(
-              body: Column(
-                children: [
-                  Text(currentGameName, key: const ValueKey('game-name')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      result = await showNewGameWizard(context);
-                      if (result != null) {
-                        setState(() => currentGameName = result!.gameName);
-                      }
-                    },
-                    child: const Text('Open Wizard'),
-                  ),
-                ],
-              ),
-            );
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              return Scaffold(
+                body: Column(
+                  children: [
+                    Text(currentGameName, key: const ValueKey('game-name')),
+                    ElevatedButton(
+                      onPressed: () async {
+                        result = await showNewGameWizard(context);
+                        if (result != null) {
+                          setState(() => currentGameName = result!.gameName);
+                        }
+                      },
+                      child: const Text('Open Wizard'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('Open Wizard'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Open Wizard'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
 
-    await tester.tap(find.text('Cancel'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(result, isNull);
-    expect(find.text('Current Game'), findsOneWidget);
-  });
+      expect(result, isNull);
+      expect(find.text('Current Game'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'player-controlled Replicators only expose Replicator advantages',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: EmpireAdvantagePicker(
+              showReplicatorAdvantages: true,
+              selectedCardNumber: null,
+              onChanged: _noopOnChanged,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('Fast Replicators'), findsOneWidget);
+      expect(find.textContaining('Advanced Research'), findsOneWidget);
+      expect(find.textContaining('Gifted Scientists'), findsNothing);
+      expect(find.textContaining('Amazing Diplomats'), findsNothing);
+    },
+  );
 }
+
+void _noopOnChanged(int? _) {}

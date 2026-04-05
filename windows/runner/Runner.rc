@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "se4x" "\0"
+            VALUE "CompanyName", "Fabian Trunz" "\0"
+            VALUE "FileDescription", "SE4X Companion" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "se4x" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "se4x.exe" "\0"
-            VALUE "ProductName", "se4x" "\0"
+            VALUE "InternalName", "se4x_companion" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Fabian Trunz. All rights reserved." "\0"
+            VALUE "OriginalFilename", "se4x_companion.exe" "\0"
+            VALUE "ProductName", "SE4X Companion" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

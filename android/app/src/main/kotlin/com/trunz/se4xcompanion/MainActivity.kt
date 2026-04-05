@@ -1,4 +1,4 @@
-package com.example.se4x
+package com.trunz.se4xcompanion
 
 import io.flutter.embedding.android.FlutterActivity
 

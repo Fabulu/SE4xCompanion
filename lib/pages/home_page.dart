@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import '../data/empire_advantages.dart';
 import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
@@ -10,6 +11,7 @@ import '../models/game_config.dart';
 import '../models/game_state.dart';
 import '../models/map_state.dart';
 import '../models/production_state.dart';
+import '../models/replicator_player_state.dart';
 import '../models/replicator_state.dart';
 import '../models/ship_counter.dart';
 import '../models/technology.dart';
@@ -24,6 +26,7 @@ import 'alien_economy_page.dart';
 import 'map_page.dart';
 import 'production_page.dart';
 import 'replicator_page.dart';
+import 'replicator_player_page.dart';
 import 'rules_reference_page.dart';
 import 'settings_page.dart';
 import 'ship_tech_page.dart';
@@ -44,8 +47,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final PersistenceService _persistence = PersistenceService();
 
   AppState _appState = const AppState();
@@ -59,18 +61,50 @@ class _HomePageState extends State<HomePage>
 
   List<_TabDef> get _visibleTabs {
     final tabs = <_TabDef>[
-      const _TabDef(id: _TabId.production, icon: Icons.grid_on, label: 'Production'),
+      _gameState.config.playerControlsReplicators
+          ? const _TabDef(
+              id: _TabId.production,
+              icon: Icons.bug_report,
+              label: 'Replicator',
+            )
+          : const _TabDef(
+              id: _TabId.production,
+              icon: Icons.grid_on,
+              label: 'Production',
+            ),
       const _TabDef(id: _TabId.map, icon: Icons.map_outlined, label: 'Map'),
-      const _TabDef(id: _TabId.shipTech, icon: Icons.shield, label: 'Ships'),
+      if (!_gameState.config.playerControlsReplicators)
+        const _TabDef(id: _TabId.shipTech, icon: Icons.shield, label: 'Ships'),
     ];
     if (_gameState.alienPlayers.isNotEmpty) {
-      tabs.add(const _TabDef(id: _TabId.aliens, icon: Icons.smart_toy, label: 'Aliens'));
+      tabs.add(
+        const _TabDef(
+          id: _TabId.aliens,
+          icon: Icons.smart_toy,
+          label: 'Aliens',
+        ),
+      );
     }
-    if (_gameState.config.enableReplicators) {
-      tabs.add(const _TabDef(id: _TabId.replicator, icon: Icons.bug_report, label: 'Replicator'));
+    if (_gameState.config.enableReplicators &&
+        !_gameState.config.playerControlsReplicators) {
+      tabs.add(
+        const _TabDef(
+          id: _TabId.replicator,
+          icon: Icons.bug_report,
+          label: 'Replicator',
+        ),
+      );
     }
-    tabs.add(const _TabDef(id: _TabId.rules, icon: Icons.menu_book, label: 'Rules'));
-    tabs.add(const _TabDef(id: _TabId.settings, icon: Icons.settings, label: 'Settings'));
+    tabs.add(
+      const _TabDef(id: _TabId.rules, icon: Icons.menu_book, label: 'Rules'),
+    );
+    tabs.add(
+      const _TabDef(
+        id: _TabId.settings,
+        icon: Icons.settings,
+        label: 'Settings',
+      ),
+    );
     return tabs;
   }
 
@@ -126,14 +160,17 @@ class _HomePageState extends State<HomePage>
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
-    _turnWiggle = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: 0.017), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 0.017, end: -0.017), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: -0.017, end: 0), weight: 1),
-    ]).animate(CurvedAnimation(
-      parent: _turnWiggleController,
-      curve: Curves.easeInOut,
-    ));
+    _turnWiggle =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 0, end: 0.017), weight: 1),
+          TweenSequenceItem(tween: Tween(begin: 0.017, end: -0.017), weight: 2),
+          TweenSequenceItem(tween: Tween(begin: -0.017, end: 0), weight: 1),
+        ]).animate(
+          CurvedAnimation(
+            parent: _turnWiggleController,
+            curve: Curves.easeInOut,
+          ),
+        );
   }
 
   @override
@@ -178,13 +215,15 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  void _createNewGameFromWizard(
-    NewGameResult result, {
-    String? replaceGameId,
-  }) {
+  void _createNewGameFromWizard(NewGameResult result, {String? replaceGameId}) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final scenario = scenarioById(result.config.scenarioId);
-    final config = _normalizeConfigForScenario(result.config, scenario);
+    final baseConfig = _normalizeConfigForScenario(result.config, scenario);
+    final normalizedEa = _normalizeEmpireAdvantageForMode(baseConfig);
+    final config =
+        normalizedEa == null && baseConfig.selectedEmpireAdvantage != null
+        ? baseConfig.copyWith(clearEmpireAdvantage: true)
+        : baseConfig;
     final hwValue = config.enableFacilities ? 20 : 30;
 
     // Build starting tech state from scenario overrides
@@ -197,14 +236,31 @@ class _HomePageState extends State<HomePage>
       config: config,
       turnNumber: 1,
       production: ProductionState(
-        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: hwValue)],
+        worlds: [
+          WorldState(
+            id: 'world-1',
+            name: 'Homeworld',
+            isHomeworld: true,
+            homeworldValue: hwValue,
+          ),
+        ],
         techState: startTech,
       ),
       mapState: GameMapState.initial(),
-      shipCounters: createAllCounters(),
+      shipCounters: config.playerControlsReplicators
+          ? _createReplicatorStartingForces(startTech, config.useFacilitiesCosts)
+          : createAllCounters(),
+      replicatorPlayerState: config.playerControlsReplicators
+          ? ReplicatorPlayerState.initial(
+              empireAdvantageCardNumber: config.selectedEmpireAdvantage,
+            )
+          : null,
       alienPlayers: [
         for (int i = 0; i < result.alienPlayerCount; i++)
-          AlienPlayer(name: 'Alien ${i + 1}', color: ['Red', 'Blue', 'Yellow'][i % 3]),
+          AlienPlayer(
+            name: 'Alien ${i + 1}',
+            color: ['Red', 'Blue', 'Yellow'][i % 3],
+          ),
       ],
     );
 
@@ -248,10 +304,7 @@ class _HomePageState extends State<HomePage>
     );
     final games = replaceGameId == null
         ? [..._appState.games, saved]
-        : [
-            ..._appState.games.where((game) => game.id != replaceGameId),
-            saved,
-          ];
+        : [..._appState.games.where((game) => game.id != replaceGameId), saved];
     setState(() {
       _appState = _appState.copyWith(games: games, activeGameId: id);
       _gameState = finalState;
@@ -338,14 +391,17 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onCountersChanged(List<ShipCounter> counters) {
-    final nextState = _syncedMapState(_gameState.copyWith(shipCounters: counters));
+    final nextState = _syncedMapState(
+      _gameState.copyWith(shipCounters: counters),
+    );
     _updateGameState(nextState, 'Ship Tech');
   }
 
   void _onUpgradeCost(int cost) {
     final newUpgrades = _gameState.production.upgradesCp + cost;
     _onProductionChanged(
-        _gameState.production.copyWith(upgradesCp: newUpgrades));
+      _gameState.production.copyWith(upgradesCp: newUpgrades),
+    );
   }
 
   void _onGameStateOverride(GameState newState) {
@@ -354,7 +410,25 @@ class _HomePageState extends State<HomePage>
 
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
     _updateGameState(
-        _gameState.copyWith(alienPlayers: aliens), 'Alien Economy');
+      _gameState.copyWith(alienPlayers: aliens),
+      'Alien Economy',
+    );
+  }
+
+  void _onReplicatorPlayerChanged(ReplicatorPlayerState state) {
+    _updateGameState(
+      _gameState.copyWith(replicatorPlayerState: state),
+      'Replicator Economy',
+    );
+  }
+
+  void _onReplicatorPlayerWorldsChanged(List<WorldState> worlds) {
+    _updateGameState(
+      _gameState.copyWith(
+        production: _gameState.production.copyWith(worlds: worlds),
+      ),
+      'Replicator Colonies',
+    );
   }
 
   void _onMapChanged(
@@ -375,8 +449,9 @@ class _HomePageState extends State<HomePage>
 
   GameState _syncedMapState(GameState state) {
     final normalizedProduction = state.production.ensureWorldIds();
-    final validWorldIds =
-        normalizedProduction.worlds.map((world) => world.id).toSet();
+    final validWorldIds = normalizedProduction.worlds
+        .map((world) => world.id)
+        .toSet();
     final validShipIds = state.shipCounters
         .where((counter) => counter.isBuilt)
         .map((counter) => counter.id)
@@ -394,6 +469,39 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onEndTurn() {
+    if (_gameState.config.playerControlsReplicators) {
+      final playerState =
+          _gameState.replicatorPlayerState ??
+          ReplicatorPlayerState.initial(
+            empireAdvantageCardNumber:
+                _gameState.config.selectedEmpireAdvantage,
+          );
+      final nextWorlds = _gameState.production.worlds.map((world) {
+        if (world.isHomeworld && world.homeworldValue < 30) {
+          return world.copyWith(
+            homeworldValue: (world.homeworldValue + 5).clamp(0, 30),
+          );
+        }
+        if (!world.isHomeworld && world.growthMarkerLevel < 3) {
+          return world.copyWith(
+            growthMarkerLevel: (world.growthMarkerLevel + 1).clamp(0, 3),
+          );
+        }
+        return world;
+      }).toList();
+      final nextTurn = _gameState.turnNumber + 1;
+      _updateGameState(
+        _gameState.copyWith(
+          turnNumber: nextTurn,
+          replicatorPlayerState: playerState.endTurn(nextTurnNumber: nextTurn),
+          production: _gameState.production.copyWith(worlds: nextWorlds),
+        ),
+        'Replicator End Turn',
+      );
+      _lastActionWasEndTurn = true;
+      return;
+    }
+
     final prod = _gameState.production;
     final config = _gameState.config;
     final counters = _gameState.shipCounters;
@@ -402,10 +510,15 @@ class _HomePageState extends State<HomePage>
     // Compute techs gained
     final techsGained = <String>[];
     for (final entry in prod.pendingTechPurchases.entries) {
-      final currentLevel = prod.techState.getLevel(entry.key, facilitiesMode: fm);
+      final currentLevel = prod.techState.getLevel(
+        entry.key,
+        facilitiesMode: fm,
+      );
       final newLevel = entry.value;
       if (newLevel > currentLevel) {
-        techsGained.add('${_techDisplayName(entry.key)} $currentLevel -> $newLevel');
+        techsGained.add(
+          '${_techDisplayName(entry.key)} $currentLevel -> $newLevel',
+        );
       }
     }
 
@@ -424,10 +537,19 @@ class _HomePageState extends State<HomePage>
 
     // Resource calculations
     final mods = _gameState.activeModifiers;
-    final remainingCp = prod.remainingCp(config, counters, mods, _gameState.shipSpecialAbilities);
-    final remainingRp = config.enableFacilities ? prod.remainingRp(config, mods) : 0;
+    final remainingCp = prod.remainingCp(
+      config,
+      counters,
+      mods,
+      _gameState.shipSpecialAbilities,
+    );
+    final remainingRp = config.enableFacilities
+        ? prod.remainingRp(config, mods)
+        : 0;
     final cpLostToCap = math.max(0, remainingCp - 30);
-    final rpLostToCap = config.enableFacilities ? math.max(0, remainingRp - 30) : 0;
+    final rpLostToCap = config.enableFacilities
+        ? math.max(0, remainingRp - 30)
+        : 0;
     final cpCarryOver = remainingCp.clamp(0, 30);
     final rpCarryOver = config.enableFacilities ? remainingRp.clamp(0, 30) : 0;
     final maintenancePaid = prod.maintenanceTotal(counters, config, mods);
@@ -445,7 +567,12 @@ class _HomePageState extends State<HomePage>
       maintenancePaid: maintenancePaid,
     );
 
-    final nextProduction = prod.prepareForNextTurn(config, counters, mods, _gameState.shipSpecialAbilities);
+    final nextProduction = prod.prepareForNextTurn(
+      config,
+      counters,
+      mods,
+      _gameState.shipSpecialAbilities,
+    );
     _updateGameState(
       _gameState.copyWith(
         turnNumber: _gameState.turnNumber + 1,
@@ -455,6 +582,41 @@ class _HomePageState extends State<HomePage>
       'End Turn ${_gameState.turnNumber}',
     );
     _lastActionWasEndTurn = true;
+  }
+
+  /// Starting forces for a player-controlled Replicator empire (RAW 40.1.3):
+  /// 1 Flagship + 5 Type 0 (Scout) ships, all pre-built.
+  static List<ShipCounter> _createReplicatorStartingForces(
+    TechState tech,
+    bool facilitiesMode,
+  ) {
+    final counters = createAllCounters();
+    final updated = List<ShipCounter>.from(counters);
+    int scoutsBuilt = 0;
+    bool flagshipBuilt = false;
+    for (int i = 0; i < updated.length; i++) {
+      final c = updated[i];
+      if (c.isBuilt) continue;
+      if (c.type == ShipType.flag && !flagshipBuilt) {
+        updated[i] = ShipCounter.stampFromTech(
+          ShipType.flag,
+          c.number,
+          tech,
+          facilitiesMode: facilitiesMode,
+        );
+        flagshipBuilt = true;
+      } else if (c.type == ShipType.scout && scoutsBuilt < 5) {
+        updated[i] = ShipCounter.stampFromTech(
+          ShipType.scout,
+          c.number,
+          tech,
+          facilitiesMode: facilitiesMode,
+        );
+        scoutsBuilt++;
+      }
+      if (flagshipBuilt && scoutsBuilt >= 5) break;
+    }
+    return updated;
   }
 
   static String _techDisplayName(TechId id) {
@@ -535,33 +697,61 @@ class _HomePageState extends State<HomePage>
 
   void _onConfigChanged(GameConfig config) {
     // Check if EA was just selected and has starting tech overrides
-    final ea = config.empireAdvantage;
     final oldEa = _gameState.config.empireAdvantage;
     final scenario = scenarioById(config.scenarioId);
     final normalizedConfig = _normalizeConfigForScenario(config, scenario);
+    final normalizedEa = _normalizeEmpireAdvantageForMode(normalizedConfig);
+    final effectiveConfig =
+        normalizedEa == null && normalizedConfig.selectedEmpireAdvantage != null
+        ? normalizedConfig.copyWith(clearEmpireAdvantage: true)
+        : normalizedConfig;
     final scenarioChanged =
-        normalizedConfig.scenarioId != _gameState.config.scenarioId;
+        effectiveConfig.scenarioId != _gameState.config.scenarioId;
     final replicatorModeChanged =
-        normalizedConfig.enableReplicators != _gameState.config.enableReplicators;
+        effectiveConfig.enableReplicators !=
+            _gameState.config.enableReplicators ||
+        effectiveConfig.playerControlsReplicators !=
+            _gameState.config.playerControlsReplicators;
     var nextState = _applyScenarioState(
-      _gameState.copyWith(config: normalizedConfig),
-      config: normalizedConfig,
+      _gameState.copyWith(config: effectiveConfig),
+      config: effectiveConfig,
       scenario: scenario,
       syncVictoryPoints: scenarioChanged,
       syncReplicatorSetup: scenarioChanged || replicatorModeChanged,
     );
-    if (ea != null && ea != oldEa && ea.startingTechOverrides.isNotEmpty) {
+    final effectiveEa = effectiveConfig.empireAdvantage;
+    if (effectiveConfig.playerControlsReplicators) {
+      final currentRepPlayer =
+          nextState.replicatorPlayerState ??
+          ReplicatorPlayerState.fromEmpireAdvantage(effectiveEa);
+      nextState = nextState.copyWith(
+        replicatorPlayerState: currentRepPlayer.copyWith(
+          empireAdvantageCardNumber: effectiveEa?.isReplicator == true
+              ? effectiveEa!.cardNumber
+              : null,
+          clearEmpireAdvantage: effectiveEa?.isReplicator != true,
+        ),
+      );
+    }
+    if (effectiveEa != null &&
+        effectiveEa != oldEa &&
+        effectiveEa.startingTechOverrides.isNotEmpty) {
       // Auto-apply starting tech overrides
       var newTechState = nextState.production.techState;
-      for (final entry in ea.startingTechOverrides.entries) {
-        final currentLevel = newTechState.getLevel(entry.key, facilitiesMode: normalizedConfig.useFacilitiesCosts);
+      for (final entry in effectiveEa.startingTechOverrides.entries) {
+        final currentLevel = newTechState.getLevel(
+          entry.key,
+          facilitiesMode: effectiveConfig.useFacilitiesCosts,
+        );
         if (entry.value > currentLevel) {
           newTechState = newTechState.setLevel(entry.key, entry.value);
         }
       }
-      final newProduction = nextState.production.copyWith(techState: newTechState);
+      final newProduction = nextState.production.copyWith(
+        techState: newTechState,
+      );
       nextState = nextState.copyWith(production: newProduction);
-      _updateGameState(nextState, 'Empire Advantage: ${ea.name}');
+      _updateGameState(nextState, 'Empire Advantage: ${effectiveEa.name}');
     } else {
       _updateGameState(nextState, 'Settings');
     }
@@ -581,8 +771,11 @@ class _HomePageState extends State<HomePage>
       result = result.copyWith(victoryPoints: vpConfig?.startingPoints ?? 0);
     }
 
-    final shouldHaveReplicator = forceReplicator || config.enableReplicators;
-    if (shouldHaveReplicator && (syncReplicatorSetup || result.replicatorState == null)) {
+    final shouldHaveReplicator =
+        !config.playerControlsReplicators &&
+        (forceReplicator || config.enableReplicators);
+    if (shouldHaveReplicator &&
+        (syncReplicatorSetup || result.replicatorState == null)) {
       result = result.copyWith(
         replicatorState: ReplicatorState.fromScenario(
           config.scenarioId,
@@ -592,6 +785,18 @@ class _HomePageState extends State<HomePage>
     } else if (result.replicatorState != null) {
       result = result.copyWith(clearReplicatorState: true);
     }
+
+    if (config.playerControlsReplicators &&
+        (syncReplicatorSetup || result.replicatorPlayerState == null)) {
+      result = result.copyWith(
+        replicatorPlayerState: ReplicatorPlayerState.initial(
+          empireAdvantageCardNumber: config.selectedEmpireAdvantage,
+        ),
+      );
+    } else if (!config.playerControlsReplicators &&
+        result.replicatorPlayerState != null) {
+      result = result.copyWith(clearReplicatorPlayerState: true);
+    }
     return result;
   }
 
@@ -599,17 +804,38 @@ class _HomePageState extends State<HomePage>
     GameConfig config,
     ScenarioPreset? scenario,
   ) {
-    if (scenario?.replicatorSetup == null) return config;
-    return config.copyWith(
+    var result = config;
+    if (result.playerControlsReplicators) {
+      result = result.copyWith(
+        enableFacilities: false,
+        enableLogistics: false,
+        enableTemporal: false,
+        enableShipExperience: false,
+        enableAlternateEmpire: false,
+        enableReplicators: false,
+      );
+    }
+    if (scenario?.replicatorSetup == null) return result;
+    return result.copyWith(
       enableFacilities: false,
       enableShipExperience: false,
       enableReplicators: true,
+      playerControlsReplicators: false,
       scenarioBlockedShips: [
-        ...config.scenarioBlockedShips,
-        if (!config.scenarioBlockedShips.contains(ShipType.decoy))
+        ...result.scenarioBlockedShips,
+        if (!result.scenarioBlockedShips.contains(ShipType.decoy))
           ShipType.decoy,
       ],
     );
+  }
+
+  EmpireAdvantage? _normalizeEmpireAdvantageForMode(GameConfig config) {
+    final ea = config.empireAdvantage;
+    if (ea == null) return null;
+    if (config.playerControlsReplicators) {
+      return ea.isReplicator ? ea : null;
+    }
+    return ea.isReplicator ? null : ea;
   }
 
   void _onGameNameChanged(String name) {
@@ -710,10 +936,22 @@ class _HomePageState extends State<HomePage>
       config: _gameState.config,
       turnNumber: 1,
       production: const ProductionState(
-        worlds: [WorldState(id: 'world-1', name: 'Homeworld', isHomeworld: true, homeworldValue: 30)],
+        worlds: [
+          WorldState(
+            id: 'world-1',
+            name: 'Homeworld',
+            isHomeworld: true,
+            homeworldValue: 30,
+          ),
+        ],
       ),
       mapState: GameMapState.initial(),
       shipCounters: createAllCounters(),
+      replicatorPlayerState: _gameState.config.playerControlsReplicators
+          ? ReplicatorPlayerState.fromEmpireAdvantage(
+              _gameState.config.empireAdvantage,
+            )
+          : null,
       alienPlayers: const [],
     );
     setState(() {
@@ -753,15 +991,18 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final prod = _gameState.production;
     final config = _gameState.config;
     final counters = _gameState.shipCounters;
     final activeMods = _gameState.activeModifiers;
+    final repPlayer =
+        _gameState.replicatorPlayerState ??
+        ReplicatorPlayerState.initial(
+          empireAdvantageCardNumber: config.selectedEmpireAdvantage,
+        );
 
     return Scaffold(
       appBar: AppBar(
@@ -777,17 +1018,14 @@ class _HomePageState extends State<HomePage>
         ],
         title: GestureDetector(
           onLongPress: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SpaceHockeyGame()),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SpaceHockeyGame()));
           },
           child: AnimatedBuilder(
             animation: _turnWiggleController,
             builder: (context, child) {
-              return Transform.rotate(
-                angle: _turnWiggle.value,
-                child: child,
-              );
+              return Transform.rotate(angle: _turnWiggle.value, child: child);
             },
             child: Text(
               '$_gameName  \u2022  Turn ${_gameState.turnNumber}',
@@ -798,13 +1036,32 @@ class _HomePageState extends State<HomePage>
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(36),
-          child: _ResourceBar(
-            totalCp: prod.totalCp(config, activeMods),
-            maintenance: prod.maintenanceTotal(counters, config, activeMods),
-            remainingCp: prod.remainingCp(config, counters, activeMods, _gameState.shipSpecialAbilities),
-            remainingRp: config.enableFacilities ? prod.remainingRp(config, activeMods) : null,
-            remainingLp: config.enableLogistics ? prod.remainingLp(config, counters, activeMods) : null,
-          ),
+          child: config.playerControlsReplicators
+              ? _ReplicatorPlayerResourceBar(
+                  state: repPlayer,
+                  turnNumber: _gameState.turnNumber,
+                  worlds: _gameState.production.worlds,
+                )
+              : _ResourceBar(
+                  totalCp: prod.totalCp(config, activeMods),
+                  maintenance: prod.maintenanceTotal(
+                    counters,
+                    config,
+                    activeMods,
+                  ),
+                  remainingCp: prod.remainingCp(
+                    config,
+                    counters,
+                    activeMods,
+                    _gameState.shipSpecialAbilities,
+                  ),
+                  remainingRp: config.enableFacilities
+                      ? prod.remainingRp(config, activeMods)
+                      : null,
+                  remainingLp: config.enableLogistics
+                      ? prod.remainingLp(config, counters, activeMods)
+                      : null,
+                ),
         ),
       ),
       body: _buildBody(),
@@ -830,91 +1087,109 @@ class _HomePageState extends State<HomePage>
     final scenario = scenarioById(_gameState.config.scenarioId);
     final vpConfig = scenario?.victoryPoints;
     final content = switch (_currentTabId) {
-      _TabId.production => ProductionPage(
-          config: _gameState.config,
-          turnNumber: _gameState.turnNumber,
-          production: _gameState.production,
-          shipCounters: _gameState.shipCounters,
-          activeModifiers: _gameState.activeModifiers,
-          shipSpecialAbilities: _gameState.shipSpecialAbilities,
-          onProductionChanged: _onProductionChanged,
-          onEndTurn: _onEndTurn,
-          onRuleTap: _navigateToRule,
-          onGameStateOverride: _onGameStateOverride,
-          onLocateShip: _locateShipOnMap,
-        ),
+      _TabId.production =>
+        _gameState.config.playerControlsReplicators
+            ? ReplicatorPlayerPage(
+                turnNumber: _gameState.turnNumber,
+                state:
+                    _gameState.replicatorPlayerState ??
+                    ReplicatorPlayerState.initial(
+                      empireAdvantageCardNumber:
+                          _gameState.config.selectedEmpireAdvantage,
+                    ),
+                worlds: _gameState.production.worlds,
+                onChanged: _onReplicatorPlayerChanged,
+                onWorldsChanged: _onReplicatorPlayerWorldsChanged,
+                onEndTurn: _onEndTurn,
+              )
+            : ProductionPage(
+                config: _gameState.config,
+                turnNumber: _gameState.turnNumber,
+                production: _gameState.production,
+                shipCounters: _gameState.shipCounters,
+                activeModifiers: _gameState.activeModifiers,
+                shipSpecialAbilities: _gameState.shipSpecialAbilities,
+                onProductionChanged: _onProductionChanged,
+                onEndTurn: _onEndTurn,
+                onRuleTap: _navigateToRule,
+                onGameStateOverride: _onGameStateOverride,
+                onLocateShip: _locateShipOnMap,
+              ),
       _TabId.map => MapPage(
-          state: _gameState.mapState.hexes.isEmpty
-              ? GameMapState.initial(layoutPreset: _gameState.mapState.layoutPreset)
-              : _gameState.mapState,
-          productionWorlds: _gameState.production.worlds,
-          shipCounters: _gameState.shipCounters,
-          pipelineAssetIds: _gameState.production.pipelineAssetIds,
-          focusShipId: _mapFocusShipId,
-          focusRequestId: _mapFocusRequestId,
-          onChanged: _onMapChanged,
-        ),
+        state: _gameState.mapState.hexes.isEmpty
+            ? GameMapState.initial(
+                layoutPreset: _gameState.mapState.layoutPreset,
+              )
+            : _gameState.mapState,
+        productionWorlds: _gameState.production.worlds,
+        shipCounters: _gameState.shipCounters,
+        pipelineAssetIds: _gameState.production.pipelineAssetIds,
+        focusShipId: _mapFocusShipId,
+        focusRequestId: _mapFocusRequestId,
+        onChanged: _onMapChanged,
+      ),
       _TabId.shipTech => ShipTechPage(
-          config: _gameState.config,
-          turnNumber: _gameState.turnNumber,
-          techState: _gameState.production.techState.withPending(
-            _gameState.production.pendingTechPurchases,
-          ),
-          shipCounters: _gameState.shipCounters,
-          showExperience: _gameState.config.enableShipExperience,
-          shipSpecialAbilities: _gameState.shipSpecialAbilities,
-          onCountersChanged: _onCountersChanged,
-          onUpgradeCostIncurred: _onUpgradeCost,
-          onRuleTap: _navigateToRule,
-          onLocateShip: _locateShipOnMap,
+        config: _gameState.config,
+        turnNumber: _gameState.turnNumber,
+        techState: _gameState.production.techState.withPending(
+          _gameState.production.pendingTechPurchases,
         ),
+        shipCounters: _gameState.shipCounters,
+        showExperience: _gameState.config.enableShipExperience,
+        shipSpecialAbilities: _gameState.shipSpecialAbilities,
+        onCountersChanged: _onCountersChanged,
+        onUpgradeCostIncurred: _onUpgradeCost,
+        onRuleTap: _navigateToRule,
+        onLocateShip: _locateShipOnMap,
+      ),
       _TabId.aliens => AlienEconomyPage(
-          alienPlayers: _gameState.alienPlayers,
-          onAlienPlayersChanged: _onAlienPlayersChanged,
-        ),
+        alienPlayers: _gameState.alienPlayers,
+        onAlienPlayersChanged: _onAlienPlayersChanged,
+      ),
       _TabId.replicator => ReplicatorPage(
-          state: _gameState.replicatorState ?? const ReplicatorState(),
-          onChanged: (newState) {
-            _updateGameState(
-              _gameState.copyWith(replicatorState: newState),
-              'Replicator',
-            );
-          },
-          onEndTurn: () {
-            final repState = _gameState.replicatorState ?? const ReplicatorState();
-            final updated = repState.endTurn();
-            _updateGameState(
-              _gameState.copyWith(replicatorState: updated),
-              'Replicator End Turn',
-            );
-          },
-        ),
+        state: _gameState.replicatorState ?? const ReplicatorState(),
+        onChanged: (newState) {
+          _updateGameState(
+            _gameState.copyWith(replicatorState: newState),
+            'Replicator',
+          );
+        },
+        onEndTurn: () {
+          final repState =
+              _gameState.replicatorState ?? const ReplicatorState();
+          final updated = repState.endTurn();
+          _updateGameState(
+            _gameState.copyWith(replicatorState: updated),
+            'Replicator End Turn',
+          );
+        },
+      ),
       _TabId.settings => SettingsPage(
-          config: _gameState.config,
-          gameName: _gameName,
-          turnNumber: _gameState.turnNumber,
-          savedGames: _appState.games,
-          activeGameId: _activeGameId,
-          turnSummaries: _gameState.turnSummaries,
-          gameState: _gameState,
-          shipSpecialAbilities: _gameState.shipSpecialAbilities,
-          onConfigChanged: _onConfigChanged,
-          onGameNameChanged: _onGameNameChanged,
-          onNewGame: _onNewGame,
-          onLoadGame: _onLoadGame,
-          onRenameGame: _onRenameGame,
-          onDeleteGame: _onDeleteGame,
-          onDuplicateGame: _onDuplicateGame,
-          onResetGame: _onResetGame,
-          onSetupStartingFleet: _showStartingFleetDialog,
-          onImportGame: _onImportGame,
-          onSpecialAbilitiesChanged: (abilities) {
-            _updateGameState(
-              _gameState.copyWith(shipSpecialAbilities: abilities),
-              'Special Abilities',
-            );
-          },
-        ),
+        config: _gameState.config,
+        gameName: _gameName,
+        turnNumber: _gameState.turnNumber,
+        savedGames: _appState.games,
+        activeGameId: _activeGameId,
+        turnSummaries: _gameState.turnSummaries,
+        gameState: _gameState,
+        shipSpecialAbilities: _gameState.shipSpecialAbilities,
+        onConfigChanged: _onConfigChanged,
+        onGameNameChanged: _onGameNameChanged,
+        onNewGame: _onNewGame,
+        onLoadGame: _onLoadGame,
+        onRenameGame: _onRenameGame,
+        onDeleteGame: _onDeleteGame,
+        onDuplicateGame: _onDuplicateGame,
+        onResetGame: _onResetGame,
+        onSetupStartingFleet: _showStartingFleetDialog,
+        onImportGame: _onImportGame,
+        onSpecialAbilitiesChanged: (abilities) {
+          _updateGameState(
+            _gameState.copyWith(shipSpecialAbilities: abilities),
+            'Special Abilities',
+          );
+        },
+      ),
       _TabId.rules => RulesReferencePage(key: _rulesKey),
     };
 
@@ -985,10 +1260,7 @@ class _ResourceBarState extends State<_ResourceBar>
     _popScale = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.2), weight: 1),
       TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 1),
-    ]).animate(CurvedAnimation(
-      parent: _popController,
-      curve: Curves.easeOut,
-    ));
+    ]).animate(CurvedAnimation(parent: _popController, curve: Curves.easeOut));
     _prevRemainingCp = widget.remainingCp;
   }
 
@@ -1046,10 +1318,7 @@ class _ResourceBarState extends State<_ResourceBar>
           ScaleTransition(
             scale: _popScale,
             child: widget.remainingCp < 0
-                ? _PulsingText(
-                    text: '${widget.remainingCp}',
-                    style: warnMono,
-                  )
+                ? _PulsingText(text: '${widget.remainingCp}', style: warnMono)
                 : Text('${widget.remainingCp}', style: mono),
           ),
           if (widget.remainingCp > 30)
@@ -1078,6 +1347,56 @@ class _ResourceBarState extends State<_ResourceBar>
   }
 }
 
+class _ReplicatorPlayerResourceBar extends StatelessWidget {
+  final ReplicatorPlayerState state;
+  final int turnNumber;
+  final List<WorldState> worlds;
+
+  const _ReplicatorPlayerResourceBar({
+    required this.state,
+    required this.turnNumber,
+    required this.worlds,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mono = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
+      fontWeight: FontWeight.w600,
+    );
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Text('CP ', style: mono),
+            Text('${state.cpPool}', style: mono),
+            const SizedBox(width: 14),
+            Text('RP ', style: mono),
+            Text('${state.rpTotal}', style: mono),
+            const SizedBox(width: 14),
+            Text('Move ', style: mono),
+            Text('${state.moveLevel}', style: mono),
+            const SizedBox(width: 14),
+            Text('Hulls ', style: mono),
+            Text(
+              '${state.hullProductionThisTurn(worlds, turnNumber)}',
+              style: mono,
+            ),
+            const Spacer(),
+            Text(
+              state.empireAdvantage?.name ?? 'Replicator Player',
+              style: mono,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A text widget that pulses its opacity between 0.6 and 1.0.
 class _PulsingText extends StatefulWidget {
   final String text;
@@ -1101,9 +1420,10 @@ class _PulsingTextState extends State<_PulsingText>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _opacity = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _opacity = Tween<double>(
+      begin: 0.6,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     _controller.repeat(reverse: true);
   }
 

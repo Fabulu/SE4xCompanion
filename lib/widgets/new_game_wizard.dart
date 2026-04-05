@@ -16,6 +16,7 @@ class NewGameResult {
   final Map<TechId, int> startingTechOverrides;
   final int alienPlayerCount;
   final bool isReplicatorGame;
+  final bool playerControlsReplicators;
 
   const NewGameResult({
     required this.gameName,
@@ -24,6 +25,7 @@ class NewGameResult {
     this.startingTechOverrides = const {},
     this.alienPlayerCount = 0,
     this.isReplicatorGame = false,
+    this.playerControlsReplicators = false,
   });
 }
 
@@ -88,6 +90,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
   // Solo/Coop
   int _alienPlayerCount = 0;
   bool _isReplicatorGame = false;
+  bool _playerControlsReplicators = false;
   String _replicatorDifficulty = 'Normal';
 
   @override
@@ -107,6 +110,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
       enableAdvancedConstruction: _advCon,
       enableAlternateEmpire: _altEmpire && _ce,
       enableReplicators: _isReplicatorGame && _replicators,
+      playerControlsReplicators: _playerControlsReplicators && _replicators,
       enableShipExperience: _shipExp,
       enableUnpredictableResearch: _unpredictableResearch,
       selectedEmpireAdvantage: _selectedEA,
@@ -122,19 +126,26 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
   }
 
   void _finish() {
-    final fleet = startingFleetForSelection(
-      scenario: _scenario,
-      isReplicatorGame: _isReplicatorGame,
-      replicatorDifficulty: _replicatorDifficulty,
+    final fleet = _playerControlsReplicators
+        ? null
+        : startingFleetForSelection(
+            scenario: _scenario,
+            isReplicatorGame: _isReplicatorGame,
+            replicatorDifficulty: _replicatorDifficulty,
+          );
+    Navigator.of(context).pop(
+      NewGameResult(
+        gameName: _nameController.text.isEmpty
+            ? 'New Game'
+            : _nameController.text,
+        config: _buildConfig(),
+        startingFleet: fleet,
+        startingTechOverrides: _scenario?.startingTechOverrides ?? const {},
+        alienPlayerCount: _alienPlayerCount,
+        isReplicatorGame: _isReplicatorGame,
+        playerControlsReplicators: _playerControlsReplicators,
+      ),
     );
-    Navigator.of(context).pop(NewGameResult(
-      gameName: _nameController.text.isEmpty ? 'New Game' : _nameController.text,
-      config: _buildConfig(),
-      startingFleet: fleet,
-      startingTechOverrides: _scenario?.startingTechOverrides ?? const {},
-      alienPlayerCount: _alienPlayerCount,
-      isReplicatorGame: _isReplicatorGame,
-    ));
   }
 
   @override
@@ -143,7 +154,11 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
 
     return AlertDialog(
       title: Text(
-        _step == 0 ? 'New Game' : _step == 1 ? 'Scenario & EA' : 'Ready',
+        _step == 0
+            ? 'New Game'
+            : _step == 1
+            ? 'Scenario & EA'
+            : 'Ready',
         style: const TextStyle(fontSize: 18),
       ),
       content: SizedBox(
@@ -155,8 +170,8 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             child: _step == 0
                 ? _buildStep0(theme)
                 : _step == 1
-                    ? _buildStep1(theme)
-                    : _buildStep2(theme),
+                ? _buildStep1(theme)
+                : _buildStep2(theme),
           ),
         ),
       ),
@@ -176,10 +191,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             child: const Text('Next'),
           ),
         if (_step == 2)
-          FilledButton(
-            onPressed: _finish,
-            child: const Text('Create'),
-          ),
+          FilledButton(onPressed: _finish, child: const Text('Create')),
       ],
     );
   }
@@ -207,6 +219,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
           setState(() {
             _replicators = v;
             if (!v) _isReplicatorGame = false;
+            if (!v) _playerControlsReplicators = false;
           });
         }),
         _toggle('All Good Things', _agt, (v) {
@@ -217,22 +230,40 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
         }),
         const SizedBox(height: 12),
         _sectionLabel(theme, 'Rules'),
-        _toggle('Facilities (AGT)', _facilities && _agt,
-            _agt ? (v) => setState(() => _facilities = v) : null),
-        _toggle('Advanced Construction', _advCon,
-            (v) => setState(() => _advCon = v)),
-        _toggle('Alternate Empire', _altEmpire && _ce,
-            _ce ? (v) => setState(() => _altEmpire = v) : null),
-        _toggle('Ship Experience', _shipExp,
-            (v) => setState(() => _shipExp = v)),
-        _toggle('Unpredictable Research', _unpredictableResearch,
-            (v) => setState(() => _unpredictableResearch = v)),
+        _toggle(
+          'Facilities (AGT)',
+          _facilities && _agt,
+          _agt ? (v) => setState(() => _facilities = v) : null,
+        ),
+        _toggle(
+          'Advanced Construction',
+          _advCon,
+          (v) => setState(() => _advCon = v),
+        ),
+        _toggle(
+          'Alternate Empire',
+          _altEmpire && _ce,
+          _ce ? (v) => setState(() => _altEmpire = v) : null,
+        ),
+        _toggle(
+          'Ship Experience',
+          _shipExp,
+          (v) => setState(() => _shipExp = v),
+        ),
+        _toggle(
+          'Unpredictable Research',
+          _unpredictableResearch,
+          (v) => setState(() => _unpredictableResearch = v),
+        ),
         const SizedBox(height: 12),
         _sectionLabel(theme, 'Game Mode'),
         _toggle('Solitaire Aliens', _alienPlayerCount > 0, (v) {
           setState(() {
             _alienPlayerCount = v ? 2 : 0;
-            if (v) _isReplicatorGame = false;
+            if (v) {
+              _isReplicatorGame = false;
+              _playerControlsReplicators = false;
+            }
           });
         }),
         if (_alienPlayerCount > 0)
@@ -240,8 +271,10 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             padding: const EdgeInsets.only(left: 16),
             child: Row(
               children: [
-                Text('Alien players: $_alienPlayerCount',
-                    style: const TextStyle(fontSize: 13)),
+                Text(
+                  'Alien players: $_alienPlayerCount',
+                  style: const TextStyle(fontSize: 13),
+                ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.remove, size: 18),
@@ -262,15 +295,39 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
               ],
             ),
           ),
-        _toggle('Replicator Opponent', _isReplicatorGame && _replicators,
-            _replicators
-                ? (v) {
-                    setState(() {
-                      _isReplicatorGame = v;
-                      if (v) _alienPlayerCount = 0;
-                    });
-                  }
-                : null),
+        _toggle(
+          'Replicator Opponent',
+          _isReplicatorGame && _replicators,
+          _replicators
+              ? (v) {
+                  setState(() {
+                    _isReplicatorGame = v;
+                    if (v) {
+                      _alienPlayerCount = 0;
+                      _playerControlsReplicators = false;
+                    }
+                  });
+                }
+              : null,
+        ),
+        _toggle(
+          'Player-Controlled Replicators',
+          _playerControlsReplicators && _replicators,
+          _replicators
+              ? (v) {
+                  setState(() {
+                    _playerControlsReplicators = v;
+                    if (v) {
+                      _alienPlayerCount = 0;
+                      _isReplicatorGame = false;
+                      _facilities = false;
+                      _shipExp = false;
+                      _altEmpire = false;
+                    }
+                  });
+                }
+              : null,
+        ),
         if (_isReplicatorGame && _replicators)
           Padding(
             padding: const EdgeInsets.only(left: 16, top: 4),
@@ -281,10 +338,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
               ),
               items: [
                 for (final difficulty in kReplicatorDifficulties)
-                  DropdownMenuItem(
-                    value: difficulty,
-                    child: Text(difficulty),
-                  ),
+                  DropdownMenuItem(value: difficulty, child: Text(difficulty)),
               ],
               onChanged: (value) {
                 if (value == null) return;
@@ -306,8 +360,12 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
         // Scenario picker
         _sectionLabel(theme, 'Scenario (optional)'),
         const SizedBox(height: 4),
-        _radioTile(theme, 'None / Custom', _scenario == null,
-            () => setState(() => _scenario = null)),
+        _radioTile(
+          theme,
+          'None / Custom',
+          _scenario == null,
+          () => setState(() => _scenario = null),
+        ),
         for (final s in kScenarios)
           _radioTile(
             theme,
@@ -323,7 +381,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
         _sectionLabel(theme, 'Empire Advantage'),
         const SizedBox(height: 4),
         EmpireAdvantagePicker(
-          replicatorsOwned: _replicators,
+          showReplicatorAdvantages: _playerControlsReplicators,
           selectedCardNumber: _selectedEA,
           descriptionTruncation: 60,
           onChanged: (v) => setState(() => _selectedEA = v),
@@ -343,42 +401,65 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
     final techs = _scenario?.startingTechOverrides ?? {};
     final ea = _selectedEA != null
         ? kEmpireAdvantages
-            .where((e) => e.cardNumber == _selectedEA)
-            .firstOrNull
+              .where((e) => e.cardNumber == _selectedEA)
+              .firstOrNull
         : null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_nameController.text,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(
+          _nameController.text,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         if (_scenario != null)
-          Text('Scenario: ${_scenario!.name}',
-              style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
-        if (ea != null)
-          Text('EA: #${ea.cardNumber} ${ea.name}',
-              style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
-        if (_alienPlayerCount > 0)
-          Text('Solitaire: $_alienPlayerCount alien players',
-              style: const TextStyle(fontSize: 13)),
-        if (_isReplicatorGame)
-          Text('Replicator opponent ($_replicatorDifficulty)',
-              style: const TextStyle(fontSize: 13)),
-        const SizedBox(height: 8),
-        _sectionLabel(theme, 'Starting Fleet'),
-        for (final entry in fleet.entries)
           Text(
-            '  ${kShipDefinitions[entry.key]?.name ?? entry.key.name} x${entry.value}',
+            'Scenario: ${_scenario!.name}',
+            style: TextStyle(fontSize: 13, color: theme.colorScheme.primary),
+          ),
+        if (ea != null)
+          Text(
+            'EA: #${ea.cardNumber} ${ea.name}',
+            style: TextStyle(fontSize: 13, color: theme.colorScheme.primary),
+          ),
+        if (_alienPlayerCount > 0)
+          Text(
+            'Solitaire: $_alienPlayerCount alien players',
             style: const TextStyle(fontSize: 13),
+          ),
+        if (_isReplicatorGame)
+          Text(
+            'Replicator opponent ($_replicatorDifficulty)',
+            style: const TextStyle(fontSize: 13),
+          ),
+        if (_playerControlsReplicators)
+          const Text(
+            'Player-controlled Replicators',
+            style: TextStyle(fontSize: 13),
+          ),
+        const SizedBox(height: 8),
+        if (!_playerControlsReplicators) ...[
+          _sectionLabel(theme, 'Starting Fleet'),
+          for (final entry in fleet.entries)
+            Text(
+              '  ${kShipDefinitions[entry.key]?.name ?? entry.key.name} x${entry.value}',
+              style: const TextStyle(fontSize: 13),
+            ),
+        ] else
+          const Text(
+            'Replicator player uses Replicator starting forces and production instead of the standard fleet ledger.',
+            style: TextStyle(fontSize: 13),
           ),
         if (techs.isNotEmpty) ...[
           const SizedBox(height: 8),
           _sectionLabel(theme, 'Starting Tech'),
           for (final entry in techs.entries)
-            Text('  ${entry.key.name} ${entry.value}',
-                style: const TextStyle(fontSize: 13)),
+            Text(
+              '  ${entry.key.name} ${entry.value}',
+              style: const TextStyle(fontSize: 13),
+            ),
         ],
         if (_scenario != null && _scenario!.shipCostMultiplier != 1.0)
           Padding(
@@ -416,12 +497,14 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
 
   // ── Helpers ──
 
-  Widget _sectionLabel(ThemeData theme, String text) => Text(text,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.bold,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-      ));
+  Widget _sectionLabel(ThemeData theme, String text) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+    ),
+  );
 
   Widget _toggle(String label, bool value, ValueChanged<bool>? onChanged) {
     return SwitchListTile(
@@ -433,9 +516,13 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
     );
   }
 
-  Widget _radioTile(ThemeData theme, String title, bool selected,
-      VoidCallback onTap,
-      {String? subtitle}) {
+  Widget _radioTile(
+    ThemeData theme,
+    String title,
+    bool selected,
+    VoidCallback onTap, {
+    String? subtitle,
+  }) {
     return ListTile(
       leading: Icon(
         selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
@@ -444,10 +531,12 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: subtitle != null
-          ? Text(subtitle,
+          ? Text(
+              subtitle,
               style: const TextStyle(fontSize: 11),
               maxLines: 2,
-              overflow: TextOverflow.ellipsis)
+              overflow: TextOverflow.ellipsis,
+            )
           : null,
       dense: true,
       visualDensity: VisualDensity.compact,

@@ -64,10 +64,7 @@ class SettingsPage extends StatelessWidget {
         // ── Game Setup ──
         _SectionTitle(title: 'GAME SETUP'),
         const SizedBox(height: 8),
-        _GameNameTile(
-          gameName: gameName,
-          onChanged: onGameNameChanged,
-        ),
+        _GameNameTile(gameName: gameName, onChanged: onGameNameChanged),
         ListTile(
           title: const Text('Turn', style: TextStyle(fontSize: 16)),
           trailing: Text(
@@ -80,21 +77,28 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onSetupStartingFleet,
-              icon: const Icon(Icons.rocket_launch, size: 20),
-              label: const Text('Setup Starting Fleet', style: TextStyle(fontSize: 15)),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                minimumSize: const Size(0, 48),
+        if (!config.playerControlsReplicators)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onSetupStartingFleet,
+                icon: const Icon(Icons.rocket_launch, size: 20),
+                label: const Text(
+                  'Setup Starting Fleet',
+                  style: TextStyle(fontSize: 15),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  minimumSize: const Size(0, 48),
+                ),
               ),
             ),
           ),
-        ),
         const Divider(height: 24),
 
         // ── Turn Log ──
@@ -112,23 +116,29 @@ class SettingsPage extends StatelessWidget {
         SwitchListTile(
           title: const Text('Close Encounters', style: TextStyle(fontSize: 16)),
           value: config.ownership.closeEncounters,
-          onChanged: (v) => onConfigChanged(config.copyWith(
-            ownership: config.ownership.copyWith(closeEncounters: v),
-          )),
+          onChanged: (v) => onConfigChanged(
+            config.copyWith(
+              ownership: config.ownership.copyWith(closeEncounters: v),
+            ),
+          ),
         ),
         SwitchListTile(
           title: const Text('Replicators', style: TextStyle(fontSize: 16)),
           value: config.ownership.replicators,
-          onChanged: (v) => onConfigChanged(config.copyWith(
-            ownership: config.ownership.copyWith(replicators: v),
-          )),
+          onChanged: (v) => onConfigChanged(
+            config.copyWith(
+              ownership: config.ownership.copyWith(replicators: v),
+            ),
+          ),
         ),
         SwitchListTile(
           title: const Text('All Good Things', style: TextStyle(fontSize: 16)),
           value: config.ownership.allGoodThings,
-          onChanged: (v) => onConfigChanged(config.copyWith(
-            ownership: config.ownership.copyWith(allGoodThings: v),
-          )),
+          onChanged: (v) => onConfigChanged(
+            config.copyWith(
+              ownership: config.ownership.copyWith(allGoodThings: v),
+            ),
+          ),
         ),
         const Divider(height: 24),
 
@@ -147,7 +157,8 @@ class SettingsPage extends StatelessWidget {
           value: config.enableLogistics,
           enabled: config.enableFacilities,
           disabledReason: 'Requires Facilities enabled',
-          onChanged: (v) => onConfigChanged(config.copyWith(enableLogistics: v)),
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableLogistics: v)),
         ),
         _RuleToggle(
           title: 'Enable Temporal',
@@ -164,12 +175,30 @@ class SettingsPage extends StatelessWidget {
               onConfigChanged(config.copyWith(enableAdvancedConstruction: v)),
         ),
         _RuleToggle(
-          title: 'Enable Replicators',
-          value: config.enableReplicators,
+          title: 'Replicator Opponent',
+          value: config.enableReplicators && !config.playerControlsReplicators,
           enabled: config.ownership.replicators,
           disabledReason: 'Requires Replicators expansion',
-          onChanged: (v) =>
-              onConfigChanged(config.copyWith(enableReplicators: v)),
+          onChanged: (v) => onConfigChanged(
+            config.copyWith(
+              enableReplicators: v,
+              playerControlsReplicators: v
+                  ? false
+                  : config.playerControlsReplicators,
+            ),
+          ),
+        ),
+        _RuleToggle(
+          title: 'Player-Controlled Replicators',
+          value: config.playerControlsReplicators,
+          enabled: config.ownership.replicators,
+          disabledReason: 'Requires Replicators expansion',
+          onChanged: (v) => onConfigChanged(
+            config.copyWith(
+              playerControlsReplicators: v,
+              enableReplicators: v ? true : config.enableReplicators,
+            ),
+          ),
         ),
         _RuleToggle(
           title: 'Enable Ship Experience',
@@ -198,11 +227,10 @@ class SettingsPage extends StatelessWidget {
         // ── Scenario ──
         _SectionTitle(title: 'SCENARIO'),
         const SizedBox(height: 8),
-        _ScenarioTile(
-          config: config,
-          onConfigChanged: onConfigChanged,
-        ),
-        if (scenarioById(config.scenarioId)?.replicatorSetup != null)
+        _ScenarioTile(config: config, onConfigChanged: onConfigChanged),
+        if ((scenarioById(config.scenarioId)?.replicatorSetup != null ||
+                config.enableReplicators) &&
+            !config.playerControlsReplicators)
           _ReplicatorDifficultyTile(
             config: config,
             onConfigChanged: onConfigChanged,
@@ -212,10 +240,7 @@ class SettingsPage extends StatelessWidget {
         // ── Empire Advantage ──
         _SectionTitle(title: 'EMPIRE ADVANTAGE'),
         const SizedBox(height: 8),
-        _EmpireAdvantageTile(
-          config: config,
-          onConfigChanged: onConfigChanged,
-        ),
+        _EmpireAdvantageTile(config: config, onConfigChanged: onConfigChanged),
 
         // ── Ship Special Abilities (Alternate Empire only) ──
         if (config.enableAlternateEmpire) ...[
@@ -237,8 +262,7 @@ class SettingsPage extends StatelessWidget {
               shipType: shipType,
               currentAbility: shipSpecialAbilities[shipType],
               onChanged: (value) {
-                final updated =
-                    Map<ShipType, int>.from(shipSpecialAbilities);
+                final updated = Map<ShipType, int>.from(shipSpecialAbilities);
                 if (value == null) {
                   updated.remove(shipType);
                 } else {
@@ -270,7 +294,10 @@ class SettingsPage extends StatelessWidget {
               icon: const Icon(Icons.add, size: 20),
               label: const Text('New Game', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 minimumSize: const Size(0, 48),
               ),
             ),
@@ -280,7 +307,10 @@ class SettingsPage extends StatelessWidget {
               icon: const Icon(Icons.copy, size: 20),
               label: const Text('Duplicate', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 minimumSize: const Size(0, 48),
               ),
             ),
@@ -294,7 +324,10 @@ class SettingsPage extends StatelessWidget {
               icon: const Icon(Icons.upload, size: 20),
               label: const Text('Export', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 minimumSize: const Size(0, 48),
               ),
             ),
@@ -304,7 +337,10 @@ class SettingsPage extends StatelessWidget {
               icon: const Icon(Icons.download, size: 20),
               label: const Text('Import', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 minimumSize: const Size(0, 48),
               ),
             ),
@@ -321,10 +357,155 @@ class SettingsPage extends StatelessWidget {
             onPressed: () => _showResetConfirm(context),
             style: OutlinedButton.styleFrom(
               foregroundColor: theme.colorScheme.error,
-              side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.5)),
+              side: BorderSide(
+                color: theme.colorScheme.error.withValues(alpha: 0.5),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 10),
             ),
-            child: const Text('Reset Current Game', style: TextStyle(fontSize: 16)),
+            child: const Text(
+              'Reset Current Game',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+        const Divider(height: 32),
+
+        // ── About ──
+        _SectionTitle(title: 'ABOUT'),
+        const SizedBox(height: 8),
+        ListTile(
+          dense: true,
+          title: const Text(
+            'SE4X Companion',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'Version 1.0.0\n\u00A9 2026 Fabian Trunz',
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          isThreeLine: true,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              'SE4X Companion is an unofficial, fan-made companion for the '
+              'board game Space Empires 4X by Jim Krohn, published by GMT '
+              'Games, LLC. Not affiliated with or endorsed by GMT Games. '
+              'Trademarks belong to their respective owners. A physical copy '
+              'of the game is required.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Credits',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '\u2022 Game design: Jim Krohn (GMT Games, LLC)\n'
+                '\u2022 App author: Fabian Trunz (@Fabulu)\n'
+                '\u2022 AI assistance: Claude Code (Anthropic)',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ListTile(
+          dense: true,
+          leading: const Icon(Icons.description_outlined, size: 20),
+          title: const Text(
+            'Open source licenses',
+            style: TextStyle(fontSize: 14),
+          ),
+          trailing: const Icon(Icons.chevron_right, size: 20),
+          onTap: () => showLicensePage(
+            context: context,
+            applicationName: 'SE4X Companion',
+            applicationVersion: '1.0.0',
+            applicationLegalese: '\u00A9 2026 Fabian Trunz',
+          ),
+        ),
+        ListTile(
+          dense: true,
+          leading: const Icon(Icons.code, size: 20),
+          title: const Text('GitHub', style: TextStyle(fontSize: 14)),
+          subtitle: const SelectableText(
+            'https://github.com/Fabulu/SE4xCompanion',
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            tooltip: 'Copy URL',
+            onPressed: () {
+              Clipboard.setData(
+                const ClipboardData(
+                  text: 'https://github.com/Fabulu/SE4xCompanion',
+                ),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('GitHub URL copied')),
+              );
+            },
+          ),
+        ),
+        ListTile(
+          dense: true,
+          leading: const Icon(Icons.privacy_tip_outlined, size: 20),
+          title: const Text(
+            'Privacy policy',
+            style: TextStyle(fontSize: 14),
+          ),
+          subtitle: const SelectableText(
+            'https://github.com/Fabulu/SE4xCompanion/blob/master/PRIVACY_POLICY.md',
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            tooltip: 'Copy URL',
+            onPressed: () {
+              Clipboard.setData(
+                const ClipboardData(
+                  text:
+                      'https://github.com/Fabulu/SE4xCompanion/blob/master/PRIVACY_POLICY.md',
+                ),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Privacy policy URL copied')),
+              );
+            },
           ),
         ),
         const SizedBox(height: 32),
@@ -337,9 +518,9 @@ class SettingsPage extends StatelessWidget {
   void _exportGame(BuildContext context) {
     final json = jsonEncode(gameState.toJson());
     Clipboard.setData(ClipboardData(text: json));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Game copied to clipboard')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Game copied to clipboard')));
   }
 
   Future<void> _importGame(BuildContext context) async {
@@ -347,9 +528,9 @@ class SettingsPage extends StatelessWidget {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data == null || data.text == null || data.text!.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Clipboard is empty')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Clipboard is empty')));
         }
         return;
       }
@@ -428,7 +609,9 @@ class SettingsPage extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Game?'),
-        content: Text('Permanently delete "${game.name}"? This cannot be undone.'),
+        content: Text(
+          'Permanently delete "${game.name}"? This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -497,7 +680,9 @@ class _SectionTitle extends StatelessWidget {
           fontSize: 16,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.0,
-          color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          color:
+              color ??
+              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       ),
     );
@@ -526,7 +711,8 @@ class _GameNameTileState extends State<_GameNameTile> {
   @override
   void didUpdateWidget(_GameNameTile old) {
     super.didUpdateWidget(old);
-    if (old.gameName != widget.gameName && _controller.text != widget.gameName) {
+    if (old.gameName != widget.gameName &&
+        _controller.text != widget.gameName) {
       _controller.text = widget.gameName;
     }
   }
@@ -656,7 +842,9 @@ class _SavedGameTile extends StatelessWidget {
                       game.name,
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: isActive
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                         color: theme.colorScheme.onSurface,
                       ),
                     ),
@@ -665,7 +853,9 @@ class _SavedGameTile extends StatelessWidget {
                       'Turn ${game.state.turnNumber}  |  $updatedStr',
                       style: TextStyle(
                         fontSize: 13,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -681,7 +871,11 @@ class _SavedGameTile extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onDelete,
-                icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: theme.colorScheme.error,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 splashRadius: 20,
@@ -721,31 +915,51 @@ class _TurnSummaryTile extends StatelessWidget {
     final details = <Widget>[];
 
     if (summary.techsGained.isNotEmpty) {
-      details.add(Text('Techs: ${summary.techsGained.join(", ")}', style: dimStyle));
+      details.add(
+        Text('Techs: ${summary.techsGained.join(", ")}', style: dimStyle),
+      );
     }
     if (summary.shipsBuilt.isNotEmpty) {
-      details.add(Text('Ships: ${summary.shipsBuilt.join(", ")}', style: dimStyle));
+      details.add(
+        Text('Ships: ${summary.shipsBuilt.join(", ")}', style: dimStyle),
+      );
     }
     if (summary.coloniesGrown > 0) {
-      details.add(Text('Colonies grown: ${summary.coloniesGrown}', style: dimStyle));
+      details.add(
+        Text('Colonies grown: ${summary.coloniesGrown}', style: dimStyle),
+      );
     }
-    details.add(Text('Maintenance: ${summary.maintenancePaid}', style: dimStyle));
+    details.add(
+      Text('Maintenance: ${summary.maintenancePaid}', style: dimStyle),
+    );
     details.add(Text('CP carry-over: ${summary.cpCarryOver}', style: dimStyle));
     if (summary.cpLostToCap > 0) {
-      details.add(Text('CP lost to cap: ${summary.cpLostToCap}',
-          style: dimStyle.copyWith(color: theme.colorScheme.tertiary)));
+      details.add(
+        Text(
+          'CP lost to cap: ${summary.cpLostToCap}',
+          style: dimStyle.copyWith(color: theme.colorScheme.tertiary),
+        ),
+      );
     }
     if (summary.rpCarryOver > 0 || summary.rpLostToCap > 0) {
-      details.add(Text('RP carry-over: ${summary.rpCarryOver}', style: dimStyle));
+      details.add(
+        Text('RP carry-over: ${summary.rpCarryOver}', style: dimStyle),
+      );
       if (summary.rpLostToCap > 0) {
-        details.add(Text('RP lost to cap: ${summary.rpLostToCap}',
-            style: dimStyle.copyWith(color: theme.colorScheme.tertiary)));
+        details.add(
+          Text(
+            'RP lost to cap: ${summary.rpLostToCap}',
+            style: dimStyle.copyWith(color: theme.colorScheme.tertiary),
+          ),
+        );
       }
     }
 
     return ExpansionTile(
-      title: Text('Turn ${summary.turnNumber}',
-          style: const TextStyle(fontSize: 16)),
+      title: Text(
+        'Turn ${summary.turnNumber}',
+        style: const TextStyle(fontSize: 16),
+      ),
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
@@ -787,9 +1001,11 @@ class _EmpireAdvantageTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right,
-              size: 20,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
         ],
       ),
       onTap: () => _showPicker(context),
@@ -797,7 +1013,7 @@ class _EmpireAdvantageTile extends StatelessWidget {
   }
 
   void _showPicker(BuildContext context) {
-    final replicatorsOwned = config.ownership.replicators;
+    final playerReplicators = config.playerControlsReplicators;
 
     showModalBottomSheet(
       context: context,
@@ -813,12 +1029,16 @@ class _EmpireAdvantageTile extends StatelessWidget {
             return Column(
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
-                      Text('Empire Advantage',
-                          style: theme.textTheme.titleMedium),
+                      Text(
+                        'Empire Advantage',
+                        style: theme.textTheme.titleMedium,
+                      ),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -830,7 +1050,8 @@ class _EmpireAdvantageTile extends StatelessWidget {
                 const Divider(height: 1),
                 Expanded(
                   child: EmpireAdvantagePicker(
-                    replicatorsOwned: replicatorsOwned,
+                    showReplicatorAdvantages:
+                        config.ownership.replicators && playerReplicators,
                     selectedCardNumber: config.selectedEmpireAdvantage,
                     descriptionTruncation: 80,
                     style: EmpireAdvantagePickerStyle.avatar,
@@ -838,10 +1059,12 @@ class _EmpireAdvantageTile extends StatelessWidget {
                     onChanged: (value) {
                       if (value == null) {
                         onConfigChanged(
-                            config.copyWith(clearEmpireAdvantage: true));
+                          config.copyWith(clearEmpireAdvantage: true),
+                        );
                       } else {
-                        onConfigChanged(config.copyWith(
-                            selectedEmpireAdvantage: value));
+                        onConfigChanged(
+                          config.copyWith(selectedEmpireAdvantage: value),
+                        );
                       }
                       Navigator.of(ctx).pop();
                     },
@@ -896,8 +1119,7 @@ class _SpecialAbilityRow extends StatelessWidget {
               onTap: () => _showAbilityPicker(context),
               borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: theme.colorScheme.outline.withValues(alpha: 0.3),
@@ -914,8 +1136,9 @@ class _SpecialAbilityRow extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: ability.affectsProduction
                               ? theme.colorScheme.tertiary
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -934,15 +1157,18 @@ class _SpecialAbilityRow extends StatelessWidget {
                         'Not assigned',
                         style: TextStyle(
                           fontSize: 13,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.4),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                           fontStyle: FontStyle.italic,
                         ),
                       ),
                     const Spacer(),
-                    Icon(Icons.unfold_more, size: 16,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.4)),
+                    Icon(
+                      Icons.unfold_more,
+                      size: 16,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
                   ],
                 ),
               ),
@@ -950,8 +1176,11 @@ class _SpecialAbilityRow extends StatelessWidget {
           ),
           if (currentAbility != null)
             IconButton(
-              icon: Icon(Icons.clear, size: 18,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+              icon: Icon(
+                Icons.clear,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32),
               visualDensity: VisualDensity.compact,
@@ -1002,10 +1231,12 @@ class _SpecialAbilityRow extends StatelessWidget {
                       ),
                     ),
                     title: Text(ab.name, style: const TextStyle(fontSize: 14)),
-                    subtitle: Text(ab.description,
-                        style: const TextStyle(fontSize: 11),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      ab.description,
+                      style: const TextStyle(fontSize: 11),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     selected: isSelected,
                     dense: true,
                     onTap: () {
@@ -1028,10 +1259,7 @@ class _ScenarioTile extends StatelessWidget {
   final GameConfig config;
   final ValueChanged<GameConfig> onConfigChanged;
 
-  const _ScenarioTile({
-    required this.config,
-    required this.onConfigChanged,
-  });
+  const _ScenarioTile({required this.config, required this.onConfigChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1043,10 +1271,13 @@ class _ScenarioTile extends StatelessWidget {
 
     return ListTile(
       title: const Text('Scenario', style: TextStyle(fontSize: 16)),
-      subtitle: Text(label, style: TextStyle(
-        fontSize: 13,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-      )),
+      subtitle: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      ),
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: () => _showPicker(context),
     );
@@ -1072,15 +1303,17 @@ class _ScenarioTile extends StatelessWidget {
                     const Spacer(),
                     TextButton(
                       onPressed: () {
-                        onConfigChanged(config.copyWith(
-                          clearScenario: true,
-                          shipCostMultiplier: 1.0,
-                          techCostMultiplier: 1.0,
-                          colonyIncomeMultiplier: 1.0,
-                          colonyGrowthBonus: 0,
-                          scenarioBlockedTechs: const [],
-                          scenarioBlockedShips: const [],
-                        ));
+                        onConfigChanged(
+                          config.copyWith(
+                            clearScenario: true,
+                            shipCostMultiplier: 1.0,
+                            techCostMultiplier: 1.0,
+                            colonyIncomeMultiplier: 1.0,
+                            colonyGrowthBonus: 0,
+                            scenarioBlockedTechs: const [],
+                            scenarioBlockedShips: const [],
+                          ),
+                        );
                         Navigator.of(ctx).pop();
                       },
                       child: const Text('Clear'),
@@ -1142,31 +1375,37 @@ class _ScenarioTile extends StatelessWidget {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.description,
-                              style: const TextStyle(fontSize: 11),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
+                          Text(
+                            s.description,
+                            style: const TextStyle(fontSize: 11),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           if (effects.isNotEmpty)
-                            Text(effectStr,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: theme.colorScheme.tertiary,
-                                )),
+                            Text(
+                              effectStr,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            ),
                         ],
                       ),
                       selected: isSelected,
                       dense: true,
                       onTap: () {
-                        onConfigChanged(config.copyWith(
-                          scenarioId: s.id,
-                          shipCostMultiplier: s.shipCostMultiplier,
-                          techCostMultiplier: s.techCostMultiplier,
-                          colonyIncomeMultiplier: s.colonyIncomeMultiplier,
-                          colonyGrowthBonus: s.colonyGrowthBonus,
-                          scenarioBlockedTechs: s.blockedTechs,
-                          scenarioBlockedShips: s.blockedShipTypes,
-                        ));
+                        onConfigChanged(
+                          config.copyWith(
+                            scenarioId: s.id,
+                            shipCostMultiplier: s.shipCostMultiplier,
+                            techCostMultiplier: s.techCostMultiplier,
+                            colonyIncomeMultiplier: s.colonyIncomeMultiplier,
+                            colonyGrowthBonus: s.colonyGrowthBonus,
+                            scenarioBlockedTechs: s.blockedTechs,
+                            scenarioBlockedShips: s.blockedShipTypes,
+                          ),
+                        );
                         Navigator.of(ctx).pop();
                       },
                     );
@@ -1194,7 +1433,10 @@ class _ReplicatorDifficultyTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = config.replicatorDifficulty ?? 'Normal';
     return ListTile(
-      title: const Text('Replicator Difficulty', style: TextStyle(fontSize: 16)),
+      title: const Text(
+        'Replicator Difficulty',
+        style: TextStyle(fontSize: 16),
+      ),
       subtitle: Text(label, style: const TextStyle(fontSize: 13)),
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: () => _showPicker(context),
@@ -1208,12 +1450,20 @@ class _ReplicatorDifficultyTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final difficulty in const ['Easy', 'Normal', 'Hard', 'Impossible'])
+            for (final difficulty in const [
+              'Easy',
+              'Normal',
+              'Hard',
+              'Impossible',
+            ])
               ListTile(
                 title: Text(difficulty),
-                selected: (config.replicatorDifficulty ?? 'Normal') == difficulty,
+                selected:
+                    (config.replicatorDifficulty ?? 'Normal') == difficulty,
                 onTap: () {
-                  onConfigChanged(config.copyWith(replicatorDifficulty: difficulty));
+                  onConfigChanged(
+                    config.copyWith(replicatorDifficulty: difficulty),
+                  );
                   Navigator.of(ctx).pop();
                 },
               ),

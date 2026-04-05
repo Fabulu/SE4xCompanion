@@ -20,7 +20,7 @@ enum EmpireAdvantagePickerStyle {
 }
 
 class EmpireAdvantagePicker extends StatelessWidget {
-  final bool replicatorsOwned;
+  final bool showReplicatorAdvantages;
   final int? selectedCardNumber;
   final ValueChanged<int?> onChanged;
   final int descriptionTruncation;
@@ -30,7 +30,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
 
   const EmpireAdvantagePicker({
     super.key,
-    required this.replicatorsOwned,
+    this.showReplicatorAdvantages = false,
     required this.selectedCardNumber,
     required this.onChanged,
     this.descriptionTruncation = 80,
@@ -41,7 +41,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
 
   List<EmpireAdvantage> _filtered() {
     return kEmpireAdvantages
-        .where((ea) => !ea.isReplicator || replicatorsOwned)
+        .where((ea) => ea.isReplicator == showReplicatorAdvantages)
         .toList();
   }
 
@@ -64,8 +64,12 @@ class EmpireAdvantagePicker extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (includeNoneOption)
-              _radioTile(theme, 'None', selectedCardNumber == null,
-                  () => onChanged(null)),
+              _radioTile(
+                theme,
+                'None',
+                selectedCardNumber == null,
+                () => onChanged(null),
+              ),
             for (final ea in filtered)
               _radioTile(
                 theme,
@@ -89,8 +93,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
                 onTap: () => onChanged(null),
               );
             }
-            final ea =
-                filtered[index - (includeNoneOption ? 1 : 0)];
+            final ea = filtered[index - (includeNoneOption ? 1 : 0)];
             return ListTile(
               leading: CircleAvatar(
                 radius: 16,
@@ -123,9 +126,13 @@ class EmpireAdvantagePicker extends StatelessWidget {
     }
   }
 
-  Widget _radioTile(ThemeData theme, String title, bool selected,
-      VoidCallback onTap,
-      {String? subtitle}) {
+  Widget _radioTile(
+    ThemeData theme,
+    String title,
+    bool selected,
+    VoidCallback onTap, {
+    String? subtitle,
+  }) {
     return ListTile(
       leading: Icon(
         selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
@@ -134,10 +141,12 @@ class EmpireAdvantagePicker extends StatelessWidget {
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: subtitle != null
-          ? Text(subtitle,
+          ? Text(
+              subtitle,
               style: const TextStyle(fontSize: 11),
               maxLines: 2,
-              overflow: TextOverflow.ellipsis)
+              overflow: TextOverflow.ellipsis,
+            )
           : null,
       dense: true,
       visualDensity: VisualDensity.compact,
