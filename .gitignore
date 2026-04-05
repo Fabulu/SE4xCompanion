@@ -49,3 +49,4 @@ app.*.map.json
 *.xls
 *.xlsx
 AppIcons.zip
+rb.txt

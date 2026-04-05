@@ -582,10 +582,13 @@ class ProductionState {
       if (w.isHomeworld && w.homeworldValue < 30) {
         newHwValue = (w.homeworldValue + 5).clamp(0, 30);
       }
+      // Rule 7.1.2: blockaded worlds defer staged mineral markers until the
+      // blockade is lifted. Non-blocked worlds release the staged CP as income
+      // during the Economic Phase and clear the marker here.
       return w.copyWith(
         growthMarkerLevel: newGrowth,
         homeworldValue: newHwValue,
-        stagedMineralCp: 0,
+        stagedMineralCp: w.isBlocked ? w.stagedMineralCp : 0,
         pipelineIncome: 0,
       );
     }).toList();

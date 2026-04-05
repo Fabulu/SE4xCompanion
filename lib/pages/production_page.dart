@@ -1269,12 +1269,64 @@ class _ProductionPageState extends State<ProductionPage>
           subtitle: unpredictable ? 'unpredictable \u2022 5 CP/grant' : 'costs in $costLabel',
         ),
         const SizedBox(height: 4),
+        if (techs.contains(TechId.shipYard)) _buildShipyardSummaryChip(context),
         for (final id in techs)
           if (unpredictable)
             _buildResearchTechRow(id)
           else
             _buildTechRow(id),
       ],
+    );
+  }
+
+  /// Ship Yard tech summary chip (T1-D).
+  /// Shows total shipyards owned and HP/turn per shipyard per rule 9.6.
+  Widget _buildShipyardSummaryChip(BuildContext context) {
+    final theme = Theme.of(context);
+    final syLevel = _effectiveLevel(TechId.shipYard);
+    // Rule 9.6: Lvl 1 = 1 HP, Lvl 2 = 1.5 HP, Lvl 3 = 2 HP per turn per shipyard.
+    final double hpPerSy = switch (syLevel) {
+      <= 1 => 1.0,
+      2 => 1.5,
+      _ => 2.0,
+    };
+    final owned = shipCounters
+        .where((c) => c.type == ShipType.shipyard && c.isBuilt)
+        .length;
+    String fmtHp(double v) =>
+        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+    final label = 'Shipyards: $owned \u00B7 ${fmtHp(hpPerSy)} HP/turn';
+    final tooltip =
+        'Ship Yard tech level $syLevel \u2192 ${fmtHp(hpPerSy)} HP/turn per shipyard (rule 9.6)';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Tooltip(
+          message: tooltip,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1627,21 +1679,34 @@ class _ProductionPageState extends State<ProductionPage>
             SizedBox(
               width: 44,
               height: 44,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                iconSize: 20,
-                icon: const Icon(Icons.add),
-                onPressed: _canAffordOneMore(purchase.type)
-                    ? () {
-                        final updated =
-                            List<ShipPurchase>.from(production.shipPurchases);
-                        updated[index] =
-                            purchase.copyWith(quantity: purchase.quantity + 1);
-                        widget.onProductionChanged(
-                            production.copyWith(shipPurchases: updated));
-                      }
-                    : null,
+              child: Builder(
+                builder: (context) {
+                  final hasStock = _hasCounterStock(purchase.type);
+                  final canAfford = _canAffordOneMore(purchase.type);
+                  final enabled = canAfford && hasStock;
+                  final tooltip = !hasStock
+                      ? _counterStockTooltip(purchase.type)
+                      : (!canAfford ? 'Not enough CP for another unit' : '');
+                  final button = IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
+                    icon: const Icon(Icons.add),
+                    onPressed: enabled
+                        ? () {
+                            final updated = List<ShipPurchase>.from(
+                                production.shipPurchases);
+                            updated[index] = purchase.copyWith(
+                                quantity: purchase.quantity + 1);
+                            widget.onProductionChanged(production.copyWith(
+                                shipPurchases: updated));
+                          }
+                        : null,
+                  );
+                  return tooltip.isEmpty
+                      ? button
+                      : Tooltip(message: tooltip, child: button);
+                },
               ),
             ),
             const SizedBox(width: 8),
@@ -1717,6 +1782,45 @@ class _ProductionPageState extends State<ProductionPage>
     return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts);
   }
 
+  /// T1-C: Number of blank/unused physical counters remaining for this ship
+  /// type, after subtracting built ships and queued purchases. Returns null
+  /// when this ship type is not tracked on the Ship Technology Sheet
+  /// (maxCounters == 0, e.g. mines, transports, pipelines).
+  int? _countersRemaining(ShipType type) {
+    final def = kShipDefinitions[type];
+    if (def == null) return null;
+    if (def.maxCounters == 0) return null; // untracked pool
+    final built =
+        shipCounters.where((c) => c.type == type && c.isBuilt).length;
+    final queued = production.shipPurchases
+        .where((p) => p.type == type)
+        .fold<int>(0, (s, p) => s + p.quantity);
+    final remaining = def.maxCounters - built - queued;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  /// T1-C: Hard block — true if at least one blank counter is available.
+  bool _hasCounterStock(ShipType type) {
+    final remaining = _countersRemaining(type);
+    if (remaining == null) return true; // untracked = unlimited
+    return remaining > 0;
+  }
+
+  /// T1-C: Tooltip describing why the "+1" button is blocked.
+  String _counterStockTooltip(ShipType type) {
+    final def = kShipDefinitions[type];
+    if (def == null || def.maxCounters == 0) return '';
+    final built =
+        shipCounters.where((c) => c.type == type && c.isBuilt).length;
+    final queued = production.shipPurchases
+        .where((p) => p.type == type)
+        .fold<int>(0, (s, p) => s + p.quantity);
+    final max = def.maxCounters;
+    final abbr = def.abbreviation;
+    return 'Cannot build: all $max $abbr counters in use '
+        '($built built, $queued queued).';
+  }
+
   void _showAddShipDialog(BuildContext context) {
     // Task 2: Filter to ships the player has tech to build AND can afford
     final remaining = production.remainingCp(config, shipCounters, modifiers, abilities);
@@ -1732,6 +1836,8 @@ class _ProductionPageState extends State<ProductionPage>
               shipCounters,
             ))
         .where((e) => e.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts) <= remaining)
+        // T1-C: hard block when all physical counters of this type are in use.
+        .where((e) => _hasCounterStock(e.key))
         .toList()
       ..sort((a, b) => a.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts)
           .compareTo(b.value.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts)));
@@ -1949,6 +2055,19 @@ class _ProductionPageState extends State<ProductionPage>
               children: [
                 Text('Homeworld', style: labelStyle),
                 const Spacer(),
+                // Blocked toggle (rule 2.8: colony rules apply to homeworlds;
+                // rule 7.1.2: blockaded worlds defer income/staged minerals).
+                _CompactToggle(
+                  label: 'Blocked',
+                  helpText:
+                      'Per rule 2.8, rules that apply to Colonies also apply to Homeworlds. '
+                      'A blockaded homeworld produces no CP/RP/LP/TP this turn, and any '
+                      'staged mineral markers are deferred until the blockade lifts (7.1.2).',
+                  value: world.isBlocked,
+                  onChanged: (v) =>
+                      _updateWorld(index, (w) => w.copyWith(isBlocked: v)),
+                ),
+                const SizedBox(width: 4),
                 NumberInput(
                   value: world.homeworldValue,
                   onChanged: (v) =>

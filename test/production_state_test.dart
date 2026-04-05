@@ -998,4 +998,115 @@ void main() {
       expect(filtered, contains(TechId.defense));
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Homeworld blockade (rules 2.8 + 7.1.2 + 7.3)
+  // ---------------------------------------------------------------------------
+  group('Homeworld blockade (rule 2.8 + 7.1.2)', () {
+    test('blockaded homeworld produces 0 colonyCp', () {
+      final ps = ProductionState(
+        worlds: [hw().copyWith(isBlocked: true)],
+      );
+      expect(ps.colonyCp(baseConfig), 0);
+      expect(ps.colonyCp(facilitiesConfig), 0);
+    });
+
+    test('blockaded homeworld produces 0 facilityCp', () {
+      final ps = ProductionState(
+        worlds: [
+          hw(facility: FacilityType.industrial).copyWith(isBlocked: true),
+        ],
+      );
+      expect(ps.facilityCp(facilitiesConfig), 0);
+    });
+
+    test('blockaded homeworld produces 0 pipelineCp', () {
+      final ps = ProductionState(
+        worlds: [
+          hw().copyWith(isBlocked: true, pipelineIncome: 4),
+        ],
+      );
+      // Legacy per-world pipelineIncome path: blocked worlds contribute 0.
+      expect(ps.pipelineCp(baseConfig), 0);
+    });
+
+    test('blockaded homeworld produces 0 mineralCp', () {
+      final ps = ProductionState(
+        worlds: [
+          hw().copyWith(isBlocked: true, stagedMineralCp: 7),
+        ],
+      );
+      expect(ps.mineralCp(), 0);
+    });
+
+    test('blockaded homeworld retains stagedMineralCp after prepareForNextTurn',
+        () {
+      final ps = ProductionState(
+        worlds: [
+          hw().copyWith(isBlocked: true, stagedMineralCp: 7),
+        ],
+      );
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      expect(next.worlds[0].isBlocked, isTrue);
+      expect(next.worlds[0].stagedMineralCp, 7);
+    });
+
+    test('unblocking homeworld releases staged minerals next turn', () {
+      // Turn T: homeworld blockaded with 7 staged CP. Deferred through
+      // prepareForNextTurn. Turn T+1: blockade lifts; mineralCp now reports
+      // the deferred 7 CP for the Economic Phase.
+      final blocked = ProductionState(
+        worlds: [
+          hw().copyWith(isBlocked: true, stagedMineralCp: 7),
+        ],
+      );
+      final nextTurn = blocked.prepareForNextTurn(baseConfig, []);
+      // Simulate the player lifting the blockade at the start of next turn.
+      final unblocked = nextTurn.copyWith(
+        worlds: [nextTurn.worlds[0].copyWith(isBlocked: false)],
+      );
+      expect(unblocked.worlds[0].stagedMineralCp, 7);
+      expect(unblocked.mineralCp(), 7);
+      // After the Economic Phase of T+1, the staged CP is cleared.
+      final afterEcon = unblocked.prepareForNextTurn(baseConfig, []);
+      expect(afterEcon.worlds[0].stagedMineralCp, 0);
+    });
+
+    test('blockaded homeworld still owes ship maintenance (rule 7.3 excluded)',
+        () {
+      // Blockade defers colony income (7.1.2) but does not exempt a player
+      // from ship maintenance, which is calculated per built, non-exempt hull.
+      final counters = [
+        const ShipCounter(type: ShipType.dd, number: 1, isBuilt: true), // hull 1
+        const ShipCounter(type: ShipType.ca, number: 1, isBuilt: true), // hull 2
+      ];
+      final ps = ProductionState(
+        worlds: [hw().copyWith(isBlocked: true)],
+      );
+      // 1 + 2 = 3; blockaded homeworld does not exempt ship maintenance.
+      expect(ps.maintenanceTotal(counters, baseConfig), 3);
+    });
+
+    test('blockaded regular colony: zero income + deferred minerals', () {
+      final ps = ProductionState(
+        worlds: [
+          hw(),
+          colony(3, blocked: true, mineral: 5, pipeline: 2),
+        ],
+      );
+      // Homeworld pays all the income; the blockaded colony contributes 0.
+      expect(ps.colonyCp(baseConfig), 30);
+      expect(ps.mineralCp(), 0);
+      expect(ps.pipelineCp(baseConfig), 0);
+
+      final next = ps.prepareForNextTurn(baseConfig, []);
+      // Blockaded colony retains its staged minerals across turns.
+      expect(next.worlds[1].isBlocked, isTrue);
+      expect(next.worlds[1].stagedMineralCp, 5);
+      // Pipeline income still resets (it is per-turn income, not a marker).
+      expect(next.worlds[1].pipelineIncome, 0);
+      // Growth still proceeds for non-homeworld worlds (rule 7.1.2 note).
+      expect(next.worlds[1].growthMarkerLevel, 3);
+    });
+  });
 }
