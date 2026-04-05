@@ -551,15 +551,9 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
           const SizedBox(width: 8),
           SizedBox(
             width: 140,
-            child: TextFormField(
+            child: _AlienNameField(
               initialValue: player.name,
-              style: const TextStyle(fontSize: 15),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                border: OutlineInputBorder(),
-              ),
-              onFieldSubmitted: (v) => onChanged(player.copyWith(name: v)),
+              onCommitted: (v) => onChanged(player.copyWith(name: v)),
             ),
           ),
           const SizedBox(width: 16),
@@ -665,8 +659,6 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
                   ));
                 }
               : null,
-          onTechNotesChanged: null,
-          onDefenseNotesChanged: null,
         ),
         // If this turn was rolled, show a summary line
         if (isPast)
@@ -1301,6 +1293,81 @@ class _FleetCompositionDialogState extends State<_FleetCompositionDialog> {
           child: const Text('Apply'),
         ),
       ],
+    );
+  }
+}
+
+/// Name input that saves on submit (Enter) AND on blur (focus loss).
+/// Ensures user edits are not lost when tapping elsewhere without hitting Enter.
+class _AlienNameField extends StatefulWidget {
+  final String initialValue;
+  final ValueChanged<String> onCommitted;
+
+  const _AlienNameField({
+    required this.initialValue,
+    required this.onCommitted,
+  });
+
+  @override
+  State<_AlienNameField> createState() => _AlienNameFieldState();
+}
+
+class _AlienNameFieldState extends State<_AlienNameField> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+  late String _lastCommitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+    _lastCommitted = widget.initialValue;
+    _focusNode = FocusNode()..addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_AlienNameField old) {
+    super.didUpdateWidget(old);
+    // Sync from parent if the canonical value changed externally and we're not editing.
+    if (widget.initialValue != _lastCommitted && !_focusNode.hasFocus) {
+      _lastCommitted = widget.initialValue;
+      _controller.text = widget.initialValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      _commit();
+    }
+  }
+
+  void _commit() {
+    final v = _controller.text;
+    if (v == _lastCommitted) return;
+    _lastCommitted = v;
+    widget.onCommitted(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      style: const TextStyle(fontSize: 15),
+      decoration: const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (_) => _commit(),
     );
   }
 }

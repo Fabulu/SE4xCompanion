@@ -26,6 +26,9 @@ class LedgerRow {
   /// a small indicator icon is shown before the trailing value.
   final VoidCallback? onTap;
 
+  /// Optional tooltip text shown on hover/long-press of a tappable row.
+  final String? onTapTooltip;
+
   const LedgerRow({
     required this.label,
     this.value,
@@ -40,6 +43,7 @@ class LedgerRow {
     this.trailing,
     this.trailingBuilder,
     this.onTap,
+    this.onTapTooltip,
   });
 }
 
@@ -144,9 +148,15 @@ class LedgerGrid extends StatelessWidget {
             thickness: 0.5,
             color: theme.dividerColor.withValues(alpha: 0.5),
           ),
-        row.onTap != null
-            ? InkWell(onTap: row.onTap, child: rowInner)
-            : rowInner,
+        if (row.onTap != null)
+          row.onTapTooltip != null
+              ? Tooltip(
+                  message: row.onTapTooltip!,
+                  child: InkWell(onTap: row.onTap, child: rowInner),
+                )
+              : InkWell(onTap: row.onTap, child: rowInner)
+        else
+          rowInner,
       ],
     );
   }

@@ -26,8 +26,6 @@ class AlienTurnRow extends StatelessWidget {
   final VoidCallback? onRoll;
   final ValueChanged<int>? onExtraEconChanged;
   final ValueChanged<String>? onFleetNotesChanged;
-  final ValueChanged<String>? onTechNotesChanged;
-  final ValueChanged<String>? onDefenseNotesChanged;
 
   const AlienTurnRow({
     super.key,
@@ -42,8 +40,6 @@ class AlienTurnRow extends StatelessWidget {
     this.onRoll,
     this.onExtraEconChanged,
     this.onFleetNotesChanged,
-    this.onTechNotesChanged,
-    this.onDefenseNotesChanged,
   });
 
   @override
@@ -150,7 +146,7 @@ class AlienTurnRow extends StatelessWidget {
                 : Text('-', style: labelStyle, textAlign: TextAlign.center),
           ),
           _colSep(theme),
-          // Tech notes
+          // Tech notes (read-only tally display)
           Expanded(
             flex: 2,
             child: isPast || isCurrent
@@ -159,13 +155,13 @@ class AlienTurnRow extends StatelessWidget {
                     isPast
                         ? '${techCount}T${techNotes.isNotEmpty ? " $techNotes" : ""}'
                         : techNotes,
-                    isPast ? null : onTechNotesChanged,
+                    null,
                     labelStyle,
                   )
                 : Text('-', style: labelStyle, textAlign: TextAlign.center),
           ),
           _colSep(theme),
-          // Defense notes
+          // Defense notes (read-only tally display)
           Expanded(
             flex: 2,
             child: isPast || isCurrent
@@ -174,7 +170,7 @@ class AlienTurnRow extends StatelessWidget {
                     isPast
                         ? '${defCount}D${defenseNotes.isNotEmpty ? " $defenseNotes" : ""}'
                         : defenseNotes,
-                    isPast ? null : onDefenseNotesChanged,
+                    null,
                     labelStyle,
                   )
                 : Text('-', style: labelStyle, textAlign: TextAlign.center),

@@ -201,7 +201,12 @@ class ProductionPage extends StatefulWidget {
   final ValueChanged<List<DrawnCard>>? onDrawnHandChanged;
   final void Function(String cardName, List<GameModifier> modifiers)?
       onPlayCardAsEvent;
-  final void Function(String cardName, int cpGained)? onPlayCardForCredits;
+  /// Fired when the player discards a drawn card for a one-shot CP bonus.
+  /// [sourceCardId] is the stable identity string (`card:<type>:<number>:credits:<turn>`)
+  /// used to deduplicate the generated income modifier in the active ledger.
+  final void Function(
+          String cardName, int cpGained, String sourceCardId)?
+      onPlayCardForCredits;
   final List<TurnSummary> turnSummaries;
 
   const ProductionPage({
@@ -246,6 +251,9 @@ class _ProductionPageState extends State<ProductionPage>
   late AnimationController _cpPopController;
   late Animation<double> _cpPopScale;
   int? _prevRemainingCp;
+
+  // ---- Wave 2.1: Research log expansion state ----
+  bool _researchLogExpanded = false;
 
   @override
   void initState() {
@@ -649,6 +657,9 @@ class _ProductionPageState extends State<ProductionPage>
         // Technology
         _buildTechSection(context),
 
+        // Wave 2.1: Research log (current turn audit trail)
+        _buildResearchLogSection(context),
+
         const SizedBox(height: 16),
 
         // Ship Purchases (Problem 4)
@@ -720,14 +731,46 @@ class _ProductionPageState extends State<ProductionPage>
               if (widget.turnSummaries.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: IconButton(
-                    icon: const Icon(Icons.history, size: 22),
-                    tooltip: 'Turn Log',
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    constraints:
-                        const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: () => _showTurnLogModal(context),
+                  child: Tooltip(
+                    message:
+                        'Turn Log (${widget.turnSummaries.length} past turn'
+                        '${widget.turnSummaries.length == 1 ? '' : 's'})',
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.history, size: 22),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(
+                              minWidth: 36, minHeight: 36),
+                          onPressed: () => _showTurnLogModal(context),
+                        ),
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            constraints: const BoxConstraints(
+                                minWidth: 16, minHeight: 16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${widget.turnSummaries.length}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -807,7 +850,34 @@ class _ProductionPageState extends State<ProductionPage>
             spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
-            children: chips,
+            children: [
+              ...chips,
+              // 2.3: tappable indicator for full config dialog
+              Tooltip(
+                message: 'Tap for full config',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'details',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        decoration: TextDecoration.underline,
+                        color: theme.colorScheme.primary
+                            .withValues(alpha: 0.75),
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 10,
+                      color: theme.colorScheme.primary
+                          .withValues(alpha: 0.75),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1328,6 +1398,7 @@ class _ProductionPageState extends State<ProductionPage>
           label: '- Maintenance',
           computedValue: maint,
           onTap: () => _showMaintenanceBreakdown(context, maint),
+          onTapTooltip: 'Tap for ship-type breakdown',
         ),
         LedgerRow(
           label: '- Turn order bid',
@@ -1422,6 +1493,7 @@ class _ProductionPageState extends State<ProductionPage>
           label: '- Maintenance',
           computedValue: maint,
           onTap: () => _showMaintenanceBreakdown(context, maint),
+          onTapTooltip: 'Tap for ship-type breakdown',
         ),
         LedgerRow(
           label: '- LP placed on LC colonies',
@@ -1861,6 +1933,133 @@ class _ProductionPageState extends State<ProductionPage>
   // ===========================================================================
   // Technology section
   // ===========================================================================
+
+  // ===========================================================================
+  // Wave 2.1: Research log (current turn)
+  // ===========================================================================
+
+  Widget _buildResearchLogSection(BuildContext context) {
+    final log = production.researchLog;
+    if (log.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final count = log.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(
+              () => _researchLogExpanded = !_researchLogExpanded,
+            ),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    _researchLogExpanded
+                        ? Icons.expand_more
+                        : Icons.chevron_right,
+                    size: 18,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'RESEARCH LOG',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.4,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '($count this turn)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_researchLogExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final event in log) _buildResearchLogRow(theme, event),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResearchLogRow(ThemeData theme, ResearchEvent event) {
+    IconData icon;
+    String label;
+    Color color = theme.colorScheme.onSurface.withValues(alpha: 0.8);
+    switch (event.kind) {
+      case ResearchEventKind.techPurchased:
+        final e = event as TechPurchasedEvent;
+        icon = Icons.shopping_cart_outlined;
+        final name = _techDisplayNames[e.techId] ?? e.techId.name;
+        final costParts = <String>[];
+        if (e.cpCost > 0) costParts.add('${e.cpCost}CP');
+        if (e.rpCost > 0) costParts.add('${e.rpCost}RP');
+        final cost = costParts.isEmpty ? '' : ' (${costParts.join(" + ")})';
+        label = '$name L${e.fromLevel}\u2192L${e.toLevel}$cost';
+        break;
+      case ResearchEventKind.grantRolled:
+        final e = event as GrantRolledEvent;
+        icon = e.success ? Icons.check_circle_outline : Icons.casino_outlined;
+        final name = _techDisplayNames[e.techId] ?? e.techId.name;
+        label = 'Grant roll $name L${e.targetLevel}: '
+            '${e.dieResult} (${e.outcomeCpSpent}CP)'
+            '${e.success ? " \u2014 breakthrough" : ""}';
+        color = e.success
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withValues(alpha: 0.8);
+        break;
+      case ResearchEventKind.grantReassigned:
+        final e = event as GrantReassignedEvent;
+        icon = Icons.swap_horiz;
+        final from = _techDisplayNames[e.fromTechId] ?? e.fromTechId.name;
+        final to = _techDisplayNames[e.toTechId] ?? e.toTechId.name;
+        label = 'Reassigned ${e.accumulatedCp}CP: $from \u2192 $to';
+        break;
+      case ResearchEventKind.techGrantedByCard:
+        final e = event as TechGrantedByCardEvent;
+        icon = Icons.card_giftcard;
+        final name = _techDisplayNames[e.techId] ?? e.techId.name;
+        label = 'Card grant: $name L${e.targetLevel} '
+            '(${e.sourceCardName})';
+        color = theme.colorScheme.tertiary;
+        break;
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildTechSection(BuildContext context) {
     final allTechs = visibleTechs(
@@ -3034,34 +3233,48 @@ class _ProductionPageState extends State<ProductionPage>
             // Line 1: Colony name (tap to edit), growth, blocked toggle, delete
             Row(
               children: [
-                // Editable colony name
+                // Editable colony name (2.5: edit-icon affordance)
                 GestureDetector(
                   onTap: () => _showEditColonyNameDialog(context, index, world),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       minWidth: 60,
-                      maxWidth: 100,
+                      maxWidth: 120,
                       minHeight: 44,
                     ),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        world.name,
-                        style: labelStyle,
-                        overflow: TextOverflow.ellipsis,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              world.name,
+                              style: labelStyle,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 12,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.45),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Growth marker with +/- adjustment
+                // Growth marker with +/- adjustment (4.4: 48x48 touch targets)
                 SizedBox(
-                  width: 24,
-                  height: 24,
+                  width: 48,
+                  height: 48,
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    iconSize: 16,
+                    iconSize: 18,
                     icon: Icon(Icons.remove, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                     onPressed: world.growthMarkerLevel > 0
                         ? () => _updateWorld(index, (w) => w.copyWith(growthMarkerLevel: w.growthMarkerLevel - 1))
@@ -3070,12 +3283,12 @@ class _ProductionPageState extends State<ProductionPage>
                 ),
                 Text(growthLabel, style: dimStyle),
                 SizedBox(
-                  width: 24,
-                  height: 24,
+                  width: 48,
+                  height: 48,
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    iconSize: 16,
+                    iconSize: 18,
                     icon: Icon(Icons.add, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                     onPressed: world.growthMarkerLevel < 3
                         ? () => _updateWorld(index, (w) => w.copyWith(growthMarkerLevel: w.growthMarkerLevel + 1))
@@ -3105,7 +3318,7 @@ class _ProductionPageState extends State<ProductionPage>
                       Icons.close,
                       color: theme.colorScheme.error.withValues(alpha: 0.6),
                     ),
-                    onPressed: () => _removeColony(index),
+                    onPressed: () => _confirmRemoveColony(index, world),
                   ),
                 ),
               ],
@@ -3203,6 +3416,33 @@ class _ProductionPageState extends State<ProductionPage>
     if (production.worlds[index].isHomeworld) return;
     final updated = List<WorldState>.from(production.worlds)..removeAt(index);
     widget.onProductionChanged(production.copyWith(worlds: updated));
+  }
+
+  // Wave 4.1: confirm removal of a colony before destroying its state.
+  Future<void> _confirmRemoveColony(int index, WorldState world) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Remove colony '${world.name}'?"),
+        content: const Text(
+          'This will discard growth level, staged minerals, and facility. '
+          'Cannot be undone via single undo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      _removeColony(index);
+    }
   }
 
   void _updatePipelineConnectedColonies(int value) {
@@ -3460,6 +3700,8 @@ class _ProductionPageState extends State<ProductionPage>
                           'crew',
                           'mission',
                           'planetAttribute',
+                          'scenarioModifier',
+                          'empire',
                         ])
                           ChoiceChip(
                             label: Text(
@@ -3584,7 +3826,14 @@ class _ProductionPageState extends State<ProductionPage>
       ),
     );
     if (result == null || result <= 0) return;
-    widget.onPlayCardForCredits?.call(name, result);
+    // Build a unique-but-trackable sourceCardId so the home_page handler can
+    // stamp the one-shot income modifier. The turn number keeps repeated
+    // "for credits" plays of the same card in different turns distinct,
+    // while still de-duping double-taps within a single turn.
+    final typeLabel = entry?.type ?? 'unknown';
+    final sourceId =
+        'card:$typeLabel:${card.cardNumber}:credits:${widget.turnNumber}';
+    widget.onPlayCardForCredits?.call(name, result, sourceId);
     final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
     widget.onDrawnHandChanged?.call(updated);
   }

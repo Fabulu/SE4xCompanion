@@ -314,7 +314,10 @@ class SettingsPage extends StatelessWidget {
         // ── Empire Advantage ──
         _SectionTitle(title: 'EMPIRE ADVANTAGE'),
         const SizedBox(height: 8),
-        _EmpireAdvantageTile(config: config, onConfigChanged: onConfigChanged),
+        _EmpireAdvantageTile(
+            config: config,
+            turnNumber: turnNumber,
+            onConfigChanged: onConfigChanged),
 
         // ── Ship Special Abilities (Alternate Empire only) ──
         if (config.enableAlternateEmpire) ...[
@@ -377,7 +380,18 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: onDuplicateGame,
+              onPressed: () {
+                onDuplicateGame();
+                // Wave 4.3: surface success feedback.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      "Game duplicated: '$gameName (copy)'",
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
               icon: const Icon(Icons.copy, size: 20),
               label: const Text('Duplicate', style: TextStyle(fontSize: 15)),
               style: OutlinedButton.styleFrom(
@@ -1238,10 +1252,12 @@ class _TurnSummaryTile extends StatelessWidget {
 
 class _EmpireAdvantageTile extends StatelessWidget {
   final GameConfig config;
+  final int turnNumber;
   final ValueChanged<GameConfig> onConfigChanged;
 
   const _EmpireAdvantageTile({
     required this.config,
+    required this.turnNumber,
     required this.onConfigChanged,
   });
 
@@ -1319,7 +1335,35 @@ class _EmpireAdvantageTile extends StatelessWidget {
                     descriptionTruncation: 80,
                     style: EmpireAdvantagePickerStyle.avatar,
                     scrollController: scrollController,
-                    onChanged: (value) {
+                    onChanged: (value) async {
+                      // Wave 4.2: If the game has progressed past turn 1,
+                      // changing EA may invalidate existing state. Confirm.
+                      final current = config.selectedEmpireAdvantage;
+                      if (turnNumber > 1 && value != current) {
+                        final confirmed = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dctx) => AlertDialog(
+                            title: const Text('Change Empire Advantage?'),
+                            content: const Text(
+                              'Changing Empire Advantage mid-game may '
+                              'invalidate current state. Continue?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dctx).pop(true),
+                                child: const Text('Change'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+                      }
                       if (value == null) {
                         onConfigChanged(
                           config.copyWith(clearEmpireAdvantage: true),
@@ -1329,7 +1373,7 @@ class _EmpireAdvantageTile extends StatelessWidget {
                           config.copyWith(selectedEmpireAdvantage: value),
                         );
                       }
-                      Navigator.of(ctx).pop();
+                      if (ctx.mounted) Navigator.of(ctx).pop();
                     },
                   ),
                 ),

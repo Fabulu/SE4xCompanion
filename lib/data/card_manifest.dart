@@ -1,6 +1,7 @@
 // Card manifest data for the SE4X companion app.
 // Consolidates all card types into a single searchable list.
 
+import 'card_modifiers.dart';
 import 'empire_advantages.dart';
 
 enum CardSupportStatus {
@@ -810,6 +811,38 @@ const List<CardEntry> kPlanetAttributes = [
 
 // ── Combined Card Manifest ──
 
+/// Derive the effective support status for a non-EA card by inspecting its
+/// `card_modifiers.dart` binding. EA cards already carry authoritative status
+/// from [EaSupportStatus], so this only applies when a card currently has the
+/// default `referenceOnly` status from the raw catalog tables.
+///
+/// Logic:
+///   - binding missing                     -> keep existing status
+///   - binding has non-empty modifiers     -> supported
+///   - binding is bespoke (complexBehaviorNote set, empty modifiers)
+///                                          -> partial
+CardSupportStatus _deriveSupportStatus(CardEntry card) {
+  final binding = kCardModifiers[card.number];
+  if (binding == null) return card.supportStatus;
+  if (binding.hasModifiers) return CardSupportStatus.supported;
+  if (binding.isComplex) return CardSupportStatus.partial;
+  return card.supportStatus;
+}
+
+CardEntry _withDerivedSupport(CardEntry card) {
+  final derived = _deriveSupportStatus(card);
+  if (derived == card.supportStatus) return card;
+  return CardEntry(
+    number: card.number,
+    name: card.name,
+    type: card.type,
+    description: card.description,
+    revealCondition: card.revealCondition,
+    cpValue: card.cpValue,
+    supportStatus: derived,
+  );
+}
+
 final List<CardEntry> kAllCards = (() {
   final cards = <CardEntry>[
     for (final ea in kEmpireAdvantages)
@@ -825,12 +858,16 @@ final List<CardEntry> kAllCards = (() {
           EaSupportStatus.referenceOnly => CardSupportStatus.referenceOnly,
         },
       ),
-    ...kAlienTechCards,
-    ...kCrewCards,
-    ...kMissionCards,
-    ...kPlanetAttributes,
-    ...kResourceCards,
-    ...kScenarioModifierCards,
+    // Non-EA catalog entries default to `referenceOnly` at construction
+    // time; promote them to supported/partial when they have a binding in
+    // `card_modifiers.dart` (so the Rules > Cards reference renders the
+    // correct badge).
+    for (final c in kAlienTechCards) _withDerivedSupport(c),
+    for (final c in kCrewCards) _withDerivedSupport(c),
+    for (final c in kMissionCards) _withDerivedSupport(c),
+    for (final c in kPlanetAttributes) _withDerivedSupport(c),
+    for (final c in kResourceCards) _withDerivedSupport(c),
+    for (final c in kScenarioModifierCards) _withDerivedSupport(c),
   ];
   cards.sort(_compareCatalogOrder);
   return cards;

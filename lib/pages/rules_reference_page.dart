@@ -18,7 +18,15 @@ class RulesReferencePage extends StatefulWidget {
   final void Function(String cardName, List<GameModifier> modifiers)?
       onApplyCardModifiers;
 
-  const RulesReferencePage({super.key, this.onApplyCardModifiers});
+  /// Currently active game modifiers, used to mark cards as "Applied" when
+  /// their sourceCardId already exists on the active modifier ledger.
+  final List<GameModifier> activeModifiers;
+
+  const RulesReferencePage({
+    super.key,
+    this.onApplyCardModifiers,
+    this.activeModifiers = const [],
+  });
 
   @override
   State<RulesReferencePage> createState() => RulesReferencePageState();
@@ -37,6 +45,10 @@ class RulesReferencePageState extends State<RulesReferencePage> {
   final Set<String> _expandedSections = {};
   final Set<String> _expandedPhases = {};
   final Set<String> _expandedCardGroups = {};
+
+  // Wave 5.1: card filters
+  String _cardTypeFilter = 'all';
+  String _cardStatusFilter = 'all';
 
   // Keys for scroll-to-section
   final Map<String, GlobalKey> _sectionKeys = {};
@@ -497,12 +509,86 @@ class RulesReferencePageState extends State<RulesReferencePage> {
     'scenarioModifier': 'Scenario Modifiers',
   };
 
+  bool _cardMatchesFilters(CardEntry card) {
+    if (_cardTypeFilter != 'all' && card.type != _cardTypeFilter) return false;
+    if (_cardStatusFilter != 'all') {
+      final status = switch (_cardStatusFilter) {
+        'supported' => CardSupportStatus.supported,
+        'partial' => CardSupportStatus.partial,
+        'referenceOnly' => CardSupportStatus.referenceOnly,
+        _ => null,
+      };
+      if (status != null && card.supportStatus != status) return false;
+    }
+    return true;
+  }
+
+  Widget _buildCardFilterChips() {
+    const typeOptions = <(String, String)>[
+      ('all', 'All'),
+      ('empire', 'Empire'),
+      ('alienTech', 'Alien Tech'),
+      ('crew', 'Crew'),
+      ('resource', 'Resource'),
+      ('mission', 'Mission'),
+      ('scenarioModifier', 'Scenario'),
+      ('planetAttribute', 'Planet'),
+    ];
+    const statusOptions = <(String, String)>[
+      ('all', 'All'),
+      ('supported', 'Supported'),
+      ('partial', 'Partial'),
+      ('referenceOnly', 'Reference only'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final opt in typeOptions)
+                ChoiceChip(
+                  label: Text(opt.$2, style: const TextStyle(fontSize: 11)),
+                  selected: _cardTypeFilter == opt.$1,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onSelected: (_) =>
+                      setState(() => _cardTypeFilter = opt.$1),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final opt in statusOptions)
+                ChoiceChip(
+                  label: Text(opt.$2, style: const TextStyle(fontSize: 11)),
+                  selected: _cardStatusFilter == opt.$1,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onSelected: (_) =>
+                      setState(() => _cardStatusFilter = opt.$1),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   List<Widget> _buildCardView() {
-    final widgets = <Widget>[];
+    final widgets = <Widget>[_buildCardFilterChips()];
     for (final entry in _cardGroups.entries) {
       final typeKey = entry.key;
       final groupName = entry.value;
-      final cards = kAllCards.where((c) => c.type == typeKey).toList();
+      final cards = kAllCards
+          .where((c) => c.type == typeKey && _cardMatchesFilters(c))
+          .toList();
       if (cards.isEmpty) continue;
 
       final isExpanded = _expandedCardGroups.contains(typeKey);
@@ -608,31 +694,46 @@ class RulesReferencePageState extends State<RulesReferencePage> {
 
     final children = <Widget>[];
     if (binding.hasModifiers && widget.onApplyCardModifiers != null) {
+      final sourceId = '${card.type}:${card.number}';
+      final isApplied = widget.activeModifiers
+          .any((m) => m.sourceCardId == sourceId);
       children.add(
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            icon: const Icon(Icons.add_circle_outline, size: 16),
-            label: const Text('Apply this card',
-                style: TextStyle(fontSize: 12)),
+            icon: Icon(
+              isApplied
+                  ? Icons.check_circle
+                  : Icons.add_circle_outline,
+              size: 16,
+            ),
+            label: Text(
+              isApplied ? 'Applied' : 'Apply this card',
+              style: const TextStyle(fontSize: 12),
+            ),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: isApplied
+                  ? theme.colorScheme.primary
+                  : null,
             ),
-            onPressed: () {
-              final sourceId = '${card.type}:${card.number}';
-              final stamped = [
-                for (final m in binding.modifiers) m.withSourceCardId(sourceId),
-              ];
-              widget.onApplyCardModifiers!(card.name, stamped);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Applied: ${card.name}'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
+            onPressed: isApplied
+                ? null
+                : () {
+                    final stamped = [
+                      for (final m in binding.modifiers)
+                        m.withSourceCardId(sourceId),
+                    ];
+                    widget.onApplyCardModifiers!(card.name, stamped);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Applied: ${card.name}'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
           ),
         ),
       );

@@ -119,6 +119,15 @@ class _MapPageState extends State<MapPage> {
     widget.onChanged(next, description: description, recordUndo: recordUndo);
   }
 
+  void _resetViewport() {
+    _mapCanvasKey.currentState?.resetViewport(persistState: false);
+    _apply(
+      _state.copyWith(zoom: 1.0, panX: 0.0, panY: 0.0, rotation: 0.0),
+      recordUndo: false,
+      preserveViewport: false,
+    );
+  }
+
   void _selectHex(HexCoord coord) {
     _apply(
       _state.copyWith(selectedHex: coord, clearSelectedFleetId: true),
@@ -559,29 +568,43 @@ class _MapPageState extends State<MapPage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
-                child: _MapCanvas(
-                  key: _mapCanvasKey,
-                  state: _state,
-                  productionWorlds: widget.productionWorlds,
-                  onHexTap: _onHexTapped,
-                  onFleetTap: _selectFleet,
-                  onFleetDrop: (fleetId, target) {
-                    _apply(
-                      _state.moveFleet(fleetId, target),
-                      description: 'Move Fleet',
-                    );
-                  },
-                  onViewportChanged: (zoom, panX, panY, rotation) {
-                    _apply(
-                      _state.copyWith(
-                        zoom: zoom,
-                        panX: panX,
-                        panY: panY,
-                        rotation: rotation,
+                child: Stack(
+                  children: [
+                    _MapCanvas(
+                      key: _mapCanvasKey,
+                      state: _state,
+                      productionWorlds: widget.productionWorlds,
+                      onHexTap: _onHexTapped,
+                      onFleetTap: _selectFleet,
+                      onFleetDrop: (fleetId, target) {
+                        _apply(
+                          _state.moveFleet(fleetId, target),
+                          description: 'Move Fleet',
+                        );
+                      },
+                      onViewportChanged: (zoom, panX, panY, rotation) {
+                        _apply(
+                          _state.copyWith(
+                            zoom: zoom,
+                            panX: panX,
+                            panY: panY,
+                            rotation: rotation,
+                          ),
+                          recordUndo: false,
+                        );
+                      },
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: FloatingActionButton.small(
+                        heroTag: 'map-reset-viewport',
+                        tooltip: 'Reset view',
+                        onPressed: _resetViewport,
+                        child: const Icon(Icons.center_focus_strong),
                       ),
-                      recordUndo: false,
-                    );
-                  },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -708,6 +731,20 @@ class _MapCanvasState extends State<_MapCanvas> {
         panY: _appliedPanY,
         rotation: _appliedRotation,
       );
+
+  void resetViewport({bool persistState = true}) {
+    _syncing = true;
+    _controller.value = Matrix4.identity();
+    _appliedZoom = 1.0;
+    _appliedPanX = 0.0;
+    _appliedPanY = 0.0;
+    _appliedRotation = 0.0;
+    _syncing = false;
+    if (mounted) setState(() {});
+    if (persistState) {
+      widget.onViewportChanged(1.0, 0.0, 0.0, 0.0);
+    }
+  }
 
   void focusHex(
     HexCoord coord, {
@@ -1311,138 +1348,6 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
   }
 }
 
-// ignore: unused_element
-class _MapInspectorPanel extends StatelessWidget {
-  final bool expanded;
-  final MapHexState? selectedHex;
-  final WorldState? selectedWorld;
-  final List<FleetStackState> fleetsOnHex;
-  final String? selectedFleetId;
-  final List<ShipCounter> availableShips;
-  final VoidCallback onToggleExpanded;
-  final ValueChanged<MapHexState> onHexChanged;
-  final VoidCallback? onPlaceWorld;
-  final VoidCallback? onClearWorld;
-  final ValueChanged<String> onFleetSelected;
-  final ValueChanged<String> onFleetDeleted;
-  final ValueChanged<FleetStackState> onFleetChanged;
-  final void Function(String fleetId, List<String> shipIds) onFleetShipsChanged;
-
-  const _MapInspectorPanel({
-    required this.expanded,
-    required this.selectedHex,
-    required this.selectedWorld,
-    required this.fleetsOnHex,
-    required this.selectedFleetId,
-    required this.availableShips,
-    required this.onToggleExpanded,
-    required this.onHexChanged,
-    required this.onPlaceWorld,
-    required this.onClearWorld,
-    required this.onFleetSelected,
-    required this.onFleetDeleted,
-    required this.onFleetChanged,
-    required this.onFleetShipsChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hex = selectedHex;
-    final theme = Theme.of(context);
-    final shellColor = theme.colorScheme.surfaceContainerHighest;
-
-    return Material(
-      color: shellColor,
-      elevation: 10,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: expanded ? null : onToggleExpanded,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      hex == null
-                          ? 'Select a hex to edit terrain, ledger worlds, tokens, and fleets.'
-                          : 'Hex ${hex.coord.id}${selectedFleetId == null ? '' : ' • Fleet selected'}',
-                      style: theme.textTheme.titleSmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: expanded ? 'Collapse inspector' : 'Expand inspector',
-                    onPressed: onToggleExpanded,
-                    icon: Icon(expanded ? Icons.expand_more : Icons.expand_less),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: expanded
-                    ? hex == null
-                        ? const Center(
-                            key: ValueKey('empty'),
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Text(
-                                'Tap a hex to inspect terrain, worlds, tokens, and fleets.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        : _HexInspector(
-                            key: const ValueKey('inspector'),
-                            hex: hex,
-                            world: selectedWorld,
-                            fleets: fleetsOnHex,
-                            selectedFleetId: selectedFleetId,
-                            availableShips: availableShips,
-                            onHexChanged: onHexChanged,
-                            onPlaceWorld: onPlaceWorld!,
-                            onClearWorld: onClearWorld!,
-                            onFleetSelected: onFleetSelected,
-                            onFleetDeleted: onFleetDeleted,
-                            onFleetChanged: onFleetChanged,
-                            onFleetShipsChanged: onFleetShipsChanged,
-                          )
-                    : Center(
-                        key: const ValueKey('collapsed'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Text(
-                            hex == null
-                                ? 'Collapsed. Tap to expand.'
-                                : 'Selected ${hex.coord.id}. Tap to expand.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 Map<String, int> _parseComposition(String value) {
   final composition = <String, int>{};
   for (final part in value.split(',')) {
@@ -1474,27 +1379,61 @@ class _FleetMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = fleet.isEnemy ? Colors.redAccent : Colors.cyanAccent;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.82),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? Colors.amber : color,
-            width: selected ? 2 : 1.2,
-          ),
-        ),
-        child: Text(
-          fleet.label.isEmpty ? fleet.owner : fleet.label,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
+    final outOfSupply = !fleet.inSupply;
+    final borderColor = selected
+        ? Colors.amber
+        : (outOfSupply ? Colors.orangeAccent : color);
+    final textColor = outOfSupply ? color.withValues(alpha: 0.55) : color;
+    final marker = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: borderColor,
+          width: selected ? 2 : (outOfSupply ? 1.6 : 1.2),
+          style: outOfSupply ? BorderStyle.solid : BorderStyle.solid,
         ),
       ),
+      child: Text(
+        fleet.label.isEmpty ? fleet.owner : fleet.label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          decoration:
+              outOfSupply ? TextDecoration.lineThrough : TextDecoration.none,
+          decorationColor: Colors.orangeAccent,
+          decorationThickness: 2,
+        ),
+      ),
+    );
+    return GestureDetector(
+      onTap: onTap,
+      child: outOfSupply
+          ? Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Opacity(opacity: 0.75, child: marker),
+                Positioned(
+                  top: -3,
+                  right: -3,
+                  child: Tooltip(
+                    message: 'Out of supply',
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 1),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : marker,
     );
   }
 }

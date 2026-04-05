@@ -39,9 +39,40 @@ class ReplicatorPlayerPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
-        Text(
-          'Replicator Player - Turn $turnNumber',
-          style: Theme.of(context).textTheme.headlineSmall,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Replicator Player - Turn $turnNumber',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            // Wave 2.4: Player-controlled mode badge
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .tertiaryContainer
+                    .withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.tertiary,
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'PLAYER MODE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.4,
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(

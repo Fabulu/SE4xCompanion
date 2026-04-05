@@ -583,12 +583,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   /// Played a drawn card for credits: add a one-shot `+N CP` income modifier
   /// stamped with the card's name so it shows up in the active-modifier chips.
-  void _onPlayCardForCredits(String cardName, int cpGained) {
+  ///
+  /// [sourceCardId] carries a per-turn identity
+  /// (`card:<type>:<number>:credits:<turn>`) so that double-tapping
+  /// "Play for credits" on the same card in the same turn does not
+  /// double-stack via the standard dedup pipeline.
+  void _onPlayCardForCredits(
+      String cardName, int cpGained, String sourceCardId) {
     if (cpGained <= 0) return;
+    final alreadyApplied = _gameState.activeModifiers
+        .any((m) => m.sourceCardId == sourceCardId);
+    if (alreadyApplied) {
+      _showAlreadyAppliedSnack('$cardName (credits)');
+      return;
+    }
     final mod = GameModifier(
       name: '$cardName (credits)',
       type: 'incomeMod',
       value: cpGained,
+      sourceCardId: sourceCardId,
     );
     _updateGameState(
       _gameState.copyWith(
@@ -1507,6 +1520,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         actions: [
+          // Wave 5.4: hand-size chip visible on every tab. Tapping jumps to
+          // the Production tab (where the Cards section lives).
+          if (_gameState.drawnHand.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Tooltip(
+                message:
+                    '${_gameState.drawnHand.length} card'
+                    '${_gameState.drawnHand.length == 1 ? '' : 's'} in hand '
+                    '\u2014 tap to open Cards',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _selectTab(_TabId.production),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.style_outlined, size: 18),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_gameState.drawnHand.length}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (_undoHistory.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.undo),
@@ -1640,6 +1687,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onUpgradeCostIncurred: _onUpgradeCost,
         onRuleTap: _navigateToRule,
         onLocateShip: _locateShipOnMap,
+        onGoToProduction: () => _selectTab(_TabId.production),
       ),
       _TabId.aliens => AlienEconomyPage(
         alienPlayers: _gameState.alienPlayers,
@@ -1693,6 +1741,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _TabId.rules => RulesReferencePage(
           key: _rulesKey,
           onApplyCardModifiers: _onApplyCardModifiers,
+          activeModifiers: _gameState.activeModifiers,
         ),
     };
 

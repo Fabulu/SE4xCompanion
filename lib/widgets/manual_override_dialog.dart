@@ -637,10 +637,38 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                               style: const TextStyle(fontSize: 11),
                             ),
                             onTap: () {
+                              // Bug: stamp each modifier with its card's
+                              // sourceCardId (matching the "Apply this card"
+                              // flow in rules_reference_page.dart) so the
+                              // existing dedup check can suppress duplicate
+                              // applications via this picker.
+                              final sourceId =
+                                  '${card.type}:${card.number}';
+                              final existingIds = <String>{
+                                for (final m in _activeModifiers)
+                                  if (m.sourceCardId != null)
+                                    m.sourceCardId!,
+                              };
+                              if (existingIds.contains(sourceId)) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(parentContext)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('${card.name} already applied'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
+                              final stamped = [
+                                for (final m in binding.modifiers)
+                                  m.withSourceCardId(sourceId),
+                              ];
                               setState(() {
                                 _activeModifiers = [
                                   ..._activeModifiers,
-                                  ...binding.modifiers,
+                                  ...stamped,
                                 ];
                               });
                               Navigator.pop(ctx);
