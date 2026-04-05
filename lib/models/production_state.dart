@@ -464,6 +464,7 @@ class ProductionState {
     GameMapState map,
     TechState tech, {
     bool facilitiesMode = false,
+    List<GameModifier> modifiers = const [],
   }) {
     final mapHex = map.hexAt(hex);
     if (mapHex == null) return 0;
@@ -477,7 +478,12 @@ class ProductionState {
     }
     final lvl = tech.getLevel(TechId.shipYard, facilitiesMode: facilitiesMode);
     final hpPerYard = hullPointsPerShipyard(lvl);
-    return (mapHex.shipyardCount * hpPerYard).floor();
+    final base = (mapHex.shipyardCount * hpPerYard).floor();
+    // Global shipyardCapacityMod (e.g. Builder planet) adds extra HP
+    // of build capacity to every hex that already fields a shipyard.
+    final bonus = modifierShipyardCapacity(modifiers);
+    final cap = base + bonus;
+    return cap < 0 ? 0 : cap;
   }
 
   /// Sum of hull points currently assigned to a given hex across all
@@ -595,6 +601,35 @@ class ProductionState {
     return total;
   }
 
+  /// Sum of all perColonyIncomeMod contributions for this state. Each
+  /// modifier's value is multiplied by the count of non-homeworld,
+  /// non-blocked colonies present (a zero count therefore zeroes the
+  /// contribution — Abundant before colonization grants nothing).
+  int perColonyIncome(List<GameModifier> modifiers) {
+    if (modifiers.isEmpty) return 0;
+    int perColonyTotal = 0;
+    for (final mod in modifiers) {
+      if (mod.type == 'perColonyIncomeMod') perColonyTotal += mod.value;
+    }
+    if (perColonyTotal == 0) return 0;
+    int colonies = 0;
+    for (final w in worlds) {
+      if (w.isBlocked) continue;
+      if (w.isHomeworld) continue;
+      colonies++;
+    }
+    return perColonyTotal * colonies;
+  }
+
+  /// Sum of all shipyardCapacityMod modifier values.
+  static int modifierShipyardCapacity(List<GameModifier> modifiers) {
+    int total = 0;
+    for (final mod in modifiers) {
+      if (mod.type == 'shipyardCapacityMod') total += mod.value;
+    }
+    return total;
+  }
+
   /// Gross CP income before subtractions. Passing [mapState] and
   /// [shipCounters] enables hex-based mining income (asteroid Miners,
   /// nebula Miners gated on Terraforming 2).
@@ -617,6 +652,7 @@ class ProductionState {
       );
     }
     total += modifierIncome(modifiers);
+    total += perColonyIncome(modifiers);
     return total;
   }
 
@@ -654,6 +690,19 @@ class ProductionState {
     return total;
   }
 
+  /// Sum of all techCostOneShot rebates currently queued. Unlike
+  /// [_techCostModTotal] (which applies per level purchased), this is a
+  /// single lump-sum rebate consumed by the next tech purchase of the
+  /// turn. Callers must clear the modifier from `activeModifiers` after
+  /// the purchase commits so it is not re-applied on subsequent turns.
+  static int techCostOneShotTotal(List<GameModifier> modifiers) {
+    int total = 0;
+    for (final mod in modifiers) {
+      if (mod.type == 'techCostOneShot') total += mod.value;
+    }
+    return total;
+  }
+
   /// Cost of pending tech purchases in CP (base mode only).
   int techSpendingCpDerived(GameConfig config,
       [List<GameModifier> modifiers = const []]) {
@@ -683,6 +732,12 @@ class ProductionState {
         techTotal += cost;
       }
       total += techTotal;
+    }
+    // One-shot rebate (e.g. planet-first-colonise -10 CP) applied to the
+    // aggregate tech spend this turn, clamped at 0.
+    final oneShot = techCostOneShotTotal(modifiers);
+    if (oneShot != 0) {
+      total = (total + oneShot).clamp(0, 999999);
     }
     return total;
   }
@@ -806,6 +861,10 @@ class ProductionState {
         techTotal += cost;
       }
       total += techTotal;
+    }
+    final oneShot = techCostOneShotTotal(modifiers);
+    if (oneShot != 0) {
+      total = (total + oneShot).clamp(0, 999999);
     }
     return total;
   }
@@ -1155,6 +1214,12 @@ class ProductionState {
       if (scenMult != 1.0) cost = (cost * scenMult).ceil();
       cost = (cost + techMod).clamp(0, 999);
       total += cost;
+    }
+
+    // One-shot rebate (consumed by this purchase).
+    final oneShot = techCostOneShotTotal(modifiers);
+    if (oneShot != 0) {
+      total = (total + oneShot).clamp(0, 999999);
     }
 
     // Unpredictable research is funded by CP grants (logged separately).

@@ -3,8 +3,11 @@ import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/models/game_config.dart';
 import 'package:se4x/models/game_modifier.dart';
 import 'package:se4x/models/game_state.dart';
+import 'package:se4x/data/tech_costs.dart';
+import 'package:se4x/models/map_state.dart';
 import 'package:se4x/models/production_state.dart';
 import 'package:se4x/models/ship_counter.dart';
+import 'package:se4x/models/technology.dart';
 import 'package:se4x/models/world.dart';
 
 void main() {
@@ -233,6 +236,147 @@ void main() {
       final withMods = ps.remainingCp(baseConfig, counters, mods);
       final withoutMods = ps.remainingCp(baseConfig, counters);
       expect(withMods, withoutMods + 5);
+    });
+  });
+
+  group('Wave B modifier types', () {
+    const baseConfig = GameConfig();
+
+    WorldState hw() =>
+        const WorldState(name: 'HW', isHomeworld: true, homeworldValue: 30);
+    WorldState colony(String name) =>
+        WorldState(name: name, growthMarkerLevel: 3);
+
+    test('perColonyIncomeMod round-trips + effectDescription', () {
+      const mod = GameModifier(
+        name: 'Abundant', type: 'perColonyIncomeMod', value: 2,
+      );
+      final restored = GameModifier.fromJson(mod.toJson());
+      expect(restored.type, 'perColonyIncomeMod');
+      expect(restored.value, 2);
+      expect(mod.effectDescription, '+2 CP per non-HW colony');
+    });
+
+    test('shipyardCapacityMod round-trips + effectDescription', () {
+      const mod = GameModifier(
+        name: 'Builder', type: 'shipyardCapacityMod', value: 3,
+      );
+      final restored = GameModifier.fromJson(mod.toJson());
+      expect(restored.type, 'shipyardCapacityMod');
+      expect(restored.value, 3);
+      expect(mod.effectDescription, '+3 HP shipyard capacity');
+    });
+
+    test('techCostOneShot round-trips + effectDescription', () {
+      const mod = GameModifier(
+        name: 'Giant rebate', type: 'techCostOneShot', value: -10,
+      );
+      final restored = GameModifier.fromJson(mod.toJson());
+      expect(restored.type, 'techCostOneShot');
+      expect(restored.value, -10);
+      expect(mod.effectDescription, 'Next tech -10 CP (one-shot)');
+    });
+
+    test('perColonyIncomeMod zero with only HW', () {
+      final ps = ProductionState(worlds: [hw()]);
+      const mods = [
+        GameModifier(name: 'Abundant', type: 'perColonyIncomeMod', value: 2),
+      ];
+      expect(ps.totalCp(baseConfig, mods), ps.totalCp(baseConfig));
+    });
+
+    test('perColonyIncomeMod scales with non-HW colony count', () {
+      final ps = ProductionState(
+        worlds: [hw(), colony('C1'), colony('C2'), colony('C3')],
+      );
+      const mods = [
+        GameModifier(name: 'Abundant', type: 'perColonyIncomeMod', value: 2),
+      ];
+      // 3 non-HW colonies * +2 = +6.
+      expect(ps.totalCp(baseConfig, mods), ps.totalCp(baseConfig) + 6);
+    });
+
+    test('perColonyIncomeMod ignores blocked colonies', () {
+      final ps = ProductionState(worlds: [
+        hw(),
+        const WorldState(name: 'C1', growthMarkerLevel: 3),
+        const WorldState(name: 'C2', growthMarkerLevel: 3, isBlocked: true),
+      ]);
+      const mods = [
+        GameModifier(name: 'Abundant', type: 'perColonyIncomeMod', value: 2),
+      ];
+      // Only 1 non-blocked non-HW colony; blocked HW income is already
+      // excluded by colonyCp, so we compare against totalCp with the same
+      // modifiers-free baseline.
+      expect(ps.totalCp(baseConfig, mods), ps.totalCp(baseConfig) + 2);
+    });
+
+    test('shipyardCapacityMod adds to per-hex capacity', () {
+      final hex = const HexCoord(0, 0);
+      final map = GameMapState(hexes: [
+        MapHexState(coord: hex, worldId: 'w1', shipyardCount: 2),
+      ]);
+      const tech = TechState(levels: {TechId.shipYard: 1});
+      final ps = ProductionState(
+        worlds: [WorldState(name: 'HW', id: 'w1', isHomeworld: true)],
+      );
+      // Base: 2 yards * 1.0 = 2 HP.
+      expect(ps.shipyardCapacityForHex(hex, map, tech), 2);
+      const mods = [
+        GameModifier(name: 'Builder', type: 'shipyardCapacityMod', value: 3),
+      ];
+      // With +3 HP bonus -> 5.
+      expect(
+        ps.shipyardCapacityForHex(hex, map, tech, modifiers: mods),
+        5,
+      );
+    });
+
+    test('shipyardCapacityMod still 0 when hex is blocked', () {
+      final hex = const HexCoord(0, 0);
+      final map = GameMapState(hexes: [
+        MapHexState(coord: hex, worldId: 'w1', shipyardCount: 2),
+      ]);
+      const tech = TechState(levels: {TechId.shipYard: 1});
+      final ps = ProductionState(worlds: [
+        WorldState(
+          name: 'HW', id: 'w1', isHomeworld: true, isBlocked: true,
+        ),
+      ]);
+      const mods = [
+        GameModifier(name: 'Builder', type: 'shipyardCapacityMod', value: 3),
+      ];
+      expect(
+        ps.shipyardCapacityForHex(hex, map, tech, modifiers: mods),
+        0,
+      );
+    });
+
+    test('techCostOneShot subtracts from aggregate tech spend', () {
+      // Buy Attack L1 (base cost 20 CP) with a -10 one-shot.
+      final ps = ProductionState(
+        worlds: [hw()],
+        techState: const TechState(levels: {}),
+        pendingTechPurchases: const {TechId.attack: 1},
+      );
+      final baseSpend = ps.techSpendingCpDerived(baseConfig);
+      const mods = [
+        GameModifier(name: 'Giant', type: 'techCostOneShot', value: -10),
+      ];
+      expect(ps.techSpendingCpDerived(baseConfig, mods), baseSpend - 10);
+    });
+
+    test('techCostOneShot clamps at 0', () {
+      // Cheap purchase + huge rebate should not go negative.
+      final ps = ProductionState(
+        worlds: [hw()],
+        techState: const TechState(levels: {}),
+        pendingTechPurchases: const {TechId.attack: 1},
+      );
+      const mods = [
+        GameModifier(name: 'Mega', type: 'techCostOneShot', value: -9999),
+      ];
+      expect(ps.techSpendingCpDerived(baseConfig, mods), 0);
     });
   });
 

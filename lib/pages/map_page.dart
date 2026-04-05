@@ -176,9 +176,19 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _addFriendlyFleet(HexCoord coord) {
     final availableShips = _availableShips();
-    if (availableShips.isEmpty) return;
+    if (availableShips.isEmpty) {
+      _showSnack('No built ships available. Build ships in the Ships tab.');
+      return;
+    }
     final id = 'fleet-${DateTime.now().microsecondsSinceEpoch}';
     _apply(
       _state.copyWith(
@@ -228,7 +238,10 @@ class _MapPageState extends State<MapPage> {
       excludeHexId: hex.coord.id,
       includeWorldId: currentWorldId,
     );
-    if (options.isEmpty) return;
+    if (options.isEmpty) {
+      _showSnack('No worlds available to place. Create one in Production.');
+      return;
+    }
     final selected = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -258,7 +271,10 @@ class _MapPageState extends State<MapPage> {
       return;
     }
     final available = _availablePipelineAssets(excludeHexId: hex.coord.id);
-    if (available.isEmpty) return;
+    if (available.isEmpty) {
+      _showSnack('No pipeline assets available. Add one in Production.');
+      return;
+    }
     _apply(
       _state.replaceHex(hex.copyWith(pipelineIds: [available.first])),
       description: 'Pipeline',
@@ -494,19 +510,29 @@ class _MapPageState extends State<MapPage> {
                       child: Text('Special 5P Map'),
                     ),
                   ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.map, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          _state.layoutPreset == MapLayoutPreset.standard4p ? '4P' : '5P',
-                          style: theme.textTheme.labelMedium,
+                  child: Semantics(
+                    button: true,
+                    label: 'Map layout: '
+                        '${_state.layoutPreset == MapLayoutPreset.standard4p ? '4-player' : '5-player'}',
+                    child: ExcludeSemantics(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.map, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              _state.layoutPreset == MapLayoutPreset.standard4p
+                                  ? '4P'
+                                  : '5P',
+                              style: theme.textTheme.labelMedium,
+                            ),
+                            const Icon(Icons.arrow_drop_down, size: 16),
+                          ],
                         ),
-                        const Icon(Icons.arrow_drop_down, size: 16),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -544,10 +570,19 @@ class _MapPageState extends State<MapPage> {
                           onPressed: _togglePipelineAtSelected,
                         ),
                         const SizedBox(width: 4),
-                        _ToolbarActionButton(
-                          icon: Icons.tune,
-                          label: 'Edit',
-                          onPressed: selectedHex == null ? null : _openInspector,
+                        Semantics(
+                          label: 'Edit hex',
+                          button: true,
+                          enabled: selectedHex != null,
+                          child: ExcludeSemantics(
+                            child: _ToolbarActionButton(
+                              icon: Icons.tune,
+                              label: 'Edit',
+                              onPressed: selectedHex == null
+                                  ? null
+                                  : _openInspector,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         _AssetPill(label: 'Worlds', value: availableWorlds.length),
@@ -631,11 +666,31 @@ class _MapPageState extends State<MapPage> {
                     Positioned(
                       top: 8,
                       right: 8,
-                      child: FloatingActionButton.small(
-                        heroTag: 'map-reset-viewport',
-                        tooltip: 'Reset view',
-                        onPressed: _resetViewport,
-                        child: const Icon(Icons.center_focus_strong),
+                      // Enforce the 48dp minimum tap target. The small
+                      // FAB variant is only 40dp, below the a11y minimum,
+                      // so we wrap it in a transparent GestureDetector
+                      // padded to 48dp that forwards taps to _resetViewport.
+                      child: Semantics(
+                        button: true,
+                        label: 'Reset map view',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _resetViewport,
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.transparent,
+                            alignment: Alignment.center,
+                            child: ExcludeSemantics(
+                              child: FloatingActionButton.small(
+                                heroTag: 'map-reset-viewport',
+                                tooltip: 'Reset view',
+                                onPressed: _resetViewport,
+                                child: const Icon(Icons.center_focus_strong),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -841,6 +896,7 @@ class _MapCanvasState extends State<_MapCanvas> {
     final padding = metrics.padding;
     final width = metrics.width;
     final height = metrics.height;
+    final fanOffsets = _fleetFanOutOffsets(widget.state.fleets);
 
     return InteractiveViewer(
       transformationController: _controller,
@@ -864,6 +920,24 @@ class _MapCanvasState extends State<_MapCanvas> {
           angle: _appliedRotation,
           child: Stack(
             children: [
+              // Pipeline overlay: draws connections between hexes that share
+              // a pipeline ID so users can see the network on the map.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _PipelinePainter(
+                      hexes: widget.state.hexes,
+                      positions: positions,
+                      minX: minX,
+                      minY: minY,
+                      padding: padding,
+                      hexWidth: metrics.hexWidth,
+                      hexHeight: metrics.hexHeight,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
+                  ),
+                ),
+              ),
               for (final hex in widget.state.hexes)
                 Builder(
                   builder: (context) {
@@ -944,6 +1018,7 @@ class _MapCanvasState extends State<_MapCanvas> {
                 Builder(
                   builder: (context) {
                     final pos = positions[fleet.coord.id]!;
+                    final fanOffset = fanOffsets[fleet.id] ?? Offset.zero;
                     final selected = widget.state.selectedFleetId == fleet.id;
                     final marker = _FleetMarker(
                       fleet: fleet,
@@ -951,8 +1026,8 @@ class _MapCanvasState extends State<_MapCanvas> {
                       onTap: () => widget.onFleetTap(fleet.id),
                     );
                     return Positioned(
-                      left: pos.dx - minX + padding + 16,
-                      top: pos.dy - minY + padding + 16,
+                      left: pos.dx - minX + padding + 16 + fanOffset.dx,
+                      top: pos.dy - minY + padding + 16 + fanOffset.dy,
                       child: Draggable<String>(
                         data: fleet.id,
                         feedback: Material(
@@ -1078,6 +1153,64 @@ MapLayoutMetrics computeLayoutMetrics(
     hexWidth: xSpacing,
     hexHeight: hexRadius * 2,
   );
+}
+
+/// Computes per-fleet pixel offsets so fleets sharing a hex fan out around
+/// the hex centre instead of overlapping on a single +16,+16 stack.
+///
+/// Arrangement:
+///   • 1 fleet  → no offset.
+///   • 2 fleets → horizontal pair (±12, 0).
+///   • 3 fleets → equilateral triangle (radius ≈ 14).
+///   • 4+       → evenly spaced ring (radius ≈ 16).
+///
+/// Deterministic in fleet-list order: the i-th fleet at a hex always lands
+/// at the same slot, keeping drag-and-drop stable between rebuilds.
+@visibleForTesting
+Map<String, Offset> fleetFanOutOffsets(List<FleetStackState> fleets) =>
+    _fleetFanOutOffsets(fleets);
+
+Map<String, Offset> _fleetFanOutOffsets(List<FleetStackState> fleets) {
+  // Group fleet IDs by hex id, preserving input order.
+  final byHex = <String, List<String>>{};
+  for (final f in fleets) {
+    byHex.putIfAbsent(f.coord.id, () => []).add(f.id);
+  }
+  final out = <String, Offset>{};
+  for (final ids in byHex.values) {
+    final n = ids.length;
+    if (n == 1) {
+      out[ids[0]] = Offset.zero;
+      continue;
+    }
+    if (n == 2) {
+      out[ids[0]] = const Offset(-12, 0);
+      out[ids[1]] = const Offset(12, 0);
+      continue;
+    }
+    if (n == 3) {
+      const radius = 14.0;
+      // Triangle: top, bottom-left, bottom-right.
+      for (var i = 0; i < 3; i++) {
+        final angle = -math.pi / 2 + i * (2 * math.pi / 3);
+        out[ids[i]] = Offset(
+          radius * math.cos(angle),
+          radius * math.sin(angle),
+        );
+      }
+      continue;
+    }
+    // 4+ fleets: even ring around the centre.
+    const radius = 16.0;
+    for (var i = 0; i < n; i++) {
+      final angle = -math.pi / 2 + i * (2 * math.pi / n);
+      out[ids[i]] = Offset(
+        radius * math.cos(angle),
+        radius * math.sin(angle),
+      );
+    }
+  }
+  return out;
 }
 
 class _HexInspector extends StatelessWidget {
@@ -1442,32 +1575,70 @@ class _FleetMarker extends StatelessWidget {
         ),
       ),
     );
-    return GestureDetector(
-      onTap: onTap,
-      child: outOfSupply
-          ? Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Opacity(opacity: 0.75, child: marker),
-                Positioned(
-                  top: -3,
-                  right: -3,
-                  child: Tooltip(
-                    message: 'Out of supply',
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: Colors.orangeAccent,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black, width: 1),
-                      ),
+    final body = outOfSupply
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Opacity(opacity: 0.75, child: marker),
+              Positioned(
+                top: -3,
+                right: -3,
+                child: Tooltip(
+                  message: 'Out of supply',
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.orangeAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.black, width: 1),
                     ),
                   ),
                 ),
-              ],
-            )
-          : marker,
+              ),
+            ],
+          )
+        : marker;
+    // The painted marker is roughly 22dp tall — below the 48dp accessibility
+    // minimum. Wrap it in a transparent, tap-forwarding container so the
+    // effective tap and long-press area is 48dp without changing the visual
+    // footprint of the marker itself.
+    final labelText = fleet.label.isEmpty ? fleet.owner : fleet.label;
+    final allegiance = fleet.isEnemy ? 'Enemy' : 'Friendly';
+    final supply = outOfSupply ? ', out of supply' : '';
+    final semanticLabel =
+        '$allegiance fleet: $labelText at ${fleet.coord.id}$supply';
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+      message: 'Drag to move fleet',
+      waitDuration: const Duration(milliseconds: 600),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          color: Colors.transparent,
+          alignment: Alignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              body,
+              Positioned(
+                bottom: -2,
+                right: -2,
+                child: Icon(
+                  Icons.drag_indicator,
+                  size: 12,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      ),
     );
   }
 }
@@ -1486,28 +1657,46 @@ class _AssetPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final pill = Material(
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
+    final pillVisual = Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('$label: $value', style: const TextStyle(fontSize: 11)),
-              if (onTap != null) ...[
-                const SizedBox(width: 2),
-                Icon(Icons.chevron_right, size: 12, color: theme.colorScheme.primary),
-              ],
-            ],
-          ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label: $value', style: const TextStyle(fontSize: 11)),
+          if (onTap != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 12, color: theme.colorScheme.primary),
+          ],
+        ],
+      ),
+    );
+    final semanticLabel = '$value ${label.toLowerCase()} available';
+    if (onTap == null) {
+      return Semantics(
+        label: semanticLabel,
+        child: ExcludeSemantics(child: pillVisual),
+      );
+    }
+    // Enforce the 48dp minimum accessible tap region by wrapping the
+    // compact visual pill in a transparent GestureDetector sized to 48dp.
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          color: Colors.transparent,
+          alignment: Alignment.center,
+          child: ExcludeSemantics(child: pillVisual),
         ),
       ),
     );
-    return pill;
   }
 }
 
@@ -1524,15 +1713,24 @@ class _ToolbarActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 14),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-        minimumSize: const Size(0, 28),
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    // Keep the compact 28dp-high visual but restore an accessible tap
+    // region. `MaterialTapTargetSize.padded` inflates the hit test area to
+    // 48dp without affecting the painted chip. `visualDensity: standard`
+    // keeps the button from shrinking its visual padding further.
+    return Semantics(
+      button: true,
+      enabled: onPressed != null,
+      label: label,
+      child: FilledButton.tonalIcon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 14),
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          minimumSize: const Size(48, 28),
+          visualDensity: VisualDensity.standard,
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
       ),
     );
   }
@@ -1565,6 +1763,75 @@ class _StepperRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _PipelinePainter extends CustomPainter {
+  final List<MapHexState> hexes;
+  final Map<String, Offset> positions;
+  final double minX;
+  final double minY;
+  final double padding;
+  final double hexWidth;
+  final double hexHeight;
+  final Color color;
+
+  const _PipelinePainter({
+    required this.hexes,
+    required this.positions,
+    required this.minX,
+    required this.minY,
+    required this.padding,
+    required this.hexWidth,
+    required this.hexHeight,
+    required this.color,
+  });
+
+  Offset? _centerFor(MapHexState hex) {
+    final pos = positions[hex.coord.id];
+    if (pos == null) return null;
+    return Offset(
+      pos.dx - minX + padding + hexWidth / 2,
+      pos.dy - minY + padding + hexHeight / 2,
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Group hexes by pipeline ID.
+    final groups = <String, List<MapHexState>>{};
+    for (final hex in hexes) {
+      for (final id in hex.pipelineIds) {
+        groups.putIfAbsent(id, () => <MapHexState>[]).add(hex);
+      }
+    }
+    if (groups.isEmpty) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    for (final entry in groups.entries) {
+      final members = entry.value;
+      if (members.length < 2) continue;
+      // Draw all pairwise connections between members of the same network.
+      for (var i = 0; i < members.length; i++) {
+        final a = _centerFor(members[i]);
+        if (a == null) continue;
+        for (var j = i + 1; j < members.length; j++) {
+          final b = _centerFor(members[j]);
+          if (b == null) continue;
+          canvas.drawLine(a, b, paint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PipelinePainter oldDelegate) {
+    return oldDelegate.hexes != hexes ||
+        oldDelegate.positions != positions ||
+        oldDelegate.color != color;
   }
 }
 

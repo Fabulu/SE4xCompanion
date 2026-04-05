@@ -75,11 +75,22 @@ void main() {
       expect(ps.totalCp(baseConfig, b.modifiers), base + 5);
     });
 
-    test('Wealthy planet +1', () {
+    test('Wealthy planet +1 per non-HW colony', () {
       final b = cardModifiersFor(1006)!;
-      final ps = ProductionState(worlds: [hw()]);
-      expect(ps.totalCp(baseConfig, b.modifiers),
-          ps.totalCp(baseConfig) + 1);
+      expect(b.modifiers.single.type, 'perColonyIncomeMod');
+      expect(b.modifiers.single.value, 1);
+      // Only the HW is present -> 0 non-HW colonies -> no bonus.
+      final psOnlyHw = ProductionState(worlds: [hw()]);
+      expect(psOnlyHw.totalCp(baseConfig, b.modifiers),
+          psOnlyHw.totalCp(baseConfig));
+      // Add two non-HW colonies -> +2 CP.
+      final psWithColonies = ProductionState(worlds: [
+        hw(),
+        const WorldState(name: 'C1', growthMarkerLevel: 3),
+        const WorldState(name: 'C2', growthMarkerLevel: 3),
+      ]);
+      expect(psWithColonies.totalCp(baseConfig, b.modifiers),
+          psWithColonies.totalCp(baseConfig) + 2);
     });
 
     test('Quantum Computing reduces tech cost', () {

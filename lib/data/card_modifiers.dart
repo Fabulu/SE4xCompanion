@@ -219,25 +219,34 @@ const Map<int, CardModifierBinding> kCardModifiers = {
     ],
   ),
   113: CardModifierBinding(
-    // Worth the Effort — +1 CP per non-HW colony. Single +1 is the baseline.
+    // Worth the Effort — +1 CP per non-HW colony (scales with colony count).
     modifiers: [
-      GameModifier(name: 'Worth the Effort', type: 'incomeMod', value: 1),
+      GameModifier(
+        name: 'Worth the Effort',
+        type: 'perColonyIncomeMod',
+        value: 1,
+      ),
     ],
-    notes: 'Card scales per non-homeworld colony; apply once per qualifying '
-        'colony or adjust value manually to taste.',
+    notes: 'Card scales per non-homeworld colony. Uses perColonyIncomeMod '
+        'so the bonus grows automatically with the player\'s colony count.',
   ),
   119: CardModifierBinding(
     complexBehaviorNote: 'Expensive Ships: all ship costs x1.5. Use the '
         'scenario shipCostMultiplier at new-game setup; cannot be toggled '
         'mid-game via a flat modifier.',
   ),
-  130: CardModifierBinding(
-    complexBehaviorNote: 'Advanced Bases: bases get extra hull/capacity. '
-        'Reference-only in the ledger.',
-  ),
   132: CardModifierBinding(
-    complexBehaviorNote: 'Tough Shipyards: shipyards have more hull. '
-        'Reference-only in the ledger.',
+    // Tough Shipyards — extra HP of build capacity per yard.
+    modifiers: [
+      GameModifier(
+        name: 'Tough Shipyards',
+        type: 'shipyardCapacityMod',
+        value: 1,
+      ),
+    ],
+    notes: 'Card says shipyards have more hull; modelled as +1 HP of '
+        'extra build capacity per shipyard-hex per turn. The extra-hull '
+        '(durability) effect is reference-only.',
   ),
   140: CardModifierBinding(
     // Smart Scientists — tech -5 CP (conservative; rulebook says "cheaper").
@@ -275,19 +284,95 @@ const Map<int, CardModifierBinding> kCardModifiers = {
       ),
     ],
   ),
+  111: CardModifierBinding(
+    complexBehaviorNote: 'Carthage: one empire begins the scenario with its '
+        'homeworld destroyed / cannot rebuild lost colonies. One-shot setup '
+        'effect — apply via Manual Override, not the ledger pipeline.',
+  ),
+  118: CardModifierBinding(
+    complexBehaviorNote: 'Advanced Navigation: all ships treat movement tech '
+        'as one level higher (extra move per turn). Movement is not tracked '
+        'by the flat ledger pipeline; adjust Move tech via Manual Override.',
+  ),
+  122: CardModifierBinding(
+    // Better Homes — home colony produces extra CP.
+    modifiers: [
+      GameModifier(name: 'Better Homes', type: 'incomeMod', value: 1),
+    ],
+    notes: 'Card text reads as "home colonies yield additional income". +1 CP '
+        'is the conservative per-homeworld interpretation; stack the '
+        'modifier manually if multiple home colonies qualify.',
+  ),
+  123: CardModifierBinding(
+    // Improved Colony Ships — colony ships cost less.
+    modifiers: [
+      GameModifier(
+        name: 'Improved Colony Ships',
+        type: 'costMod',
+        shipType: ShipType.colonyShip,
+        value: -2,
+      ),
+    ],
+    notes: 'Card makes Colony Ships cheaper / faster. -2 CP is the canonical '
+        'build-cost reduction; the "faster" movement aspect is not modelled.',
+  ),
+  127: CardModifierBinding(
+    complexBehaviorNote: 'Advanced Destroyers: DDs get +1 to a combat stat '
+        '(Attack or Defense per scenario). Combat stats are not tracked by '
+        'the ledger pipeline — apply via Ship Tech page / Manual Override.',
+  ),
+  139: CardModifierBinding(
+    // Safer Space — ships cost less to maintain while in supply.
+    modifiers: [
+      GameModifier(
+        name: 'Safer Space',
+        type: 'maintenanceMod',
+        value: 50,
+        isPercent: true,
+      ),
+    ],
+    notes: 'Card halves fleet maintenance costs. Applied globally as 50%; if '
+        'your scenario only discounts ships in friendly territory, edit the '
+        'modifier via Manual Override before each Econ Phase.',
+  ),
+  280: CardModifierBinding(
+    // Recon Ships — Scouts cost less.
+    modifiers: [
+      GameModifier(
+        name: 'Recon Ships',
+        type: 'costMod',
+        shipType: ShipType.scout,
+        value: -2,
+      ),
+    ],
+    notes: 'Card makes Scouts cheaper / longer-ranged. -2 CP captures the '
+        'build-cost reduction; the scan-range benefit is reference-only.',
+  ),
 
   // ── Planet Attributes (1001-1028) ─────────────────────────────────────────
   1005: CardModifierBinding(
-    // Abundant — +2 CP while colony present.
+    // Abundant — +2 CP per non-HW colony (card says "while Colony, even if new").
     modifiers: [
-      GameModifier(name: 'Abundant Planet', type: 'incomeMod', value: 2),
+      GameModifier(
+        name: 'Abundant Planet',
+        type: 'perColonyIncomeMod',
+        value: 2,
+      ),
     ],
+    notes: 'Card text: "Produces 2 extra CPs each Econ Phase while there is '
+        'a Colony". Modelled as a per-non-HW-colony bonus so multiple '
+        'Abundant planets stack without hand-editing.',
   ),
   1006: CardModifierBinding(
-    // Wealthy — +1 CP.
+    // Wealthy — +1 CP per non-HW colony.
     modifiers: [
-      GameModifier(name: 'Wealthy Planet', type: 'incomeMod', value: 1),
+      GameModifier(
+        name: 'Wealthy Planet',
+        type: 'perColonyIncomeMod',
+        value: 1,
+      ),
     ],
+    notes: 'Per-non-HW-colony bonus; see Abundant notes for rationale.',
   ),
   1007: CardModifierBinding(
     // Poor — -1 CP.
@@ -323,8 +408,18 @@ const Map<int, CardModifierBinding> kCardModifiers = {
         'Track the counter manually.',
   ),
   1014: CardModifierBinding(
-    complexBehaviorNote: 'Builder: +3 Hull Points of shipyard capacity while '
-        'colonised. Not modelled as a CP modifier.',
+    // Builder — +3 HP shipyard capacity while colonised.
+    modifiers: [
+      GameModifier(
+        name: 'Builder Planet',
+        type: 'shipyardCapacityMod',
+        value: 3,
+      ),
+    ],
+    notes: 'Card grants 3 HP of extra shipyard build capacity while a '
+        'Colony is present. The ledger adds the bonus to every hex that '
+        'already fields a shipyard — apply the modifier only while the '
+        'Builder colony stands, and remove it when decolonised.',
   ),
   1017: CardModifierBinding(
     complexBehaviorNote: 'Minor Technology: draw 3 Alien Tech cards, keep 1. '
@@ -335,20 +430,55 @@ const Map<int, CardModifierBinding> kCardModifiers = {
         'One-shot event.',
   ),
   1020: CardModifierBinding(
-    complexBehaviorNote: 'Ranged planet: first colonisation grants 10 CP off '
-        'next Tactics tech. Apply via Manual Override when research next time.',
+    // Ranged — first-colonise grants 10 CP off next Tactics tech purchase.
+    modifiers: [
+      GameModifier(
+        name: 'Ranged Planet (Tactics rebate)',
+        type: 'techCostOneShot',
+        value: -10,
+      ),
+    ],
+    notes: 'One-shot rebate applied to the next tech purchase this turn. '
+        'Rulebook says "next Tactics Technology" specifically — the '
+        'ledger rebate is not tech-specific, so players should apply '
+        'the modifier only on the turn they buy Tactics, then remove '
+        'it from activeModifiers after the purchase commits.',
   ),
   1021: CardModifierBinding(
-    complexBehaviorNote: 'Accurate planet: first colonisation grants 10 CP '
-        'off next Attack tech.',
+    // Accurate — first-colonise grants 10 CP off next Attack tech purchase.
+    modifiers: [
+      GameModifier(
+        name: 'Accurate Planet (Attack rebate)',
+        type: 'techCostOneShot',
+        value: -10,
+      ),
+    ],
+    notes: 'See Ranged planet — apply only on the turn the target tech '
+        '(Attack, here) is purchased, then clear the modifier.',
   ),
   1022: CardModifierBinding(
-    complexBehaviorNote: 'Shielded planet: first colonisation grants 10 CP '
-        'off next Defense tech.',
+    // Shielded — first-colonise grants 10 CP off next Defense tech purchase.
+    modifiers: [
+      GameModifier(
+        name: 'Shielded Planet (Defense rebate)',
+        type: 'techCostOneShot',
+        value: -10,
+      ),
+    ],
+    notes: 'See Ranged planet — apply only on the turn Defense is '
+        'purchased, then clear the modifier.',
   ),
   1023: CardModifierBinding(
-    complexBehaviorNote: 'Giant planet: first colonisation grants 10 CP off '
-        'next Ship Size tech.',
+    // Giant — first-colonise grants 10 CP off next Ship Size tech purchase.
+    modifiers: [
+      GameModifier(
+        name: 'Giant Planet (Ship Size rebate)',
+        type: 'techCostOneShot',
+        value: -10,
+      ),
+    ],
+    notes: 'See Ranged planet — apply only on the turn Ship Size is '
+        'purchased, then clear the modifier.',
   ),
   1025: CardModifierBinding(
     complexBehaviorNote: 'Jedun: 3-turn dwell at temple grants permanent '
@@ -357,6 +487,70 @@ const Map<int, CardModifierBinding> kCardModifiers = {
   1028: CardModifierBinding(
     complexBehaviorNote: 'Time Dilation: doubles colony growth and production. '
         'Apply a custom incomeMod manually for the duration.',
+  ),
+
+  // ── Wave B additional bindings (Class-A and per-colony/yard effects) ──────
+  4: CardModifierBinding(
+    complexBehaviorNote: 'Polytitanium Alloy: +1 Hull Point per ship. Hull '
+        'is a ship-definition attribute; not modelled by the CP ledger. '
+        'Apply via Ship Tech / Manual Override.',
+  ),
+  130: CardModifierBinding(
+    // Advanced Bases — extra shipyard build capacity where Bases field a yard.
+    modifiers: [
+      GameModifier(
+        name: 'Advanced Bases',
+        type: 'shipyardCapacityMod',
+        value: 1,
+      ),
+    ],
+    notes: 'Card says Bases/Starbases are tougher and larger; modelled as '
+        '+1 HP shipyard capacity where applicable. Hull-size boost itself '
+        'remains reference-only.',
+  ),
+  131: CardModifierBinding(
+    complexBehaviorNote: 'Tough Planets: defending units get bonuses. Combat '
+        'stats are not tracked by the CP ledger.',
+  ),
+  141: CardModifierBinding(
+    complexBehaviorNote: 'Trained Defenders: militia/defenders get a combat '
+        'bonus. Reference-only in the ledger.',
+  ),
+  142: CardModifierBinding(
+    complexBehaviorNote: 'Know the Weakness: attackers get a one-off combat '
+        'bonus. Reference-only in the ledger.',
+  ),
+  143: CardModifierBinding(
+    complexBehaviorNote: 'No Temporal Prime Directive: temporal tech is '
+        'unrestricted. Reference-only; toggle Temporal via Manual Override.',
+  ),
+  144: CardModifierBinding(
+    complexBehaviorNote: 'Bloody Combat: all ships take extra hits. Combat '
+        'flow only — reference-only in the ledger.',
+  ),
+  145: CardModifierBinding(
+    complexBehaviorNote: 'Experienced Crew: ships gain levels faster. '
+        'Reference-only in the ledger.',
+  ),
+  115: CardModifierBinding(
+    complexBehaviorNote: 'Expert Empires: players gain free starting tech. '
+        'Apply via Manual Override -> Technology Levels at setup.',
+  ),
+  279: CardModifierBinding(
+    complexBehaviorNote: 'Second Salvo: ships fire twice per round. Combat '
+        'flow only — reference-only in the ledger.',
+  ),
+  278: CardModifierBinding(
+    complexBehaviorNote: 'Hardy Empires: homeworlds resist damage. '
+        'Reference-only in the ledger.',
+  ),
+  114: CardModifierBinding(
+    complexBehaviorNote: 'Extinct Alien Empire: extra NPAs on the map. '
+        'Reference-only; configure at setup.',
+  ),
+  128: CardModifierBinding(
+    complexBehaviorNote: 'Battlecarrier Universica: unique BV variant. '
+        'Reference-only — track manually if deployed.',
   ),
 };
 

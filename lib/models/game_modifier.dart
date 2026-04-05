@@ -4,7 +4,21 @@ import '../data/ship_definitions.dart';
 
 class GameModifier {
   final String name; // e.g., "Soylent Purple", "Abundant Planet (Alpha)"
-  final String type; // 'costMod', 'maintenanceMod', 'incomeMod', 'techCostMod'
+  final String type;
+  // Supported type strings:
+  //   'costMod'              — per-ship-type build cost delta (CP)
+  //   'maintenanceMod'       — per-type or global maintenance delta / %
+  //   'incomeMod'            — flat CP income per Econ Phase
+  //   'techCostMod'          — persistent tech-cost delta (CP)
+  //   'perColonyIncomeMod'   — CP bonus multiplied by the number of
+  //                            non-HW, non-blocked colonies (e.g. Abundant
+  //                            gives +2 per colony). Applied during
+  //                            `totalCp`, independent of `incomeMod`.
+  //   'shipyardCapacityMod'  — extra HP of global shipyard build capacity
+  //                            per turn (folded into shipyardCapacityForHex).
+  //   'techCostOneShot'      — one-time CP rebate applied to the next single
+  //                            tech purchase (consumed once per run-out;
+  //                            distinct from the persistent `techCostMod`).
   final ShipType? shipType; // for cost/maintenance mods targeting specific ship types
   final int value; // the modifier value (+2, -1, 50 for percent, etc.)
   final bool isPercent; // true for percentage modifiers (maintenance 50%)
@@ -51,6 +65,15 @@ class GameModifier {
       case 'techCostMod':
         final sign = value > 0 ? '+' : '';
         return 'Tech costs $sign$value CP';
+      case 'perColonyIncomeMod':
+        final sign = value > 0 ? '+' : '';
+        return '$sign$value CP per non-HW colony';
+      case 'shipyardCapacityMod':
+        final sign = value > 0 ? '+' : '';
+        return '$sign$value HP shipyard capacity';
+      case 'techCostOneShot':
+        final sign = value > 0 ? '+' : '';
+        return 'Next tech $sign$value CP (one-shot)';
       default:
         return '$type: $value';
     }

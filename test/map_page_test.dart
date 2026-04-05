@@ -277,6 +277,64 @@ void main() {
     );
   });
 
+  group('fleetFanOutOffsets', () {
+    test('single fleet at a hex gets no offset', () {
+      final offsets = fleetFanOutOffsets(const [
+        FleetStackState(
+          id: 'a', coord: HexCoord(0, 0), shipCounterIds: [],
+        ),
+      ]);
+      expect(offsets['a'], Offset.zero);
+    });
+
+    test('two fleets fan out horizontally', () {
+      final offsets = fleetFanOutOffsets(const [
+        FleetStackState(id: 'a', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'b', coord: HexCoord(0, 0), shipCounterIds: []),
+      ]);
+      expect(offsets['a'], const Offset(-12, 0));
+      expect(offsets['b'], const Offset(12, 0));
+    });
+
+    test('three fleets form a triangle', () {
+      final offsets = fleetFanOutOffsets(const [
+        FleetStackState(id: 'a', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'b', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'c', coord: HexCoord(0, 0), shipCounterIds: []),
+      ]);
+      // All three should sit on a radius of ~14 from origin.
+      for (final id in ['a', 'b', 'c']) {
+        final o = offsets[id]!;
+        final r = (o.dx * o.dx + o.dy * o.dy);
+        expect(r, closeTo(14.0 * 14.0, 0.5));
+      }
+      // First fleet placed at the top (negative y).
+      expect(offsets['a']!.dy, lessThan(0));
+    });
+
+    test('four fleets form a ring', () {
+      final offsets = fleetFanOutOffsets(const [
+        FleetStackState(id: 'a', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'b', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'c', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'd', coord: HexCoord(0, 0), shipCounterIds: []),
+      ]);
+      for (final id in ['a', 'b', 'c', 'd']) {
+        final o = offsets[id]!;
+        final r = (o.dx * o.dx + o.dy * o.dy);
+        expect(r, closeTo(16.0 * 16.0, 0.5));
+      }
+    });
+
+    test('fleets at distinct hexes do not interfere', () {
+      final offsets = fleetFanOutOffsets(const [
+        FleetStackState(id: 'a', coord: HexCoord(0, 0), shipCounterIds: []),
+        FleetStackState(id: 'b', coord: HexCoord(1, 0), shipCounterIds: []),
+      ]);
+      expect(offsets['a'], Offset.zero);
+      expect(offsets['b'], Offset.zero);
+    });
+  });
 }
 
 Widget mapHarness(
