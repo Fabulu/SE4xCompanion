@@ -51,6 +51,33 @@ void main() {
     });
   });
 
+  group('ReplicatorPlayerState.totalHullsProducedLifetime', () {
+    test('default value is 0', () {
+      const state = ReplicatorPlayerState();
+      expect(state.totalHullsProducedLifetime, 0);
+    });
+
+    test('round-trip preserves non-zero value', () {
+      const state = ReplicatorPlayerState(totalHullsProducedLifetime: 42);
+      final restored = ReplicatorPlayerState.fromJson(state.toJson());
+      expect(restored.totalHullsProducedLifetime, 42);
+    });
+
+    test('legacy JSON without the key decodes to 0', () {
+      // Simulate a save written before the field was added.
+      final restored = ReplicatorPlayerState.fromJson(const {});
+      expect(restored.totalHullsProducedLifetime, 0);
+    });
+
+    test('copyWith propagates totalHullsProducedLifetime', () {
+      const state = ReplicatorPlayerState();
+      final updated = state.copyWith(totalHullsProducedLifetime: 7);
+      expect(updated.totalHullsProducedLifetime, 7);
+      // Original unchanged.
+      expect(state.totalHullsProducedLifetime, 0);
+    });
+  });
+
   group('ReplicatorPlayerState JSON', () {
     test('round-trips player-controlled state', () {
       const state = ReplicatorPlayerState(

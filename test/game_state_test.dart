@@ -13,6 +13,7 @@ import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
 import 'package:se4x/models/turn_summary.dart';
 import 'package:se4x/models/world.dart';
+import 'package:se4x/tutorial/tutorial_state.dart';
 
 void main() {
   group('GameState JSON round-trip', () {
@@ -255,6 +256,62 @@ void main() {
         const app = AppState(confirmEndTurn: false);
         final updated = app.copyWith(activeGameId: 'g1');
         expect(updated.confirmEndTurn, false);
+        expect(updated.activeGameId, 'g1');
+      });
+    });
+
+    group('AppState.tutorial', () {
+      test('default AppState.tutorial is const TutorialState()', () {
+        const app = AppState();
+        // TutorialState lacks `operator ==`, so compare by field.
+        expect(app.tutorial, same(const TutorialState()));
+        expect(app.tutorial.seen, false);
+        expect(app.tutorial.lastStepIndex, 0);
+      });
+
+      test('round-trip JSON preserves tutorial.seen after toggling', () {
+        const app = AppState(tutorial: TutorialState(seen: true));
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.tutorial.seen, true);
+      });
+
+      test('round-trip JSON preserves tutorial.lastStepIndex', () {
+        const app = AppState(
+          tutorial: TutorialState(seen: true, lastStepIndex: 4),
+        );
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.tutorial.seen, true);
+        expect(restored.tutorial.lastStepIndex, 4);
+      });
+
+      test('legacy JSON without tutorial key decodes to default', () {
+        // Simulates a save written before the tutorial feature shipped: no
+        // 'tutorial' key at all. TutorialState has no `operator ==`, so we
+        // compare field-by-field against the default instance.
+        final restored = AppState.fromJson({
+          'version': 1,
+          'activeGameId': null,
+          'games': [],
+        });
+        expect(restored.tutorial.seen, false);
+        expect(restored.tutorial.lastStepIndex, 0);
+      });
+
+      test('copyWith updates tutorial', () {
+        const app = AppState();
+        final updated = app.copyWith(
+          tutorial: const TutorialState(seen: true, lastStepIndex: 2),
+        );
+        expect(updated.tutorial.seen, true);
+        expect(updated.tutorial.lastStepIndex, 2);
+        // Original unchanged.
+        expect(app.tutorial.seen, false);
+      });
+
+      test('copyWith preserves tutorial when not specified', () {
+        const app = AppState(tutorial: TutorialState(seen: true));
+        final updated = app.copyWith(activeGameId: 'g1');
+        expect(updated.tutorial.seen, true);
         expect(updated.activeGameId, 'g1');
       });
     });

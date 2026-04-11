@@ -2394,13 +2394,14 @@ class _ColonizeReadyFabState extends State<_ColonizeReadyFab>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return AnimatedBuilder(
       animation: _pulse,
       builder: (context, _) {
         final alpha = 0.55 + 0.45 * (1 - _pulse.value);
         final bg = Color.lerp(
-          Colors.green.shade700,
-          Colors.greenAccent,
+          theme.colorScheme.tertiary,
+          theme.colorScheme.tertiary.withValues(alpha: 0.4),
           _pulse.value,
         )!;
         return Semantics(
@@ -2410,7 +2411,7 @@ class _ColonizeReadyFabState extends State<_ColonizeReadyFab>
             heroTag: 'map-colonize-fab',
             onPressed: widget.onTap,
             backgroundColor: bg.withValues(alpha: alpha),
-            foregroundColor: Colors.black,
+            foregroundColor: theme.colorScheme.onTertiary,
             icon: const Icon(Icons.eco),
             label: Text('Ready to colonize: ${widget.count}'),
           ),
@@ -2608,8 +2609,6 @@ class _SelectionCard extends StatelessWidget {
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed: onPlaceWorld,
                 icon: const Icon(Icons.public),
               ),
@@ -2618,8 +2617,6 @@ class _SelectionCard extends StatelessWidget {
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed: onAddEnemy,
                 icon: const Icon(Icons.visibility_off),
               ),
@@ -2630,8 +2627,6 @@ class _SelectionCard extends StatelessWidget {
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed:
                     (fleetCount > 0 && onResolveCombat != null) ? onResolveCombat : null,
                 icon: const Icon(Icons.military_tech),
@@ -2641,8 +2636,6 @@ class _SelectionCard extends StatelessWidget {
                 iconSize: 16,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed: onDismissSelection,
                 icon: const Icon(Icons.close),
               ),

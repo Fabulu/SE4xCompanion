@@ -218,6 +218,44 @@ void main() {
     });
   });
 
+  group('ShipPurchase.uniqueDesign round-trip', () {
+    test('round-trip preserves the design', () {
+      const design = UniqueShipDesign(
+        name: 'Valkyrie',
+        hullSize: 4,
+        weaponClass: UniqueShipWeaponClass.a,
+        abilityIds: [2, 5],
+      );
+      const original = ShipPurchase(
+        type: ShipType.un,
+        quantity: 2,
+        uniqueDesign: design,
+      );
+      final restored = ShipPurchase.fromJson(
+        jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+      );
+      expect(restored.uniqueDesign, isNotNull);
+      expect(restored.uniqueDesign!.name, 'Valkyrie');
+      expect(restored.uniqueDesign!.hullSize, 4);
+      expect(restored.uniqueDesign!.weaponClass, UniqueShipWeaponClass.a);
+      expect(restored.uniqueDesign!.abilityIds, [2, 5]);
+      expect(restored.type, ShipType.un);
+      expect(restored.quantity, 2);
+    });
+
+    test('legacy JSON without uniqueDesign key decodes to null', () {
+      // Older saves never wrote the key. fromJson must accept that.
+      final json = {
+        'type': 'un',
+        'quantity': 1,
+      };
+      final restored = ShipPurchase.fromJson(json);
+      expect(restored.uniqueDesign, isNull);
+      expect(restored.type, ShipType.un);
+      expect(restored.quantity, 1);
+    });
+  });
+
   group('ShipCounter JSON round-trip — uniqueDesign preserved', () {
     test('a stamped UN counter with a design round-trips through JSON', () {
       const design = UniqueShipDesign(

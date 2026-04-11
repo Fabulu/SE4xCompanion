@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/data/tech_costs.dart';
+import 'package:se4x/data/unique_ship_designer.dart';
 import 'package:se4x/models/ship_counter.dart';
 import 'package:se4x/models/technology.dart';
 
@@ -285,6 +286,86 @@ void main() {
       expect(restored.move, 0);
       expect(restored.experience, ShipExperience.unset);
       expect(restored.notes, '');
+    });
+
+    test('default counter has uniqueDesign == null', () {
+      const c = ShipCounter(type: ShipType.un, number: 1);
+      expect(c.uniqueDesign, isNull);
+    });
+
+    test('round-trip preserves a non-null UniqueShipDesign', () {
+      const design = UniqueShipDesign(
+        name: 'Aurora',
+        hullSize: 3,
+        weaponClass: UniqueShipWeaponClass.b,
+        abilityIds: [1, 4],
+      );
+      const c = ShipCounter(
+        type: ShipType.un,
+        number: 2,
+        isBuilt: true,
+        attack: 2,
+        defense: 2,
+        tactics: 1,
+        move: 2,
+        uniqueDesign: design,
+      );
+      final restored = ShipCounter.fromJson(c.toJson());
+      expect(restored.uniqueDesign, isNotNull);
+      expect(restored.uniqueDesign!.name, 'Aurora');
+      expect(restored.uniqueDesign!.hullSize, 3);
+      expect(restored.uniqueDesign!.weaponClass, UniqueShipWeaponClass.b);
+      expect(restored.uniqueDesign!.abilityIds, [1, 4]);
+    });
+
+    test('legacy JSON without uniqueDesign key decodes to null', () {
+      final json = {
+        'type': 'un',
+        'number': 1,
+        'isBuilt': true,
+        'attack': 0,
+        'defense': 0,
+        'tactics': 0,
+        'move': 0,
+        'experience': 'unset',
+        'notes': '',
+      };
+      final restored = ShipCounter.fromJson(json);
+      expect(restored.uniqueDesign, isNull);
+      expect(restored.type, ShipType.un);
+    });
+
+    test('copyWith with uniqueDesign propagates', () {
+      const c = ShipCounter(type: ShipType.un, number: 1);
+      const design = UniqueShipDesign(
+        name: 'Comet',
+        hullSize: 2,
+        weaponClass: UniqueShipWeaponClass.c,
+        abilityIds: [],
+      );
+      final updated = c.copyWith(uniqueDesign: design);
+      expect(updated.uniqueDesign, isNotNull);
+      expect(updated.uniqueDesign!.name, 'Comet');
+      // Original is unchanged.
+      expect(c.uniqueDesign, isNull);
+    });
+
+    test('copyWith with clearUniqueDesign=true clears the design', () {
+      const design = UniqueShipDesign(
+        name: 'Nova',
+        hullSize: 4,
+        weaponClass: UniqueShipWeaponClass.a,
+        abilityIds: [],
+      );
+      const c = ShipCounter(
+        type: ShipType.un,
+        number: 1,
+        uniqueDesign: design,
+      );
+      final cleared = c.copyWith(clearUniqueDesign: true);
+      expect(cleared.uniqueDesign, isNull);
+      // Original unchanged.
+      expect(c.uniqueDesign, isNotNull);
     });
 
     test('built counter with full state round-trips', () {
