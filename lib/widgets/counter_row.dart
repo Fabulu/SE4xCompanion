@@ -59,8 +59,16 @@ class CounterRow extends StatelessWidget {
   final VoidCallback? onUpgrade;
   final VoidCallback? onDestroy;
   final VoidCallback? onLocate;
+  final VoidCallback? onInfoTap;
   final int? upgradeCost;
   final bool strongHaptics;
+  final int queuedCount;
+
+  /// When true, at least one stat (A/D/T/M) on this counter diverges
+  /// from what the current tech state would produce — i.e. the player has
+  /// manually overridden the stamped stats. Renders a small warning icon
+  /// next to the row title so the drift is discoverable.
+  final bool hasManualOverride;
 
   const CounterRow({
     super.key,
@@ -82,8 +90,11 @@ class CounterRow extends StatelessWidget {
     this.onUpgrade,
     this.onDestroy,
     this.onLocate,
+    this.onInfoTap,
     this.upgradeCost,
     this.strongHaptics = true,
+    this.queuedCount = 0,
+    this.hasManualOverride = false,
   });
 
   static const _expLabels = ['', 'G', 'S', 'V', 'E', 'L'];
@@ -105,6 +116,7 @@ class CounterRow extends StatelessWidget {
   }
 
   Widget _buildUnbuiltRow(ThemeData theme, Color dimColor) {
+    final hasQueued = queuedCount > 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
@@ -128,12 +140,63 @@ class CounterRow extends StatelessWidget {
               ),
             ),
           ),
+          if (onInfoTap != null)
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: IconButton(
+                onPressed: onInfoTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                iconSize: 14,
+                icon: Icon(
+                  Icons.info_outline,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+                tooltip: 'Ship info',
+              ),
+            ),
           Expanded(
             child: Text(
-              '\u2014 not built \u2014',
-              style: TextStyle(fontSize: 14, color: dimColor),
+              hasQueued ? 'ready to build' : '\u2014 not built \u2014',
+              style: TextStyle(
+                fontSize: 14,
+                color: hasQueued
+                    ? theme.colorScheme.onPrimaryContainer
+                    : dimColor,
+                fontWeight: hasQueued ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ),
+          if (hasQueued)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.hourglass_bottom,
+                        size: 14,
+                        color: theme.colorScheme.onPrimaryContainer),
+                    const SizedBox(width: 4),
+                    Text(
+                      queuedCount == 1 ? 'queued' : 'queued ($queuedCount)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (onBuild != null)
             SizedBox(
               height: 44,
@@ -180,6 +243,37 @@ class CounterRow extends StatelessWidget {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
+              if (onInfoTap != null) ...[
+                const SizedBox(width: 2),
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: IconButton(
+                    onPressed: onInfoTap,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 14,
+                    icon: Icon(
+                      Icons.info_outline,
+                      color:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    tooltip: 'Ship info',
+                  ),
+                ),
+              ],
+              if (hasManualOverride) ...[
+                const SizedBox(width: 4),
+                const Tooltip(
+                  message:
+                      'Stat values manually overridden — diverge from current tech.',
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    size: 14,
+                    color: Colors.amber,
+                  ),
+                ),
+              ],
               if (onUpgrade != null && upgradeCost != null) ...[
                 const SizedBox(width: 8),
                 SizedBox(

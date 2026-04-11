@@ -201,10 +201,10 @@ void main() {
       expect(card.supportStatus, CardSupportStatus.partial);
     });
 
-    test('unbound card (#56) stays Reference only', () {
+    test('card #56 (On Board Workshop) has complex binding', () {
       final card = kAllCards.firstWhere((c) => c.number == 56);
-      expect(kCardModifiers[56], isNull);
-      expect(card.supportStatus, CardSupportStatus.referenceOnly);
+      expect(kCardModifiers[56], isNotNull);
+      expect(card.supportStatus, CardSupportStatus.partial);
     });
   });
 }

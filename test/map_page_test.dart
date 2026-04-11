@@ -30,8 +30,6 @@ void main() {
               shipCounterIds: ['dd:1'],
             ),
           ],
-          pipelineAssetIds: const ['pipe-1', 'pipe-2'],
-          placedPipelineIds: const {'pipe-1'},
           selectedHex: null,
         ),
         productionWorlds: [
@@ -42,17 +40,19 @@ void main() {
           ship(ShipType.dd, 1),
           ship(ShipType.ca, 2),
         ],
-        pipelineAssetIds: const ['pipe-1', 'pipe-2'],
       ),
     );
 
     final viewer = tester.getSize(find.byType(InteractiveViewer));
     expect(viewer.width, greaterThan(1700));
-    expect(find.text('Worlds: 1'), findsOneWidget);
-    expect(find.text('Ships: 2'), findsOneWidget);
-    expect(find.text('Pipelines: 1'), findsOneWidget);
+    // The new UX hides all chrome above the canvas when nothing is
+    // selected. The old "Worlds: N" / "Ships: N" asset pills no longer
+    // exist. Verify canvas is rendered and the old inspector is not inline.
     expect(find.text('Collapsed. Tap to expand.'), findsNothing);
     expect(find.text('Terrain'), findsNothing);
+    // The inventory FAB should be rendered bottom-right with an
+    // inventory icon.
+    expect(find.byIcon(Icons.inventory_2_outlined), findsOneWidget);
   });
 
   testWidgets('tapping a selected hex opens the inspector', (tester) async {
@@ -83,7 +83,9 @@ void main() {
     expect(find.text('Terrain'), findsNothing);
     expect(find.text('Label'), findsNothing);
 
-    await tester.tap(find.text('Edit'));
+    // Inspector is now opened via the tonal "Edit Hex…" button in the
+    // selection card.
+    await tester.tap(find.text('Edit Hex\u2026'));
     await tester.pumpAndSettle();
 
     // Fleets surface first in the inspector; hex-detail fields sit below and
@@ -113,7 +115,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Place World'));
+    // "Place World" now lives as an icon button in the selection card
+    // title row. Locate it by its tooltip.
+    await tester.tap(find.byTooltip('Place World'));
     await tester.pumpAndSettle();
 
     expect(
@@ -155,7 +159,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Edit'));
+    await tester.tap(find.text('Edit Hex\u2026'));
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Unplace'));
@@ -200,47 +204,8 @@ void main() {
     expect(updated!.fleetById('fleet-1')?.coord.id, '1,0');
   });
 
-  testWidgets('pipeline mode places and removes one pipeline asset', (tester) async {
-    GameMapState? updated;
-    await tester.binding.setSurfaceSize(const Size(1800, 1200));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final state = baseState(
-      pipelineAssetIds: const ['pipe-1'],
-      selectedHex: null,
-    );
-    await tester.pumpWidget(
-      mapHarness(
-        state,
-        pipelineAssetIds: const ['pipe-1'],
-        onChanged: (value, {recordUndo = true, description}) => updated = value,
-      ),
-    );
-
-    await tester.tap(find.text('Pipeline'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('hex-0,0')));
-    await tester.pumpAndSettle();
-
-    expect(updated?.hexAt(const HexCoord(0, 0))?.pipelineIds, ['pipe-1']);
-
-    await tester.pumpWidget(
-      mapHarness(
-        updated ?? state,
-        pipelineAssetIds: const ['pipe-1'],
-        onChanged: (value, {recordUndo = true, description}) => updated = value,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('hex-0,0')));
-    await tester.pumpAndSettle();
-
-    expect(updated?.hexAt(const HexCoord(0, 0))?.pipelineIds, isEmpty);
-  });
-
-  testWidgets('ships pill opens inventory and shows assigned fleet location', (tester) async {
+  testWidgets('inventory FAB opens sheet showing assigned fleet location',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(1800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -263,17 +228,17 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Ships: 1'));
+    // Tap the inventory FAB (Icons.inventory_2_outlined).
+    await tester.tap(find.byIcon(Icons.inventory_2_outlined));
     await tester.pumpAndSettle();
 
+    // The new inventory sheet uses DraggableScrollableSheet. Section
+    // headers show "Built Ships (N)".
     expect(find.text('Built Ships'), findsOneWidget);
     expect(find.text('dd:1'), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('2,0'),
-      ),
-      findsOneWidget,
+      find.textContaining('2,0'),
+      findsWidgets,
     );
   });
 
@@ -341,9 +306,9 @@ Widget mapHarness(
   GameMapState state, {
   List<WorldState> productionWorlds = const [],
   List<ShipCounter> shipCounters = const [],
-  List<String> pipelineAssetIds = const [],
   String? focusShipId,
   int focusRequestId = 0,
+  int playerMoveLevel = 6,
   MapStateChanged? onChanged,
 }) {
   return MaterialApp(
@@ -352,9 +317,9 @@ Widget mapHarness(
         state: state,
         productionWorlds: productionWorlds,
         shipCounters: shipCounters,
-        pipelineAssetIds: pipelineAssetIds,
         focusShipId: focusShipId,
         focusRequestId: focusRequestId,
+        playerMoveLevel: playerMoveLevel,
         onChanged: onChanged ?? (_, {recordUndo = true, description}) {},
       ),
     ),
@@ -366,8 +331,6 @@ GameMapState baseState({
   Set<String> placedWorldIds = const {},
   List<ShipCounter> shipCounters = const [],
   List<FleetStackState> fleets = const [],
-  List<String> pipelineAssetIds = const [],
-  Set<String> placedPipelineIds = const {},
   HexCoord? selectedHex,
   String? selectedFleetId,
 }) {
@@ -375,10 +338,7 @@ GameMapState baseState({
     final worldId = placedWorldIds.isNotEmpty && hex.coord == const HexCoord(0, 0)
         ? placedWorldIds.first
         : null;
-    final pipelineIds = placedPipelineIds.isNotEmpty && hex.coord == const HexCoord(0, 0)
-        ? placedPipelineIds.toList()
-        : const <String>[];
-    return hex.copyWith(worldId: worldId, pipelineIds: pipelineIds);
+    return hex.copyWith(worldId: worldId);
   }).toList();
 
   return GameMapState.initial().copyWith(

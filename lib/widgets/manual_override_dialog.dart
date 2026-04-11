@@ -71,8 +71,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
   late int _rpCarryOver;
   late int _tpCarryOver;
   late int _turnOrderBid;
-  late int _shipSpendingCp;
-  late int _upgradesCp;
   late int _maintenanceIncrease;
   late int _maintenanceDecrease;
   late int _researchGrantsCp;
@@ -84,7 +82,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
 
   // Production spending
   late int _lpPlacedOnLc;
-  late int _tpSpending;
   late Map<TechId, int> _pendingTechPurchases;
   late List<ShipPurchase> _shipPurchases;
 
@@ -103,8 +100,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
     _rpCarryOver = prod.rpCarryOver;
     _tpCarryOver = prod.tpCarryOver;
     _turnOrderBid = prod.turnOrderBid;
-    _shipSpendingCp = prod.shipSpendingCp;
-    _upgradesCp = prod.upgradesCp;
     _maintenanceIncrease = prod.maintenanceIncrease;
     _maintenanceDecrease = prod.maintenanceDecrease;
     _researchGrantsCp = prod.researchGrantsCp;
@@ -122,7 +117,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
 
     // Production spending
     _lpPlacedOnLc = prod.lpPlacedOnLc;
-    _tpSpending = prod.tpSpending;
     _pendingTechPurchases = Map<TechId, int>.from(prod.pendingTechPurchases);
     _shipPurchases = List<ShipPurchase>.from(prod.shipPurchases);
 
@@ -162,15 +156,12 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
       rpCarryOver: _rpCarryOver,
       tpCarryOver: _tpCarryOver,
       turnOrderBid: _turnOrderBid,
-      shipSpendingCp: _shipSpendingCp,
-      upgradesCp: _upgradesCp,
       maintenanceIncrease: _maintenanceIncrease,
       maintenanceDecrease: _maintenanceDecrease,
       researchGrantsCp: _researchGrantsCp,
       techState: newTech,
       worlds: _worlds,
       lpPlacedOnLc: _lpPlacedOnLc,
-      tpSpending: _tpSpending,
       pendingTechPurchases: _pendingTechPurchases,
       shipPurchases: _shipPurchases,
       accumulatedResearch: _accumulatedResearch,
@@ -257,8 +248,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                   _row('RP Carry Over', _rpCarryOver, 0, 999, (v) => setState(() => _rpCarryOver = v)),
                   _row('TP Carry Over', _tpCarryOver, 0, 999, (v) => setState(() => _tpCarryOver = v)),
                   _row('Turn Order Bid', _turnOrderBid, 0, 999, (v) => setState(() => _turnOrderBid = v)),
-                  _row('Ship Spending CP', _shipSpendingCp, 0, 999, (v) => setState(() => _shipSpendingCp = v)),
-                  _row('Upgrades CP', _upgradesCp, 0, 999, (v) => setState(() => _upgradesCp = v)),
                   _row('Maintenance Increase', _maintenanceIncrease, 0, 999, (v) => setState(() => _maintenanceIncrease = v)),
                   _row('Maintenance Decrease', _maintenanceDecrease, 0, 999, (v) => setState(() => _maintenanceDecrease = v)),
                   _row('Research Grants CP', _researchGrantsCp, 0, 999, (v) => setState(() => _researchGrantsCp = v)),
@@ -269,7 +258,6 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
                   const SectionHeader(title: 'Production Spending'),
                   const SizedBox(height: 4),
                   _row('LP Placed on LC', _lpPlacedOnLc, 0, 999, (v) => setState(() => _lpPlacedOnLc = v)),
-                  _row('TP Spending', _tpSpending, 0, 999, (v) => setState(() => _tpSpending = v)),
 
                   // Pending tech purchases
                   if (_pendingTechPurchases.isNotEmpty) ...[
@@ -971,10 +959,10 @@ class _ManualOverrideDialogState extends State<_ManualOverrideDialog> {
               _worlds[index] = world.copyWith(stagedMineralCp: v);
             });
           }),
-          _row('Pipeline Income', world.pipelineIncome, 0, 99, (v) {
+          _row('Garrison GU', world.garrisonGu, 0, 99, (v) {
             setState(() {
               _worlds = List<WorldState>.from(_worlds);
-              _worlds[index] = world.copyWith(pipelineIncome: v);
+              _worlds[index] = world.copyWith(garrisonGu: v);
             });
           }),
         ],

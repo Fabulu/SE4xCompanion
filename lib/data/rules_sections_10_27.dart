@@ -101,17 +101,29 @@ const List<RuleSection> kRuleSections10to27 = [
   RuleSection(
     id: '11.1',
     title: 'ACQUIRING ALIEN TECHNOLOGY',
-    body: '''Before the start of the game the Alien Technology deck is shuffled and placed face down next to the game board. Before shuffling, the players should remove any cards from the deck that only modify rules not being used in the game. When a Barren Planet is revealed in Deep Space, the player who explored it draws one Alien Technology card from the deck. Alien Technology cards are kept face down until their reveal condition is met.''',
+    body: '''Before the start of the game the Alien Technology deck is shuffled and placed face down next to the game board. Before shuffling, the players should remove any cards from the deck that only modify rules not being used in the game.
+
+When a Barren Planet in the Deep Space portion of the map is initially colonized (4.4.2) or captured (21.13), the player may draw two of these cards. If a drawn card does not apply to the game you are playing, it may be revealed and discarded for a different one. They secretly choose one card and discard the other face down. The player may pay 10 CP during the next Economic Phase to keep the chosen card; otherwise it must be discarded. This expenditure is recorded under ship purchases on the Production Sheet.
+
+If playing with Non-Player Aliens (18.0), there is no cost for the chosen card.
+
+An Alien Technology card is not drawn for a planet that has been previously colonized or captured by any player.
+
+The only player to have benefit from an Alien Technology card is the player who drew it. An Alien Technology card may not be gained by scrapping a captured ship (19.5.1) that is benefiting from or by capturing an enemy planet. Alien Technology cards only start granting their benefit after the current player's turn.
+
+Cards that can benefit ships already built (like Holodecks) do so immediately; all existing ships get that benefit. This allows technology to be advanced after it is easier to install.
+
+Ships that are captured do still retain the benefit of the Alien Technology. This is just a way for the capturing player to gain the ability from the ship and duplicate it for their other ships.''',
     depth: 1,
     parentId: '11.0',
     isOptional: false,
-    tags: ['movement', 'tech'],
+    tags: ['tech', 'economy', 'exploration'],
     sourcePage: 14,
   ),
   RuleSection(
     id: '11.2',
-    title: 'USING ALIEN TECHNOLOGY',
-    body: '''Alien Technology cards are kept face down until their reveal condition is met. When revealed, they are turned face up and their effect is applied. Some Alien Technology cards are permanent effects, while others are one-time use. See the Card Manifest for the complete list of Alien Technology cards and their effects.''',
+    title: 'REVEALING ALIEN TECHNOLOGY LEVELS',
+    body: '''Alien Technology cards are placed face down in front of their owner. When their reveal condition is met, they are turned face up and left that way for the remainder of the game. A player's Alien Technology cards are also revealed if Ground Units capture one of their Colonies (21.13) or if a ship benefiting from it is captured. Consult the Expanded Sequence of Play in the Competitive Scenario Book (CSB) for information on when these cards are revealed. See the Card Manifest for a complete list of Alien Technology cards.''',
     depth: 1,
     parentId: '11.0',
     isOptional: false,
@@ -174,22 +186,28 @@ const List<RuleSection> kRuleSections10to27 = [
   ),
   RuleSection(
     id: '12.2.3',
-    title: 'Crew Card Limits',
-    body: '''Each player is limited to 5 Crew Cards at a time. If a player already has 5 Crew Cards in play, cards may be drawn normally, but an existing card must be discarded to keep one of the new ones. A Group may have at most one Crew Card assigned to it (Replicators can only have one Crew on a Group).''',
+    title: 'Crew Card Limitations',
+    body: '''Each Group may have at most two Crew Cards, and only one Crew with the same title (e.g., a Group can't have two Engineers).
+
+All Crew Cards that improve Weapon Class have no impact in terrain that modifies Weapon Class (e.g., ships in a Group with an Admiral would still fire as E-Class in Asteroids), unless otherwise noted.
+
+When playing with Crew Cards, the 4 Resource Cards for Heroic Ships cannot make ships Heroic. Instead, they can be played at any time to draw 2 Crew Cards and keep 1.''',
     depth: 2,
     parentId: '12.2',
     isOptional: false,
-    tags: ['ships'],
+    tags: ['ships', 'combat', 'terrain'],
     sourcePage: 15,
   ),
   RuleSection(
     id: '12.2.4',
-    title: 'Crew Card Removal',
-    body: '''A Crew Card stays with the same Group until that Group is destroyed. The only exception is if two Groups combine, each with one Crew Card; both Crew Cards may be kept by the newly combined Group. Ships may join or leave a Group with a Crew Card, but the Crew Card must stay with the Group.''',
+    title: 'Crew Cards in Combat',
+    body: '''After a battle, each Crew Card in a Group that had at least one ship destroyed must roll for survival and is eliminated on a roll of 9-10. Add -3 to the roll if the Crew Card's Group was eliminated and +3 if no friendly ships remain in the battle hex (harder to pick up escape pods). Crew Cards that become casualties are placed in the appropriate discard pile.
+
+If a Crew Card survives even though its Group has been destroyed, it is immediately assigned to another Group in the hex, if possible. If not possible, during the next Economic Phase it must be assigned as if it had been drawn. This does not prevent the player from drawing a new Crew Card.''',
     depth: 2,
     parentId: '12.2',
     isOptional: false,
-    tags: ['ships'],
+    tags: ['ships', 'combat'],
     sourcePage: 15,
   ),
 
@@ -209,9 +227,13 @@ const List<RuleSection> kRuleSections10to27 = [
   RuleSection(
     id: '13.1',
     title: 'MS PIPELINE CHARACTERISTICS',
-    body: '''Merchant Ship Pipelines are placed individually on the map. They always represent a single unit and never have a numeral marker underneath them. MS Pipelines do not incur maintenance costs. The movement rate of an MS Pipeline is one hex, regardless of a player's Movement technology level. MS Pipelines are non-combat units.
+    body: '''Merchant Ship (MS) Pipelines always represent a single trade network — never place a numeral marker underneath them. MS Pipelines move one hex per turn, and do not receive any benefit from an increase in Movement technology. They may be purchased and placed at a Shipyard or in the usual fashion. MS Pipelines are non-combat units.
 
-To make it easier to keep track of which MS Pipeline counters have not moved, the MS Pipeline counters have an "Active" side. If a MS Pipeline has moved, flip it to the "Moved" side until the start of the next turn. MS Pipelines that survive entrance into a Black Hole hex may, in future turns, use their navigational aids to allow friendly ships traveling along a chain to enter the Black Hole hex without rolling for destruction (in other words, a chain may extend into a Black Hole hex). MS Pipelines also allow friendly ships which are traveling along a chain to ignore Nebulae and Asteroids for purposes of movement.''',
+To make it easier to keep track of which MS Pipeline counters have not moved, the MS Pipeline counters have an "Active" side. If a MS Pipeline has moved, flip it to the "Moved" side until the start of the next turn.
+
+MS Pipelines that survive entrance into a Black Hole hex may, in future turns, use their navigational aids to allow friendly ships traveling along a chain to enter the Black Hole hex without rolling for destruction (in other words, a chain may extend into a Black Hole hex).
+
+MS Pipelines also allow friendly ships which are traveling along a chain to ignore Nebulae and Asteroids for purposes of movement.''',
     depth: 1,
     parentId: '13.0',
     isOptional: false,
@@ -220,32 +242,34 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '13.2',
-    title: 'MS PIPELINE USAGE',
-    body: '''MS Pipelines have two primary uses: forming chains for fast movement and creating Trade Networks for additional Colony income.''',
+    title: 'MS PIPELINE CHAINS',
+    body: '''MS Pipelines may be organized in a "chain", a trade network connecting planets and other regions of space. Two or more MS Pipelines adjacent to one another form a chain (or pipeline). The benefits of a chain are indicated below.''',
     depth: 1,
     parentId: '13.0',
     isOptional: false,
-    tags: ['economy', 'movement'],
+    tags: ['movement'],
     sourcePage: 16,
   ),
   RuleSection(
     id: '13.2.1',
-    title: 'MS Pipeline Chains',
-    body: '''A chain of MS Pipelines in adjacent hexes allows friendly ships to travel along the chain at an increased speed. Ships traveling along a chain may ignore Nebulae and Asteroids for purposes of movement. MS Pipelines that survive entrance into a Black Hole hex may, in future turns, use their navigational aids to allow friendly ships traveling along a chain to enter the Black Hole hex without rolling for destruction.''',
+    title: 'Movement',
+    body: '''Any unit, including another MS Pipeline, that starts its movement on a chain of friendly MS Pipeline counters and spends its entire Movement Phase on the same chain may move an additional hex, as long as that hex is also part of the chain. If used to aid a ship's movement, none of the MS Pipeline counters that form this chain may move or have moved during the turn.''',
     depth: 2,
     parentId: '13.2',
     isOptional: false,
-    tags: ['economy', 'movement'],
+    tags: ['movement'],
     sourcePage: 16,
   ),
   RuleSection(
     id: '13.2.2',
     title: 'Trade Networks',
-    body: '''Any friendly Colony (even a new one) that is connected to the Homeworld by a friendly MS Pipeline chain produces one extra CP in the Economic Phase (the Homeworld does not produce an extra CP, but each Colony connected to its network does). There must be an MS Pipeline counter in each planet hex, including the Homeworld, and in each hex in between. An unlimited number of Colonies may be connected to the Homeworld in this way, each contributing an extra CP through the network. MS Pipelines may contribute to this chain even if they moved this turn. Each Colony gives this benefit only one time per Economic Phase, no matter how many times it is connected.''',
+    body: '''Any friendly Colony (even a new one) that is connected to the Homeworld by a friendly MS Pipeline chain produces one extra CP in the Economic Phase (the Homeworld does not produce an extra CP, but each Colony connected to its network does). There must be an MS Pipeline counter in each planet hex, including the Homeworld, and in each hex in between.
+
+An unlimited number of Colonies may be connected to the Homeworld in this way, each contributing an extra CP through the network. MS Pipelines may contribute to this chain even if they moved this turn. Each Colony gives this benefit only one time per Economic Phase, no matter how many times it is connected.''',
     depth: 2,
     parentId: '13.2',
     isOptional: false,
-    tags: ['movement', 'economy', 'exploration', 'colonies'],
+    tags: ['movement', 'economy', 'colonies'],
     sourcePage: 16,
   ),
 
@@ -255,7 +279,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '14.0',
     title: 'Defense Satellite Networks',
-    body: '''Defense Satellite Networks (DSNs) are defensive units that protect Colonies. DSNs cannot move (4.1.3) and do not incur maintenance costs. They participate in combat as combat-capable units and count toward Combat Screening (5.1.2) and Fleet Size Bonus (5.1.3). DSNs may not be boarded (19.2.2).''',
+    body: '''Similar to Bases (8.1), a Defense Satellite Network (DSN) may be built at any friendly planet with an income-producing Colony (not new or blockaded Colonies). DSNs cannot move and do not incur maintenance costs.''',
     depth: 0,
     parentId: null,
     isOptional: false,
@@ -264,8 +288,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '14.1',
-    title: 'DSN PLACEMENT',
-    body: '''A DSN may be placed at any Colony that produced income (not new or blockaded Colonies) during the Economic Phase. DSNs do not require a Shipyard to be built. Only one DSN may be placed per hex per Economic Phase.''',
+    title: 'DSN CHARACTERISTICS',
+    body: '''DSNs are not built by Shipyards; however, they cannot be built until a player has researched Ship Size 2 technology.''',
     depth: 1,
     parentId: '14.0',
     isOptional: false,
@@ -274,8 +298,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '14.2',
-    title: 'DSN COMBAT',
-    body: '''DSNs participate in space combat as combat-capable units. They count toward screening and Fleet Size Bonus calculations. DSNs at a Colony belonging to the defender are destroyed when the Colony is captured by Ground Combat (21.9.2).''',
+    title: 'DSN RESTRICTIONS',
+    body: '''Each Colony is limited to one DSN and one Base/Starbase (38.5). If a Colony builds a DSN during an Economic Phase, it may not build a Base (or upgrade a Base to a Starbase) during the same Economic Phase.''',
     depth: 1,
     parentId: '14.0',
     isOptional: false,
@@ -284,8 +308,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '14.3',
-    title: 'DSN RESTRICTIONS',
-    body: '''DSNs cannot move, cannot retreat, and cannot be boarded. They are destroyed when the Colony they protect is captured. An Advanced Base may not be upgraded to a Starbase if a DSN was placed in the hex in the same Economic Phase (38.5.2).''',
+    title: 'DSN COMBAT',
+    body: '''DSNs (B4-1-42) participate in combat like other Groups, but may not retreat and cannot be boarded.''',
     depth: 1,
     parentId: '14.0',
     isOptional: false,
@@ -359,7 +383,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '15.2.2',
     title: 'Fighter Movement',
-    body: '''Fighters are small spaceships that have no interstellar movement capability of their own. Fighter Squadrons therefore may not move from hex to hex on their own, although they may be carried by Carriers (15.1), Battle Carriers (38.6.2), Titans (22.0), certain Unique Ships (41.0), and Transports (21.1). Fighters may also be based at Colonies (15.2.6). A ship carrying Fighters picks them up or drops them off while moving through a hex containing the Fighters, without stopping.''',
+    body: '''Fighters are small spaceships that have no interstellar movement capability of their own. Fighter Squadrons therefore may not move from hex to hex on their own, although they may be carried by Carriers (15.1), Battle Carriers (38.6.2), Titans (22.0), or certain Unique Ships with Mini-Fighter Bays (41.0). Fighters may also be based at Colonies (15.2.6).''',
     depth: 2,
     parentId: '15.2',
     isOptional: false,
@@ -368,8 +392,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '15.2.3',
-    title: 'Fighter Carrying Ships',
-    body: '''Fighters may be carried by Carriers (15.1), Battle Carriers (38.6.2), Titans (22.0), certain Unique Ships (41.0), Transports (21.1), and Colonies. If a ship carrying Fighters is destroyed, the Fighters are destroyed only if there is not enough room to carry them on other ships or a friendly Colony in the hex.''',
+    title: 'Carrying Fighters',
+    body: '''Only Carriers, Battle Carriers (38.6), Titans (22.0), or Unique Ships with Mini-Fighter Bays (x.x) may carry Fighter Squadrons. Thus, a squadron must remain at the Shipyard where it is placed during the Economic Phase, or transfer to one of the above-noted ships in the same hex.''',
     depth: 2,
     parentId: '15.2',
     isOptional: false,
@@ -378,8 +402,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '15.2.4',
-    title: 'Fighter Construction',
-    body: '''Fighter Squadrons are purchased during the Economic Phase and require Fighter technology to be researched. Fighter Squadrons are built at Shipyards and count against Shipyard capacity based on their Hull Size.''',
+    title: 'Transfer',
+    body: '''One or more Fighter Squadrons may transfer from a colonized planet to an appropriate ship type (or vice versa) which is in the same hex. Fighters may also transfer between ships in the same hex. Transfer may happen any time during a ship's move or during combat at no extra cost to the ship, but movement is simultaneous. A Fighter Squadron cannot be moved further in one turn than the speed of the fastest ship involved.''',
     depth: 2,
     parentId: '15.2',
     isOptional: false,
@@ -473,7 +497,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '16.1.1',
     title: 'Movement Advantage',
-    body: '''A cloaked Raider may move into a hex occupied by an enemy unit and continue moving. It need not stop. It may also occupy a hex and not trigger combat. If a cloaked Raider is in the same hex as an enemy ship and Colony, the Colony is not considered blockaded (7.1.2).''',
+    body: '''A cloaked Raider may move into a hex occupied by an enemy unit and continue moving. It need not stop. It may also occupy a hex and not trigger combat. If a cloaked Raider is in the same hex as an enemy ship and Colony, the Colony is not considered blockaded (7.1.2). The cloaked Raider would have to defeat any enemy ships to blockade a Colony.''',
     depth: 2,
     parentId: '16.1',
     isOptional: false,
@@ -482,8 +506,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '16.1.2',
-    title: 'Raider Combat Options',
-    body: '''A cloaked Raider in combat may choose to remain cloaked rather than participate. If the Raider remains cloaked, it does not fire and cannot be fired upon. The Raider remains in the hex after combat. If the Raider decloaks to participate in combat, it is treated as a normal combat unit for the remainder of the battle.''',
+    title: 'Retreat Advantage',
+    body: '''At the start of a battle, cloaked Raiders (both Attacking and Defending) have the option to retreat after the fleets are revealed and before shots are fired or Mines detonate (17.1.5). In this case, if no other ships remained in combat, information about an opponent's technology would not be revealed.''',
     depth: 2,
     parentId: '16.1',
     isOptional: false,
@@ -492,18 +516,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '16.1.3',
-    title: 'Raider Detection',
-    body: '''A Raider is detected (uncloaked) if the enemy has Scanner technology equal to or greater than the Raider's Cloaking technology level. Destroyers are the only ships that can carry Scanner technology (16.2). When a Raider is detected, it must participate in combat normally.''',
-    depth: 2,
-    parentId: '16.1',
-    isOptional: false,
-    tags: ['ships', 'combat', 'tech'],
-    sourcePage: 17,
-  ),
-  RuleSection(
-    id: '16.1.4',
-    title: 'Raider First Strike',
-    body: '''When a cloaked Raider decloaks to attack, it gets a first strike advantage. The Raider fires before other ships in its Weapon Class on the round it decloaks. This represents the element of surprise when attacking from a cloaked position.''',
+    title: 'Firing Advantage',
+    body: '''In combat, cloaked Raiders (both Attacking and Defending) have an A-Class rating and \u2013 during the first firing round only \u2013 have their Attack Strength increased by +1. Uncloaked Raiders have a D-Class rating.''',
     depth: 2,
     parentId: '16.1',
     isOptional: false,
@@ -511,9 +525,19 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
     sourcePage: 17,
   ),
   RuleSection(
+    id: '16.1.4',
+    title: 'Cloaking Technology Levels',
+    body: '''A player can increase their Cloaking technology up to level 2. Level 1 Scanners do not negate level 2 Cloaking technology.''',
+    depth: 2,
+    parentId: '16.1',
+    isOptional: false,
+    tags: ['ships', 'combat', 'tech'],
+    sourcePage: 17,
+  ),
+  RuleSection(
     id: '16.1.5',
-    title: 'Raider Restrictions',
-    body: '''Raiders may not mount Attack technology. Raiders may not carry Fighters, Ground Units, or other cargo. A cloaked Raider may not explore face-down system markers. Raiders must decloak to engage in combat; once decloaked during a battle they may not recloak for the remainder of that battle.''',
+    title: 'Cloaking in Nebulae',
+    body: '''Cloaking devices do not work in Nebulae. All Raider ships are treated as normal ships when in a Nebula.''',
     depth: 2,
     parentId: '16.1',
     isOptional: false,
@@ -523,7 +547,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '16.2',
     title: 'SCANNERS',
-    body: '''Scanner technology is equipped only by Destroyers. If a Destroyer with Scanner technology equal to or greater than an enemy Raider's Cloaking technology is in the same hex, that Raider is detected and must participate in combat normally. Scanner technology also allows Mines to work on cloaked Raiders if a Destroyer with appropriate Scanner technology is present (17.1.5).''',
+    body: '''To counteract Cloaking technology, a player may research Scanners. This technology gives Destroyers (and Advanced Bases) the ability to scan for Raiders. When a Destroyer with Scanners is present, treat all enemy Raiders (of equal or lower Cloaking level) as uncloaked. If all scanner equipped Destroyers are eliminated, the enemy ships regain the benefits of being cloaked at the start of the next firing round. To avoid this, a player may combat screen a Destroyer as long as they outnumber their opponent. A screened Destroyer may not participate in combat, but still provides its fleet with scanning benefits.''',
     depth: 1,
     parentId: '16.0',
     isOptional: false,
@@ -607,7 +631,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '17.2',
     title: 'MINESWEEPERS (SW)',
-    body: '''Minesweeper technology allows the purchase and placement of Minesweeper units. Unlike Mines, Minesweepers move using the player's Movement technology (they are not limited to a movement rate of one hex). Minesweepers with Minesweeper technology level 1 remove one Mine each before they detonate. Minesweeper 2 allows each Minesweeper to remove two Mines before detonation. Minesweeper 3 allows each Minesweeper to remove three Mines before detonation. Minesweepers cost maintenance equal to their Hull Size.''',
+    body: '''Minesweeper technology allows the purchase and placement of Minesweeper units. Unlike Mines, Minesweepers move using the player's Movement technology (they are not limited to a movement rate of one hex). Minesweepers with Minesweeper technology level 1 remove one Mine each before they detonate. Minesweeper 2 allows each Minesweeper to remove two Mines before detonation. Minesweeper 3 allows each to remove three Mines before detonation. Note that Minesweepers may be chosen as the target of a detonating Mine, but they do not have to be.''',
     depth: 1,
     parentId: '17.0',
     isOptional: false,
@@ -621,7 +645,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '18.0',
     title: 'Aliens (Non-Player Aliens)',
-    body: '''Non-Player Aliens (NPAs) are combat ships that inhabit certain Deep Space systems. They attack any player's ships that enter their hex. NPAs are enemy to all players. All NPA ships are equipped with Security Forces 1 (20.0). NPAs may be captured through boarding (19.0). Captured NPAs incur maintenance costs and may be used like any of a player's ships, but a player may never put any of their technology on an NPA ship.''',
+    body: '''Deep Space is inhabited by Non-Player Aliens (NPAs). When a System marker in Deep Space is revealed to be a Barren Planet, random NPA ship markers are drawn and placed on the planet. They attack any ship that enters their hex, including the exploring ship. NPAs are not player-controlled; they follow specific behavioral rules.''',
     depth: 0,
     parentId: null,
     isOptional: false,
@@ -630,8 +654,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '18.1',
-    title: 'NPA ENCOUNTERS',
-    body: '''When a ship enters a hex containing an NPA, combat occurs immediately. NPAs always defend. If the player's ships retreat or are destroyed, the NPA remains in the hex and will attack any future ships that enter.''',
+    title: 'PLACEMENT',
+    body: '''When a System marker in Deep Space is revealed to be a Barren Planet, random NPA ship markers are drawn and placed on the planet according to the Deep Space Planet Attribute (26.0). If not playing with that rule, draw 4. They attack any ship that enters their hex, including the exploring ship. Combat is resolved normally. If this planet was discovered by a Cruiser, Flagship, or Replicator Ship using Exploration 1 (9.8), the aliens are placed face down, unlogged, and may not be examined.''',
     depth: 1,
     parentId: '18.0',
     isOptional: false,
@@ -640,8 +664,17 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '18.2',
-    title: 'NPA TECHNOLOGY',
-    body: '''NPAs have standard NPA technology in addition to Movement 3 technology. They have specific Attack Strength, Defense Strength, and Hull Size values as indicated on their counters. NPA ships may not have player technology applied to them.''',
+    title: 'ALIEN BEHAVIOR',
+    body: '''Aliens normally don't leave their hex and never retreat.
+
+\u2022 Aliens have a Tactics level of 1.
+\u2022 All NPA ships are equipped with Security Forces 1 (20.0).
+\u2022 All NPA ships with a hull size of 1 have PD2 (15.3).
+\u2022 All NPA ships with a hull size of 2 have Scanner 1. However, they will only use this ability when attacked. They will not stop cloaked fleets that do not attack.
+
+Once an NPA planet hex is entered by an enemy ship, all NPA ships are revealed and remain that way until the end of the game.
+
+The first non-team player to the left of the active player makes decisions on the alien targets. In solitaire or coop games, players should make decisions on behalf of the NPA that will work towards the aliens' victory over the player.''',
     depth: 1,
     parentId: '18.0',
     isOptional: false,
@@ -650,8 +683,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '18.3',
-    title: 'NPA DESTRUCTION',
-    body: '''When an NPA is destroyed, the hex becomes empty deep space (unless there is a planet or other terrain). Destroyed NPAs are removed from the game permanently.''',
+    title: 'CONQUERING ALIEN PLANETS',
+    body: '''Aliens do not normally get additional ships and are considered subdued the moment they lose their last ship in combat. The (former) alien planet can then be colonized normally by a player with Terraforming technology (9.7).''',
     depth: 1,
     parentId: '18.0',
     isOptional: false,
@@ -715,7 +748,14 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '19.3',
     title: 'CAPTURED SHIPS',
-    body: '''A ship captured by a boarding party immediately becomes controlled by the capturing player. A captured ship has the following properties: May not attack or retreat in the first full round immediately following capture (the boarding parties are in the process of gaining complete control of the ship). Does not count for Combat Screening (5.7) or Fleet Size bonus (5.1.3) on the round after they are captured. May be fired upon, screened, and may be recaptured. May attack and retreat normally after the first round, post-capture. If playing with Ship Experience (37.0), captured ships lose any Experience they had.''',
+    body: '''A ship captured by a boarding party immediately becomes controlled by the capturing player. A captured ship has the following properties:
+
+\u2022 May not attack or retreat in the first full round immediately following capture (the boarding parties are in the process of gaining complete control of the ship).
+\u2022 Does not count for Combat Screening (5.7) or Fleet Size bonus (5.1.3) on the round after they are captured.
+\u2022 May be fired upon, screened, and may be recaptured.
+\u2022 May attack and retreat normally after the first round, post-capture. If playing with Ship Experience (37.0), newly captured ships from other players are Green (regardless of Military Academy level) but gain Experience normally.
+\u2022 If playing with Ship Experience, captured NPA ships (18.0) are always Green and can never increase in Experience.
+\u2022 Alternate: Empire ships self-destruct when captured, but yield a technology benefit. See 24.1 for details.''',
     depth: 1,
     parentId: '19.0',
     isOptional: false,
@@ -724,8 +764,10 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '19.4',
-    title: 'USING CAPTURED SHIPS',
-    body: '''A captured ship may be used like any other ship after the first full round following capture. It may attack, retreat, be upgraded, and be maintained normally. If playing with Ship Experience (37.0), captured ships lose any Experience they had. Captured ships retain the technology they were built with. The capturing player may upgrade the captured ship during a subsequent Economic Phase (9.11.3).''',
+    title: 'TRACKING CAPTURED SHIPS',
+    body: '''Until the end of the battle, a captured ship may be represented by whatever or spare counter is available. If neither player has a free counter of that unit type, it can be used. Barring that, a sign alien or other counter may be used.
+
+At the conclusion of the battle, any surviving captured ships must be switched out and represented by the player's own counters. A player capturing a ship may have to scuttle other ships or combine other counters to free up a Group counter to represent the captured ship (7.3.2). If they are unwilling, they must scuttle the captured ship. If it has the same technology as one of your Groups, the Group counters can be combined.''',
     depth: 1,
     parentId: '19.0',
     isOptional: false,
@@ -734,18 +776,28 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '19.5',
-    title: 'SCRAPPING CAPTURED SHIPS',
-    body: '''Captured ships may be scrapped during the Economic Phase to gain technology. When a captured ship is scrapped, the player gains one level of each technology that the scrapped ship possessed that is higher than the player's current level. Technologies apply to ships purchased in the same and subsequent Economic Phases (9.11). The following restrictions apply to scrapping technology (see 19.5.1).''',
+    title: 'CAPTURED SHIPS & TECHNOLOGY',
+    body: '''Captured ships may use all the technologies that they possess. However, they may not give the technology to other ships.''',
     depth: 1,
     parentId: '19.0',
     isOptional: false,
     tags: ['combat', 'ships', 'tech'],
-    sourcePage: 20,
+    sourcePage: 19,
   ),
   RuleSection(
     id: '19.5.1',
-    title: 'Scrapping Restrictions',
-    body: '''Scrapping a Carrier can only yield up to Fighter technology level 1, regardless of the level of Fighter technology the other player possessed. Ground Combat technology cannot be gained by scrapping a Transport (21.1). Security Forces (20.0) and Military Academies (37.2) cannot be gained by capturing a ship. Any technology gained is limited to what is present on the ship being scrapped. In a game with more than two players and no teams, players cannot gain technology by scrapping captured ships. Ship Size technology can be gained by this method.''',
+    title: 'Scrapping Technology',
+    body: '''If a captured ship is at a friendly Shipyard during an Economic Phase, it may be scrapped for its technology. The scrapping player will gain one level of technology in each area where the captured ship has better technology, then the scrapped ship is removed. The player may successively scrap multiple ships in the same Economic Phase to gain more technology. The order in which they scrap ships is up to them. The player may also purchase a level of a particular technology in the same Economic Phase, either before or after scrapping.
+
+The following restrictions apply to Scrapping technology:
+
+\u2022 Scrapping a Carrier can only yield up to Fighter technology level 1, regardless of the level of Fighter technology the other player possessed.
+\u2022 Ground Combat technology cannot be gained by scrapping a Transport (21.1).
+\u2022 Security Forces (20.0) and Military Academies (37.2) -- both of which are not shown on the Ship Technology Sheet -- cannot be gained by capturing a ship.
+\u2022 Any technology gained is limited to what is present on the ship being scrapped.
+\u2022 In a game with more than two players and no teams, players cannot gain technology by scrapping captured ships. This is to prevent tactics and/or collusion between players to advance their technology levels.
+
+PLAY NOTE: Ship Size technology can be gained by this method.''',
     depth: 2,
     parentId: '19.5',
     isOptional: false,
@@ -803,7 +855,21 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.1.1',
     title: 'Characteristics',
-    body: '''At the start of game, all players have Ground Combat 1, allowing them to build Transports and Infantry. Transports are used to carry Ground Units and Fighters (15.2). They may also be used to transport Dilithium Crystals (see the Deep Space Planet Attributes) and Logistic Points (36.5) if using those rules. Transports do not need to stop to pick up or drop off Ground Units or Fighters; they can pick them up while passing a planet in a similar way to a CV picking up Fighters.''',
+    body: '''At the start of game, all players have Ground Combat 1, allowing them to build Transports and Infantry. Transports are used to carry Ground Units and Fighters (15.2). They may also be used to transport Dilithium Crystals (use the Deep Space Planet Attributes) and Logistic Points (36.5) if using those rules.
+
+Transports do not need to stop to pick up or drop off Ground Units or Fighters; they can pick them up while passing a planet in a similar way to a CV picking up Fighters (15.2.1). Fighters that were carried on Transports may not participate in combat that same player turn, even if transferred to another ship or Colony.
+
+Transports have the following properties:
+
+\u2022 May not retreat.
+\u2022 Each may carry any combination of up to 6 Ground Units and/or Fighters up to 30 Logistic Points (36.5).
+\u2022 A loaded Transport may not be boarded (19.2).
+\u2022 If a Transport is destroyed, its owner destroys any Ground Units, Dilithium Crystals or Logistic Points now in excess of Transport Capacity.
+
+EXAMPLE: A player has 7 Transports, 3 Space Marines and 3 Infantry involved in a battle. One of the Transports is destroyed. The player must remove 2 Ground Units because only 6 may fit on the remaining Transport. They choose to eliminate 2 of the Infantry.
+
+\u2022 Transports participate in space combat normally. They may be screened, etc.
+\u2022 Transports cannot land units on a planet that is protected by Mines. (For Example: The Merza Reputation/Resource Card combined with the Anti-Invasion Hulls Unique Ship Ability can lead to this quirky situation.)''',
     depth: 2,
     parentId: '21.1',
     isOptional: false,
@@ -812,8 +878,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.1.2',
-    title: 'Transport Capacity',
-    body: '''Transports can carry up to 6 Ground Units and/or Fighters. They may also be used to transport Dilithium Crystals and Logistic Points (36.5) if using those rules. Transports do not need to stop to pick up or drop off Ground Units or Fighters; they can pick them up while passing a planet.''',
+    title: 'Upgrading Transports (Drop Ships)',
+    body: '''When a player researches Ground Combat 3, their Transports may be upgraded so that their Defense Strength increases from 1 to 2 (Armored Transports). The Transports will also be equipped with "Drop Ships," which allow invading Ground Units to attack in the first round of ground combat. In addition, the player may purchase Grav Armor.''',
     depth: 2,
     parentId: '21.1',
     isOptional: false,
@@ -822,8 +888,14 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.2',
-    title: 'GROUND UNIT CHARACTERISTICS',
-    body: '''Ground Units include Infantry, Heavy Infantry, Space Marines, Militia, Grav Armor, and Cyber Armor. Ground Units require no maintenance cost. They may not be placed on an uncolonized planet. Ground Units provide a defensive benefit against bombardment (21.6) and may not be hit by bombardment (21.7.4). Ground Units play no part in space combat. Whether on a Colony or on a Transport, they never shoot at ships, and they may never be shot at by ships. Ground Units are eliminated if not on a Colony or if in excess of Transport capacity.''',
+    title: 'GROUND UNITS',
+    body: '''Each Ground Unit represents a massive number of troops. Ground Units come in 6 varieties: Infantry, Space Marines, Heavy Infantry, Militia, Grav Armor, and Cyber Armor. Ground Units have the following properties:
+
+\u2022 Require no maintenance cost.
+\u2022 May not be placed on an uncolonized planet.
+\u2022 Provide a defensive benefit against bombardment (21.6) and may not be hit by bombardment (21.7.4).
+\u2022 Ground Units play no part in space combat. Whether on a Colony or on a Transport, they never shoot at ships, and they may never be shot at by ships.
+\u2022 Are eliminated if not on a Colony or if in excess of Transport capacity.''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -873,7 +945,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.7',
     title: 'LANDING PROCEDURE',
-    body: '''If a player's units move into a Colony hex that contains enemy Ground Units but no combat-capable ships, both sides are revealed immediately. All unrevealed units moving into the Colony hex must be revealed; however, an exception is made for cloaked Raiders (16.1) which may remain hidden. If enemy combat-capable ships are in the hex, space combat is resolved first (5.0). Ground Units may be landed after the second round of space combat.''',
+    body: '''If a player's units move into a Colony hex that contains enemy Ground Units but no combat-capable ships, both sides are revealed immediately. All unrevealed units moving into the Colony hex must be revealed; however, an exception is made for Raiders/Xs (38.9) and the Ground Units they may be carrying. Decoys are removed and the non-moving player must eliminate non-combat ships if the moving player has combat ships present. The moving player may now decide whether they wish to continue moving or stay in that hex.''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -882,8 +954,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.7.1',
-    title: 'Landing Requirements',
-    body: '''To land Ground Units on an enemy Colony, a player must have a Transport in the hex. Ground Units are dropped off at the Colony during the Combat Phase, after the second round of space combat (or after all space combat is resolved if no enemy combat-capable ships are present).''',
+    title: 'Reaction Movements in Response',
+    body: '''Since a Reaction Move (35.0) by the non-moving player can normally only be made after the moving player has finished moving, the Reaction Move would happen only after the non-moving player's non-combat ships had been eliminated, and then only if the moving player decided to stay in that hex.''',
     depth: 2,
     parentId: '21.7',
     isOptional: false,
@@ -892,8 +964,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.7.2',
-    title: 'Drop Ships',
-    body: '''Ground Combat 3 provides Drop Ships. With Drop Ships, Ground Units may fire in the first round of ground combat (without Drop Ships, units dropped off by Transports may not fire in the first round, 21.8.3).''',
+    title: 'Determine Location of Ground Units',
+    body: '''If a player is deciding in a hex with Ground Units, Transports, and a friendly Colony, that player must decide after the fleets have been revealed, but before combat, whether their Ground Units are on the planet or on the Transports (or a mixture of both).''',
     depth: 2,
     parentId: '21.7',
     isOptional: false,
@@ -902,8 +974,10 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.7.3',
-    title: 'Bombardment Before Landing',
-    body: '''Before landing Ground Units, ships may bombard the Colony (21.7.4). Bombardment occurs after space combat is resolved and before Ground Units are landed.''',
+    title: 'Landing',
+    body: '''After the SECOND ROUND of space combat and after each round thereafter, players may decide to land Ground Units on a Colony in that hex. Any Ground Units on the Transports are simply placed on the planet (Ground Combat will be resolved when Space Combat is done). A Transport may land Ground Units this way even if it had been screened (5.1.3). If the planet is Barren, then Ground Units may only be landed if their Empire has Terraforming 1.
+
+Regardless of whether Ground Units are landed, Transports are landed, ships in the battle and the space combat continues as normal.''',
     depth: 2,
     parentId: '21.7',
     isOptional: false,
@@ -913,7 +987,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.7.4',
     title: 'Bombardment',
-    body: '''After space combat is resolved and before Ground Units are landed, ships may bombard the Colony. Each ship may fire once at the Colony. Ground Units on the planet provide a defensive benefit (21.6) but may not be hit by bombardment themselves. If there are Ground Units besides Militia on the planet, the Colony has a Defense Strength based on the number of Ground Units present (21.6).''',
+    body: '''After space combat occurs, the attacker may choose to bombard the Colony (5.10) before landing any Ground Units. Bombardment cannot take place once the attacker has landed any units. The player may roll attacks against the Colony one at a time, reducing it, and they decide to land their Ground Units. Once they have landed them, they may not bombard the Colony anymore that turn, even if the invasion goes poorly.''',
     depth: 2,
     parentId: '21.7',
     isOptional: false,
@@ -923,7 +997,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.8',
     title: 'GROUND COMBAT PROCEDURE',
-    body: '''Ground combat uses the same basic combat system as space combat, with modifications. Ground Units are arranged in battle lines by Weapon Class. Combat is resolved by Weapon Class order. Hits are applied to individual Ground Units, which are destroyed by a single hit.''',
+    body: '''Ground combat is resolved after all space combat in the hex is finished. Like space combat, Ground Units fire at each other in order of Weapon Class (D-Class before E-Class), take damage, and are eliminated when they take damage equal to their "Hull Size" (note that Ground Units have hulls, but for simplicity's sake they use the same metric).''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -932,8 +1006,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.8.1',
-    title: 'Ground Combat Resolution',
-    body: '''Ground combat is resolved starting with A-Class Ground Units, progressing through the Weapon Classes in order. Each Ground Unit rolls to hit based on its Attack Strength, modified by any applicable bonuses. Hits destroy Ground Units in one hit each.''',
+    title: 'Unused Mechanics',
+    body: '''Ships, Fleet Size Bonus, Tactics, and Attack/Defense Tech have no effect on ground combat.''',
     depth: 2,
     parentId: '21.8',
     isOptional: false,
@@ -1013,7 +1087,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.11',
     title: 'GRAV ARMOR',
-    body: '''Require Ground Combat 3. Grav Armor has a special ability beyond its normal attack. At the start of each round of combat, for every Grav Armor unit a player has over the amount that the opponent has, one enemy ground unit is automatically eliminated before combat begins.''',
+    body: '''Require Ground Combat 3. Grav Armor has a special ability beyond its normal attack. At the start of each round of combat, for every Grav Armor unit a player has over the amount that their opponent has, that player may provide support to one non-Grav Armor unit, including Militia (and Transports if you have Air Support, see the Card Manifest). A supported unit gains one to its Attack and Defense Strength. A unit can only be supported by one Grav Armor unit per round. Units that cannot fire cannot be supported and are not counted when determining how many units can be supported.''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -1022,8 +1096,13 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.12',
-    title: 'GROUND COMBAT AND EXPERIENCE',
-    body: '''Ground Units may gain Experience in the same way as ships (37.0). Ground Unit Experience functions identically to Ship Experience with the modifications noted below.''',
+    title: 'GROUND COMBAT AGAINST ALIENS',
+    body: '''Non-player Aliens (18.0) are a special case with several exceptions to ground combat:
+
+\u2022 They may only be invaded if a player has Terraforming 1.
+\u2022 They may not be invaded until their fleet is destroyed. This means that Ground Units may not be landed after the second round of combat as is usually allowed (21.7.3).
+\u2022 After defeating the NPA fleet, the player may colonize it normally or choose to invade.
+\u2022 NPA Alien planets do not yield technology benefits other than the Alien Technology cards (11.0).''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -1032,8 +1111,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.12.1',
-    title: 'Ground Unit Experience',
-    body: '''Ground Units gain Experience by surviving ground combat. A Ground Unit that participates in a ground combat and survives gains one level of Experience. Experience bonuses for Ground Units work the same as for ships, providing attack and defense modifiers.''',
+    title: 'Procedure',
+    body: '''The NPAs have 5 Militia units on the planet. If these are defeated, the player places a 3 CP Colony of their color on the planet. If the NPAs are not defeated in ground combat, the planet is considered subdued from space and may be colonized normally; it may not be invaded later. A player has only one chance to invade an NPA planet and that is immediately after destroying its fleet. A player may NOT bombard the Colony to reduce the number of Militia like they could with a human player (21.7.4).''',
     depth: 2,
     parentId: '21.12',
     isOptional: false,
@@ -1042,8 +1121,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.12.2',
-    title: 'Ground Combat Experience Restrictions',
-    body: '''Militia units may not gain Experience. Free Ground Units (21.5) are always placed as Green units regardless of any Experience technology the player may have. Experience gained by Ground Units is tracked separately from ship Experience.''',
+    title: 'Amazing Diplomats',
+    body: '''When a player invades a Colony on an NPA planet that was started by another player using their Awesome Diplomatic ability (see the Card Manifest), that Colony may be invaded after Round 2 as normal. If the attacker wins the ground combat, any remaining NPA ships still defending the planet that were not bombed or captured by the attacker during space combat are destroyed.''',
     depth: 2,
     parentId: '21.12',
     isOptional: false,
@@ -1052,8 +1131,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.13',
-    title: 'CAPTURING COLONIES',
-    body: '''When the attacker destroys the last defending Ground Unit, the Colony has been successfully captured. To complete the process, the attacker must remove one Ground Unit that is on the planet. The removal of this unit represents the permanent resources needed to manage the captured Colony. The defeated Colony marker is left in place and covered with one from the conquering player (21.13.3). It will grow to 1 CP in the following Economic Phase. The captured Colony is then treated like any of the capturing player's Colonies.''',
+    title: 'CAPTURED COLONIES',
+    body: '''''',
     depth: 1,
     parentId: '21.0',
     isOptional: false,
@@ -1062,8 +1141,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '21.13.1',
-    title: 'Captured Colony Properties',
-    body: '''A captured Colony provides income and grows normally. Shipyards may be built, Militia will be produced when attacked, etc. Any Minerals (6.7) and Space Wrecks (6.8) that are on the Colony when it is captured are destroyed with no benefit.''',
+    title: 'Procedure and Properties',
+    body: '''Captured Colonies "go backward" one step of growth upon capture. A 5 CP Colony becomes a 3 CP Colony, a 3 CP Colony becomes a 1 CP Colony, and a 1 CP Colony is flipped back to its Colony Ship side. In this last case it does not actually become a ship, it just reverts to that step in the growth process. (This is the only time a Colony is ever flipped back to the Colony Ship side.) It will grow to 1 CP in the following Economic Phase. In the rare case where a Colony with only a Colony Ship would be captured, replace the Colony Ship with one of the capturing player's. The captured Colony is then treated like any of the capturing player's Colonies. It will provide income and grow, Shipyards may be built, Militia will be produced when attacked, etc. Any Minerals (6.7) and Space Wrecks (6.8) that are on the Colony when it is captured are destroyed with no benefit.''',
     depth: 2,
     parentId: '21.13',
     isOptional: false,
@@ -1143,7 +1222,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '21.13.9',
     title: "Capturing another Player's Captured Planet",
-    body: '''If a third player captures a planet, they gain technology from the original owner, not the current owner. The technology that can be gained is only that which was researched by the original player at the time the Colony was originally captured.''',
+    body: '''If a third player captures a planet, they gain technology from the original owner, not the current owner. The technology that can be gained is only that which was researched by the original player at the time it was originally captured. In multiplayer games, a note should be made of the player's technology when a planet is captured in case this happens.''',
     depth: 2,
     parentId: '21.13',
     isOptional: false,
@@ -1157,7 +1236,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '22.0',
     title: 'Titans',
-    body: '''Titans are massive warships that require Ship Size 6 technology to build. They are the largest standard combat units available. Titans can carry Fighters and have powerful combat capabilities. Missiles do 1 damage to a Titan instead of the normal 2 (24.4.4). The War Sun Empire Advantage allows Alternate Empires to build Titans.''',
+    body: '''Titans are massive ships -- far larger than a DN. A player must have Ship Size 7 Tech (9.4) to build a Titan. Titans have the following properties: Each hit from a Titan does 2 damage to a single ship instead of 1. It only gets 1 attack each round. May never be screened (5.7) due to their size. May never retreat (5.9) from combat. Are immune to Boarding Ships (19.2) due to their size. Unless the attacking ship is a Fighter, a roll of 1 is not an automatic hit against a Titan. It is therefore possible for some ships to not be able to score a hit on a Titan, depending on the technology on the ships. Fighters receive +1 to their Attack Strength against Titans. This is in addition to any modifiers from Attack Technology (9.2) and Fleet Size (5.1.3).''',
     depth: 0,
     parentId: null,
     isOptional: false,
@@ -1166,8 +1245,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '22.1',
-    title: 'TITAN CHARACTERISTICS',
-    body: '''Titans have a Hull Size of 3, an A-Class Weapon, and can carry up to 2 Fighter Squadrons. They are the most powerful standard combat ships in the game. Titans require Ship Size 6 technology and a Shipyard with sufficient capacity to construct.''',
+    title: 'FLEET SIZE BONUS',
+    body: '''Which rule gets the Fleet Size Bonus (5.1.3) is calculated normally for the battle. However, when firing at the Titan, ships other than Fighters do not get to claim the bonus.''',
     depth: 1,
     parentId: '22.0',
     isOptional: false,
@@ -1176,18 +1255,18 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '22.2',
-    title: 'TITAN CONSTRUCTION',
-    body: '''Titans require Ship Size 6 technology to build. They must be built at a Shipyard with sufficient construction capacity. Only standard Empires may build Titans; Alternate Empires cannot build them unless they have the War Sun Empire Advantage (10.0).''',
+    title: 'CAN CARRY FIGHTERS',
+    body: '''If the player with a Titan also has Fighter Tech, a Titan may carry up to 3 additional Fighters at a cost of 6 CP (9.5). An existing Titan can be upgraded to have this ability as soon as Fighter 1 is researched. Although the Titan carries Fighters, it is not considered a Carrier. It may be fired upon while friendly Fighters are still present in the battle. In the unlikely event that a Titan is destroyed and there are more Fighters left than can be carried on the remaining CVs/Titans/Unique Ships/Advanced Flagships, the extra Fighters would be eliminated at the conclusion of the battle.''',
     depth: 1,
     parentId: '22.0',
     isOptional: false,
-    tags: ['ships', 'economy'],
+    tags: ['ships', 'combat'],
     sourcePage: 23,
   ),
   RuleSection(
     id: '22.3',
-    title: 'TITAN IN COMBAT',
-    body: '''Titans are powerful A-Class combat units. Missiles do only 1 damage to a Titan instead of the normal 2 (24.4.4). Titans can carry Fighter Squadrons and benefit from all applicable technologies up to the limits of their Hull Size.''',
+    title: 'PLANET DESTROYERS',
+    body: '''A Titan may not attack a Colony like a normal ship would. When a Titan fires at a Colony, the Colony and planet are both automatically destroyed. Remove the planet from the game and replace it with one of the Asteroid terrain tiles (8.8.1). This hex is now an Asteroid hex. A Titan may fire at and destroy a planet that does not have a Colony on it.''',
     depth: 1,
     parentId: '22.0',
     isOptional: false,
@@ -1196,8 +1275,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '22.4',
-    title: 'TITAN RESTRICTIONS',
-    body: '''Titans may not be captured by Boarding Ships (19.2.2). Alternate Empires cannot build Titans unless they have the War Sun Empire Advantage. Titans cannot be carried by any other ship and must move under their own power.''',
+    title: 'TITANS & MINES',
+    body: '''Because of their great size, Mines (17.0) do not kill a Titan, but do one point of damage each. It would take 5 Mines to kill a Titan. If a battle immediately follows Mine detonation, the Titan would enter that battle with damage. Fighters carried by the Titan are immune to any Mine damage unless the Titan is destroyed, which would destroy them. All damage is repaired at the end of a battle as normal.''',
     depth: 1,
     parentId: '22.0',
     isOptional: false,
@@ -1285,7 +1364,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '24.1.3',
     title: 'Changes to Boarding',
-    body: '''Alternate Empires use Boarding Ships differently. Refer to sections 24.5 and the Alternate Empire Production Sheet for Alternate Empire Boarding Ship characteristics and restrictions.''',
+    body: '''Alternate Empires do not have Boarding Ships (19.0). If their ships are successfully boarded, they are destroyed instead of being captured. However, every time a ship is successfully boarded, the boarding player may steal one technology that was on the ship. If the Ship Distress / Resource Card is played it prevents this technology theft. A successful boarding attack still counts as captured for the purpose of Ship Experience (17.0).''',
     depth: 2,
     parentId: '24.1',
     isOptional: false,
@@ -1294,8 +1373,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '24.2',
-    title: 'ALTERNATE EMPIRE SHIP ABILITIES',
-    body: '''Each Alternate Empire ship type is assigned a random special ability from the Random Special Ability Table (24.3). These abilities are rolled for before the start of the game and recorded. Each ship type gets one special ability that applies to all ships of that type built by the Alternate Empire.''',
+    title: 'Random Special Ability Selection',
+    body: '''For Battlecruisers, Battleships, and Dreadnoughts, a random special ability is drawn and made available for that class at the times specified below. Each ability can be researched for a cost of 10 CP. Note that the abilities must be researched before they are available to use. When drawn, the number of the ability should be written on the player's Production Sheet. Battle Cruisers: Draw a random special ability when Ship Size 4 is researched. BCs do not automatically get Fast 1 (9.9). Battleships: Draw a random special ability when Advanced Construction 1 (38.0) is researched. BBs do not automatically get Tractor Beams (p.45). Dreadnoughts: Draw a random special ability when Advanced Construction 1 is researched. DNs do not automatically get Shield Projectors (p.45). Flagships: A Flagship may still be equipped with Exploration Technology (9.8). However, instead of automatically getting Fast 1, it gets access to the same special ability as the Battle Cruisers (see above) once it's been researched. When upgraded to an Advanced Flagship (38.11), it may pick an ability off the Unique Ship Table like any other Advanced Flagship.''',
     depth: 1,
     parentId: '24.0',
     isOptional: false,
@@ -1355,7 +1434,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '24.4.4',
     title: 'Missiles in Combat',
-    body: '''Missiles are fired as if they are A-Class (their counter is put into play) but their targets are selected and hit as if they are E-Class. This represents the time between launch and impact. Once a Missile counter is placed into combat it may be targeted like any other combat unit. During E-Class firing, Missiles resolve their attack like any other combat unit. Missiles that hit their targets do 2 damage to a ship or Colony and 1 damage to a Titan (22.0). After a Missile attacks, it is removed from the board regardless of whether it hit its target. If a Missile is fired as E-Class instead of A-Class due to terrain, it is resolved immediately during the E-Class step and does not wait until the normal E-Class resolution.''',
+    body: '''Missiles are fired as if they are A-Class (their counter is put into play) but their targets are selected and hit as if they are E-Class. This represents the time between launch and impact. Once a Missile counter is placed into combat it may be targeted like any other combat unit. During E-Class firing, Missiles resolve their attack like any other combat unit. Missiles that hit their targets do 2 damage to a ship or Colony and 1 damage to a Titan (22.0). After a Missile attacks, it is removed from the board regardless of whether it hit its target. If a Missile is fired as E-Class instead of A-Class due to terrain, it is resolved immediately. Those types of terrain affect the Attack and Defense values of Missiles in the same way as all other units. Doomsday Machines (29.0) do not fire on Missiles unless there are no ships remaining. Missiles only do -1 damage to DMs.''',
     depth: 2,
     parentId: '24.4',
     isOptional: false,
@@ -1364,32 +1443,32 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '24.5',
-    title: 'ALTERNATE EMPIRE BOARDING',
-    body: '''Alternate Empires have changes to how boarding works. Their Boarding Ships have modified characteristics compared to standard Empires.''',
+    title: 'Jammer Technology',
+    body: '''''',
     depth: 1,
     parentId: '24.0',
     isOptional: false,
-    tags: ['ships', 'combat'],
+    tags: ['tech', 'combat'],
     sourcePage: 25,
   ),
   RuleSection(
     id: '24.5.1',
-    title: 'Alternate Boarding Characteristics',
-    body: '''Alternate Empire Boarding Ships have different Attack Strength and Weapon Class values than standard Boarding Ships. Refer to the Alternate Empire Production Sheet for the specific values. All other boarding rules (19.0) still apply unless specifically modified.''',
+    title: 'Characteristics',
+    body: '''Jammer Technology can be researched by any Empire in order to counter Missiles. Jammer Technology can only be equipped by Cruisers and is unaffected by whether the ships already have Exploration Technology (9.8). Jammer Technology for Replicator ships (40.0) is shown on the Replicator Production Sheet. When firing at Missiles (not Missile Boats), Replicators are always treated as having a Tactics level of 3.''',
     depth: 2,
     parentId: '24.5',
     isOptional: false,
-    tags: ['ships', 'combat'],
+    tags: ['tech', 'combat', 'ships'],
     sourcePage: 25,
   ),
   RuleSection(
     id: '24.5.2',
-    title: 'Alternate Boarding Restrictions',
-    body: '''Alternate Empire Boarding Ships follow the same restrictions as standard Boarding Ships (19.2.2) with any modifications noted on the Alternate Empire Production Sheet. They may not mount Attack technology and are subject to all the same targeting limitations.''',
+    title: 'Jammer Technology in Combat',
+    body: '''When a Cruiser with Jammer 1 is present in combat, the Attack Strength of all enemy Missiles is reduced by 2. If at least two Cruisers equipped with Jammer 2 are present in combat, the Attack Technology of all enemy Missiles is reduced to 0. A single Cruiser with Jammer 2 only receives the benefit of Jammer 1. Cruisers and Replicator ships that are screened during a round of combat can still provide the benefit of Jammer Technology during that round. Changes to Missile Attack Strength caused by Jammer Technology are calculated each round when the first Missile attacks (during E-Class) and that shift is used for all subsequent Missiles during that round.''',
     depth: 2,
     parentId: '24.5',
     isOptional: false,
-    tags: ['ships', 'combat'],
+    tags: ['tech', 'combat', 'ships'],
     sourcePage: 25,
   ),
 
@@ -1429,7 +1508,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '25.1.2',
     title: 'Plasma Storms',
-    body: '''Units must stop when they enter a Plasma Storm and may only move one hex on the turn they leave a Plasma Storm. If a Plasma Storm is ever in the same hex as the following it will destroy them immediately: Ships that cost 9 CP or less except space pirates (25.7); Replicator Type II Ships (and smaller); Space Wrecks; Minerals. Fighters are only destroyed if not enough transporting ships (15.2.3) remain at any point, but they may not be used in fights in this hex. Doomsday Machines are unaffected by Plasma Storms. Plasma Storms are removed from the map if they move into a hex with a Space Amoeba or if a Space Amoeba spreads onto them (SSB 3.0, CSB 10.0). After a Plasma Storm leaves a hex, place a spare Nebula tile in the hex it just left. This Nebula is permanent terrain.''',
+    body: '''Units must stop when they enter a Plasma Storm and may only move one hex on the turn they leave a Plasma Storm. If a Plasma Storm is ever in the same hex as the following it will destroy them immediately: Ships that cost 9 CP or less except space pirates (25.7); Replicator Type II Ships (and smaller); Space Wrecks; Minerals. Fighters are only destroyed if not enough transporting ships (15.2.3) remain at any point, but they may not be used in fights in this hex. Doomsday Machines are unaffected by Plasma Storms. Plasma Storms are removed from the map if they move into a hex with a Space Amoeba or if a Space Amoeba spreads onto them (SSB 3.0, CSB 10.0). After a Plasma Storm leaves a hex, place a spare 5 CP Mineral Counter face up in the hex (use a Home System Mineral counter already harvested by a player).''',
     depth: 2,
     parentId: '25.1',
     isOptional: false,
@@ -1439,7 +1518,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '25.1.3',
     title: 'Ion Storms',
-    body: '''Ion Storms follow the same movement rules as Plasma Storms (25.1.1). When combat occurs in an Ion Storm hex, all units fire as E-Class like in Asteroids and Nebulae. If an Ion Storm moves into a hex with ships, those ships are not destroyed but must fight any subsequent combat as E-Class that turn.''',
+    body: '''All combat damage is doubled in Ion Storms (e.g., a Titan or a Missile would normally do 4 damage with each hit). The first time a player attempts to move their units out of an Ion Storm (including Reaction Movement, 35.0, and Retreats, 5.9) they must roll a die. On a roll of 8-10, none of their units may leave the hex that turn. This roll occurs only once per player turn per Ion Storm. Doomsday Machines receive double damage but do not need to roll when attempting to leave an Ion Storm. Amoebae are not affected by Ion Storms.''',
     depth: 2,
     parentId: '25.1',
     isOptional: false,
@@ -1458,8 +1537,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.3',
-    title: 'GRAVITY RIFTS',
-    body: '''Gravity Rifts are areas of unusual gravitational forces that affect both movement and combat in their hex.''',
+    title: 'SPACE STATIONS',
+    body: 'Heavily armed, automated platforms that attack on sight.',
     depth: 1,
     parentId: '25.0',
     isOptional: false,
@@ -1468,18 +1547,18 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.3.1',
-    title: 'Gravity Rift Movement',
-    body: '''Ships entering a Gravity Rift hex must stop and end their movement for that turn. Ships leaving a Gravity Rift hex on a subsequent turn may move normally. The gravitational forces pull ships in but do not hinder departure.''',
+    title: 'Characteristics',
+    body: '''Space Stations do not move and must be defeated in combat if a player enters the same hex. All Space Stations have Point Defense 2 (15.3) and Scanner 1 (16.2) technologies, and they cannot be boarded (19.0).''',
     depth: 2,
     parentId: '25.3',
     isOptional: false,
-    tags: ['terrain', 'movement'],
+    tags: ['terrain', 'combat'],
     sourcePage: 27,
   ),
   RuleSection(
     id: '25.3.2',
-    title: 'Gravity Rift Combat',
-    body: '''Combat in a Gravity Rift hex is conducted normally with no modifications to Weapon Class or Attack/Defense values. The gravitational anomalies do not affect combat systems.''',
+    title: 'Defeated Space Stations',
+    body: '''Players receive a benefit for destroying Space Stations based on their type. A6-2-x2: Draw two Alien Tech cards (11.0) and keep one at no cost. If not using Alien Tech Cards, gain 10 CP instead. A5-1-x1: Gain 5 CP.''',
     depth: 2,
     parentId: '25.3',
     isOptional: false,
@@ -1579,7 +1658,7 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   RuleSection(
     id: '25.7',
     title: 'SPACE PIRATES',
-    body: '''Space Pirates are interstellar nomads, technologically advanced in both space travel and weaponry. This counter's effect only comes into play via a ship entering the hex. If this counter is peeked at using Exploration technology, disregard the counter and return it face down. Space Pirates are considered Skilled (37.0) and Experience may be gained by destroying them (similar to Non-Player Aliens, 18.0), but Space Pirates may not gain Experience. Space Pirates may not be scrapped (19.5.1) to gain any technology.''',
+    body: '''Space Pirates are interstellar nomads, technologically advanced in both space travel and weaponry. This counter's effect only comes into play via a ship entering the hex. If this counter is peeked at using Exploration technology or a Regional Map, it must be left face down. In An Alien Player Fleet (SSB 4.0) this counter is removed when peeked at using Exploration technology; remove the Pirate from the board immediately.''',
     depth: 1,
     parentId: '25.0',
     isOptional: false,
@@ -1588,8 +1667,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.7.1',
-    title: 'Space Pirate Encounter',
-    body: '''When a ship enters a hex with a Space Pirates marker, the marker's effect comes into play. If the counter is peeked at using Exploration technology, it must be left face down. Space Pirates are interstellar nomads, technologically advanced in both space travel and weaponry.''',
+    title: 'Restriction',
+    body: '''Do not use Space Pirates on maps where there are only two or fewer Deep Space hexes between the players.''',
     depth: 2,
     parentId: '25.7',
     isOptional: false,
@@ -1598,8 +1677,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.7.2',
-    title: 'Space Pirate Combat',
-    body: '''Space Pirates fight as standard combat units with the technology levels indicated on their counters. They always defend and will attack any player's ships that enter their hex. Combat is resolved using normal combat procedures.''',
+    title: 'Fight or Hire',
+    body: '''When revealed, the player must state that they will fight or hire the Pirate. If they decide to hire the Pirate, they pay 10 CP in the next Economic Phase. The player must pay even if the Pirate is destroyed before the next Economic Phase. Replicators must pay the CP immediately or fight the Pirate. If the player decides to fight the Pirate, the Pirate will not retreat. Similarly to Non-Player Aliens (18.0) the first team player to the left of the active player decides the targets. If the pirate retreats or is destroyed remove the Pirate from the board. If the Pirate is hired the hiring ships are not revealed.''',
     depth: 2,
     parentId: '25.7',
     isOptional: false,
@@ -1608,8 +1687,8 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.7.3',
-    title: 'Space Pirate Abilities',
-    body: '''All Space Pirates are equipped with Fast 1, regardless of whether it is researched (9.9.1). Space Pirates are technologically advanced in both space travel and weaponry.''',
+    title: 'Controlling Pirates',
+    body: '''The player that pays the 10 CP controls the ship until it is destroyed. It acts exactly as any other unit except as noted below. Mark it with one of the player's control markers. A controlled Space Pirate remains face up for the rest of the game. A player may only have one Space Pirate under their control at a time. If a player reveals a Space Pirate while in control of another Space Pirate, they must fight the newly revealed Space Pirate.''',
     depth: 2,
     parentId: '25.7',
     isOptional: false,
@@ -1618,8 +1697,14 @@ To make it easier to keep track of which MS Pipeline counters have not moved, th
   ),
   RuleSection(
     id: '25.7.4',
-    title: 'Space Pirate Destruction',
-    body: '''When Space Pirates are destroyed, the hex becomes empty deep space (unless there is a planet or other terrain). Destroyed Space Pirates are removed from the game permanently and may not be scrapped for technology (19.5.1).''',
+    title: 'Characteristics',
+    body: '''Space Pirates have the following characteristics:
+
+\u2022 Their stats are: A5-0-x1, Movement 4, Fast 1, & Tactics 0.
+\u2022 If a Pirate is captured (19.3) it will automatically self-destruct. The Boarding Ship (19.0) may still roll for Ship Experience in this case (37.0).
+\u2022 Space Pirates cannot be equipped with a player's technology and gain none of the owner's Empire Advantage Abilities (10.0). They pay no maintenance and cannot be scuttled.
+\u2022 The Space Pirates may stack and defend with a player's ships, but may only attack alone.
+\u2022 The Space Pirates may not be moved onto an unrevealed System marker by the controlling player, even if other ships enter the hex.''',
     depth: 2,
     parentId: '25.7',
     isOptional: false,

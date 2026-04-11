@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/empire_advantages.dart';
 import '../data/scenarios.dart';
+import '../data/sci_fi_names.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/game_config.dart';
@@ -66,7 +67,10 @@ class _NewGameWizardDialog extends StatefulWidget {
 }
 
 class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
-  final _nameController = TextEditingController(text: 'New Game');
+  // Pull a random sci-fi campaign title as the default game name. Users can
+  // edit before confirming the wizard.
+  final _nameController = TextEditingController(
+      text: kGameNames[DateTime.now().microsecondsSinceEpoch % kGameNames.length]);
   int _step = 0; // 0: name+expansions+rules, 1: scenario+EA, 2: confirm
 
   // Expansion toggles
@@ -81,8 +85,10 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
   bool _shipExp = false;
   bool _unpredictableResearch = false;
 
-  // Scenario
-  ScenarioPreset? _scenario;
+  // Scenario — pre-select the recommended 2-player standard scenario by
+  // default. The user can still pick "None / Custom" or any other entry.
+  ScenarioPreset? _scenario =
+      kScenarios.where((s) => s.id == 'standard_2p').firstOrNull;
 
   // Empire Advantage
   int? _selectedEA;
@@ -413,6 +419,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             _scenario?.id == s.id,
             () => setState(() => _scenario = s),
             subtitle: s.description,
+            recommended: s.id == 'standard_2p',
           ),
 
         const SizedBox(height: 16),
@@ -565,14 +572,48 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
     bool selected,
     VoidCallback onTap, {
     String? subtitle,
+    bool recommended = false,
   }) {
+    final titleWidget = recommended
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 1,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Recommended',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ],
+          )
+        : Text(title, style: const TextStyle(fontSize: 14));
     return ListTile(
       leading: Icon(
         selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
         size: 20,
         color: theme.colorScheme.primary,
       ),
-      title: Text(title, style: const TextStyle(fontSize: 14)),
+      title: titleWidget,
       subtitle: subtitle != null
           ? Text(
               subtitle,

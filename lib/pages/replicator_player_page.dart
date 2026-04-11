@@ -84,6 +84,14 @@ class ReplicatorPlayerPage extends StatelessWidget {
             _StatChip(label: 'Move', value: '${state.moveLevel}'),
             _StatChip(label: 'Full Colonies', value: '$fullColonies'),
             _StatChip(label: 'Hulls This Turn', value: '$totalProduction'),
+            _StatChip(
+              label: 'Total Hulls',
+              value: '${state.totalHullsProducedLifetime}',
+            ),
+            _StatChip(
+              label: 'Deplete EP',
+              value: '${state.depletionThresholdPhase}+',
+            ),
           ],
         ),
         if (state.empireAdvantage != null) ...[
@@ -124,11 +132,47 @@ class ReplicatorPlayerPage extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         const SectionHeader(title: 'Flagship'),
-        _infoRow(
-          context,
-          'Flagship Present',
-          state.hasFlagship ? 'Yes' : 'No (destroyed)',
-        ),
+        if (!state.hasFlagship)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Flagship destroyed',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        onChanged(state.copyWith(hasFlagship: true)),
+                    child: const Text('Rebuild'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (state.hasFlagship) ...[
           _infoRow(
             context,
@@ -143,7 +187,31 @@ class ReplicatorPlayerPage extends StatelessWidget {
             '${state.moveLevel} / '
                 '${state.explorationResearched ? 2 : 1}',
           ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => onChanged(state.copyWith(hasFlagship: false)),
+              icon: const Icon(Icons.close, size: 16),
+              label: const Text('Mark destroyed'),
+            ),
+          ),
         ],
+        const SizedBox(height: 12),
+        const SectionHeader(title: 'Movement Tech'),
+        _infoRow(context, 'Level', '${state.moveLevel} / 3'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(
+            _moveAutoUpgradeHint(state.moveLevel, turnNumber),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.65),
+                ),
+          ),
+        ),
         const SizedBox(height: 12),
         const SectionHeader(title: 'Economy'),
         _numberRow(
@@ -165,6 +233,38 @@ class ReplicatorPlayerPage extends StatelessWidget {
           value: state.purchasedRpCount,
           onChanged: (value) =>
               onChanged(state.copyWith(purchasedRpCount: value.clamp(0, 5))),
+        ),
+        _numberRow(
+          context,
+          label: 'Space Wrecks Found',
+          value: state.spaceWrecksEncountered,
+          onChanged: (value) => onChanged(
+            state.copyWith(spaceWrecksEncountered: value.clamp(0, 99)),
+          ),
+        ),
+        _numberRow(
+          context,
+          label: 'First Combat Bonuses',
+          value: state.firstCombatBonuses,
+          onChanged: (value) => onChanged(
+            state.copyWith(firstCombatBonuses: value.clamp(0, 99)),
+          ),
+        ),
+        _numberRow(
+          context,
+          label: 'Things Encountered',
+          value: state.thingsEncountered.length,
+          onChanged: (value) {
+            final clamped = value.clamp(0, 99);
+            final list = List<String>.from(state.thingsEncountered);
+            while (list.length < clamped) {
+              list.add('encounter-${list.length + 1}');
+            }
+            while (list.length > clamped) {
+              list.removeLast();
+            }
+            onChanged(state.copyWith(thingsEncountered: list));
+          },
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -217,10 +317,47 @@ class ReplicatorPlayerPage extends StatelessWidget {
               ),
             ),
             _ActionChip(
-              label: 'Alien Tech (+10 CP)',
+              label: 'Mineral Hex (+5 CP)',
+              enabled: true,
+              onPressed: () =>
+                  onChanged(state.copyWith(cpPool: state.cpPool + 5)),
+            ),
+            _ActionChip(
+              label: 'Discard AT (+10 CP)',
               enabled: true,
               onPressed: () =>
                   onChanged(state.copyWith(cpPool: state.cpPool + 10)),
+            ),
+            _ActionChip(
+              label: '+Space Wreck (+1 RP)',
+              enabled: state.rpTotal < 15,
+              onPressed: () => onChanged(
+                state.copyWith(
+                  rpTotal: (state.rpTotal + 1).clamp(0, 15),
+                  spaceWrecksEncountered: state.spaceWrecksEncountered + 1,
+                ),
+              ),
+            ),
+            _ActionChip(
+              label: '+Hull Produced',
+              enabled: true,
+              onPressed: () => onChanged(
+                state.copyWith(
+                  totalHullsProducedLifetime:
+                      state.totalHullsProducedLifetime + 1,
+                ),
+              ),
+            ),
+            _ActionChip(
+              label: '-Hull Produced',
+              enabled: state.totalHullsProducedLifetime > 0,
+              onPressed: () => onChanged(
+                state.copyWith(
+                  totalHullsProducedLifetime:
+                      (state.totalHullsProducedLifetime - 1)
+                          .clamp(0, 9999),
+                ),
+              ),
             ),
           ],
         ),
@@ -311,6 +448,26 @@ class ReplicatorPlayerPage extends StatelessWidget {
         ),
         _infoRow(context, 'Extra HW Hulls', '$extraHomeworldHulls'),
         _infoRow(context, 'Total Hulls This Turn', '$totalProduction'),
+        _infoRow(
+          context,
+          'Lifetime Hulls Produced',
+          '${state.totalHullsProducedLifetime}',
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Depletion starts at Economic Phase '
+            '${state.depletionThresholdPhase} '
+            '(RAW 40.3.3${state.isGreenReplicators ? " + EA #61" : ""}).',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.65),
+                ),
+          ),
+        ),
         if (depletionDue)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -347,6 +504,34 @@ class ReplicatorPlayerPage extends StatelessWidget {
             label: const Text('Add Colony'),
           ),
         ),
+        const SizedBox(height: 12),
+        const SectionHeader(title: 'Game Log'),
+        if (state.notes.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'No entries yet. Tap + to add a note.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.55),
+                  ),
+            ),
+          )
+        else
+          ...state.notes.asMap().entries.map(
+                (entry) => _buildNoteEntry(context, entry.key, entry.value),
+              ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _addNoteEntry(context),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add entry'),
+          ),
+        ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -360,6 +545,146 @@ class ReplicatorPlayerPage extends StatelessWidget {
         const SizedBox(height: 24),
       ],
     );
+  }
+
+  static String _moveAutoUpgradeHint(int moveLevel, int turnNumber) {
+    if (moveLevel >= 3) {
+      return 'Move tech maxed (Level 3).';
+    }
+    if (moveLevel >= 2) {
+      return turnNumber >= 16
+          ? 'Auto-upgrade to Level 3 available (EP 16+, RAW 40.2.1).'
+          : 'Auto-upgrade to Level 3 at EP 16 (RAW 40.2.1).';
+    }
+    // moveLevel == 1
+    if (turnNumber >= 16) {
+      return 'Auto-upgrade to Level 3 available (EP 16+, RAW 40.2.1).';
+    }
+    if (turnNumber >= 8) {
+      return 'Auto-upgrade to Level 2 available (EP 8+, RAW 40.2.1).';
+    }
+    return 'Auto-upgrade to Level 2 at EP 8, Level 3 at EP 16 (RAW 40.2.1).';
+  }
+
+  Widget _buildNoteEntry(BuildContext context, int index, String text) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onLongPress: () {
+        final notes = List<String>.from(state.notes)..removeAt(index);
+        onChanged(state.copyWith(notes: notes));
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6, right: 6),
+              child: Icon(
+                Icons.circle,
+                size: 6,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+            Expanded(
+              child: InkWell(
+                onTap: () => _editNoteEntry(context, index, text),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    text,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 32,
+                minHeight: 32,
+              ),
+              iconSize: 16,
+              icon: Icon(
+                Icons.close,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+              onPressed: () {
+                final notes = List<String>.from(state.notes)..removeAt(index);
+                onChanged(state.copyWith(notes: notes));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addNoteEntry(BuildContext context) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Game Log Entry'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'e.g. "3 hulls sent to Alpha Centauri"',
+            isDense: true,
+          ),
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    final notes = [...state.notes, result];
+    onChanged(state.copyWith(notes: notes));
+  }
+
+  Future<void> _editNoteEntry(
+    BuildContext context,
+    int index,
+    String initial,
+  ) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Entry'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(isDense: true),
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    final notes = List<String>.from(state.notes);
+    notes[index] = result;
+    onChanged(state.copyWith(notes: notes));
   }
 
   Future<void> _promptDepletion(BuildContext context) async {

@@ -1,15 +1,18 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/scenarios.dart';
 import '../data/ship_definitions.dart';
 import '../data/special_abilities.dart';
+import '../data/temporal_effects.dart';
 import '../models/game_config.dart';
 import '../models/game_state.dart';
 import '../data/tech_costs.dart';
 import '../models/research_event.dart';
 import '../models/turn_summary.dart';
+import '../tutorial/tutorial_targets.dart';
 import '../widgets/empire_advantage_picker.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -33,6 +36,17 @@ class SettingsPage extends StatelessWidget {
   final Map<ShipType, int> shipSpecialAbilities;
   final ValueChanged<Map<ShipType, int>>? onSpecialAbilitiesChanged;
   final VoidCallback? onReopenLastTurn;
+  final VoidCallback? onReplayTutorial;
+
+  /// PP13: app-level preference to show a confirmation dialog before
+  /// End Turn finalizes the turn.
+  final bool confirmEndTurn;
+  final ValueChanged<bool>? onConfirmEndTurnChanged;
+
+  /// PP18: app-level text-scale multiplier (1.0 = default). Applied
+  /// via a MediaQuery.textScaler override at the MaterialApp root.
+  final double textScale;
+  final ValueChanged<double>? onTextScaleChanged;
 
   const SettingsPage({
     super.key,
@@ -56,15 +70,46 @@ class SettingsPage extends StatelessWidget {
     this.shipSpecialAbilities = const {},
     this.onSpecialAbilitiesChanged,
     this.onReopenLastTurn,
+    this.onReplayTutorial,
+    this.confirmEndTurn = true,
+    this.onConfirmEndTurnChanged,
+    this.textScale = 1.0,
+    this.onTextScaleChanged,
   });
+
+  /// PP18: human-readable subtitle for the text-scale slider.
+  static String _textScaleSubtitle(double scale) {
+    final label = '${scale.toStringAsFixed(2)}x';
+    if ((scale - 1.0).abs() < 0.001) return '$label (default)';
+    return label;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return ListView(
+      key: TutorialTargets.settingsPageRoot,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
+        // ── Help ──
+        if (onReplayTutorial != null) ...[
+          _SectionTitle(title: 'HELP'),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.school_outlined),
+            title: const Text(
+              'Replay tutorial',
+              style: TextStyle(fontSize: 16),
+            ),
+            subtitle: const Text(
+              'Walk through setup and turn basics again.',
+              style: TextStyle(fontSize: 13),
+            ),
+            onTap: onReplayTutorial,
+          ),
+          const Divider(height: 24),
+        ],
         // ── Accessibility ──
         _SectionTitle(title: 'ACCESSIBILITY'),
         const SizedBox(height: 8),
@@ -81,6 +126,69 @@ class SettingsPage extends StatelessWidget {
           onChanged: (v) {
             onConfigChanged(config.copyWith(strongHaptics: v));
           },
+        ),
+        SwitchListTile(
+          title: const Text(
+            'Confirm End Turn',
+            style: TextStyle(fontSize: 16),
+          ),
+          subtitle: const Text(
+            'Show a confirmation dialog before advancing the turn.',
+            style: TextStyle(fontSize: 13),
+          ),
+          value: confirmEndTurn,
+          onChanged: onConfirmEndTurnChanged,
+        ),
+        // PP18: in-app text size override. Applied via a
+        // MediaQuery.textScaler at the MaterialApp root so every page
+        // scales together.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Text size',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _textScaleSubtitle(textScale),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Slider(
+            value: textScale.clamp(0.85, 1.5),
+            min: 0.85,
+            max: 1.5,
+            divisions: 13,
+            label: '${textScale.toStringAsFixed(2)}x',
+            onChanged: onTextScaleChanged == null
+                ? null
+                : (v) {
+                    // Snap to the nearest 0.05 step so the persisted
+                    // value matches the slider's discrete stops even
+                    // if callers feed in a raw double.
+                    final snapped = (v * 20).round() / 20;
+                    onTextScaleChanged!(snapped);
+                  },
+          ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -222,7 +330,63 @@ class SettingsPage extends StatelessWidget {
           value: config.enableTemporal,
           enabled: config.enableFacilities,
           disabledReason: 'Requires Facilities enabled',
-          onChanged: (v) => onConfigChanged(config.copyWith(enableTemporal: v)),
+          onChanged: (v) {
+            var updated = config.copyWith(enableTemporal: v);
+            if (v && updated.temporalEngineShipType == null) {
+              final types = kTemporalEngineEligibleShipTypes;
+              updated = updated.copyWith(
+                temporalEngineShipType: types[Random().nextInt(types.length)],
+              );
+            }
+            onConfigChanged(updated);
+          },
+        ),
+        if (config.enableTemporal) ...[
+          ListTile(
+            title: const Text('Temporal Engine Ship Type'),
+            subtitle: Text(
+              config.temporalEngineShipType != null
+                  ? kShipDefinitions[config.temporalEngineShipType!]?.name ?? config.temporalEngineShipType!.name
+                  : 'Not set — tap to randomize',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.casino_outlined),
+                  tooltip: 'Randomize',
+                  onPressed: () {
+                    final types = kTemporalEngineEligibleShipTypes;
+                    final random = types[Random().nextInt(types.length)];
+                    onConfigChanged(config.copyWith(temporalEngineShipType: random));
+                  },
+                ),
+                PopupMenuButton<ShipType>(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Choose manually',
+                  onSelected: (type) => onConfigChanged(config.copyWith(temporalEngineShipType: type)),
+                  itemBuilder: (_) => [
+                    for (final type in kTemporalEngineEligibleShipTypes)
+                      PopupMenuItem(
+                        value: type,
+                        child: Text(kShipDefinitions[type]?.name ?? type.name),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+        _RuleToggle(
+          title: 'Nebula Mining (rule 34.0)',
+          value: config.enableNebulaMining,
+          enabled: config.enableFacilities,
+          disabledReason: 'Requires Facilities expansion rules',
+          helpText:
+              'Rule 34.0: Miners in Nebula hexes produce CP income when '
+              'Terraforming level 2 is researched.',
+          onChanged: (v) =>
+              onConfigChanged(config.copyWith(enableNebulaMining: v)),
         ),
         _RuleToggle(
           title: 'Enable Advanced Construction',
@@ -1241,17 +1405,15 @@ class _TurnSummaryTile extends StatelessWidget {
               children: [
                 row('CP carry-over', '${snap.cpCarryOver}'),
                 row('Turn order bid', '${snap.turnOrderBid}'),
-                row('Ship spending (CP)', '${snap.shipSpendingCp}'),
                 row('Upgrades (CP)', '${snap.upgradesCp}'),
                 row('Maint. +/-',
                     '+${snap.maintenanceIncrease} / -${snap.maintenanceDecrease}'),
                 row('Research grants (CP)', '${snap.researchGrantsCp}'),
                 row('RP carry-over', '${snap.rpCarryOver}'),
-                row('Tech spending (RP)', '${snap.techSpendingRp}'),
                 row('LP carry-over', '${snap.lpCarryOver}'),
                 row('LP on LC', '${snap.lpPlacedOnLc}'),
                 row('TP carry-over', '${snap.tpCarryOver}'),
-                row('TP spending', '${snap.tpSpending}'),
+                row('TP spending', '${snap.tpSpendingDerived()}'),
                 row('Pipeline colonies',
                     '${snap.pipelineConnectedColonies}'),
                 row('Ship purchases',

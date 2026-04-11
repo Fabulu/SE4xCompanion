@@ -6,6 +6,7 @@ import '../data/tech_costs.dart';
 import '../models/game_config.dart';
 import '../models/ship_counter.dart';
 import '../models/technology.dart';
+import '../tutorial/tutorial_targets.dart';
 import '../widgets/combat_calculator_dialog.dart';
 import '../widgets/counter_row.dart';
 import '../widgets/section_header.dart';
@@ -28,6 +29,18 @@ class ShipTechPage extends StatefulWidget {
   final ValueChanged<String>? onLocateShip;
   final VoidCallback? onGoToProduction;
 
+  /// Per-ship-type total quantity of queued purchases on the Production tab.
+  /// Used to surface a "queued" badge on unbuilt counter rows so the player
+  /// knows tapping Build will materialize a real purchase rather than
+  /// manually stamp a fresh counter.
+  final Map<ShipType, int> queuedShipPurchases;
+
+  /// Optional callback that lets the page consume one queued purchase of the
+  /// given type. Returns true if a purchase was consumed (in which case the
+  /// counter should be stamped without confirmation), or false if there was
+  /// no purchase to consume (the page falls back to the manual-override path).
+  final bool Function(ShipType type)? onConsumeQueuedPurchase;
+
   const ShipTechPage({
     super.key,
     required this.config,
@@ -41,6 +54,8 @@ class ShipTechPage extends StatefulWidget {
     this.onRuleTap,
     this.onLocateShip,
     this.onGoToProduction,
+    this.queuedShipPurchases = const {},
+    this.onConsumeQueuedPurchase,
   });
 
   @override
@@ -50,6 +65,10 @@ class ShipTechPage extends StatefulWidget {
 class _ShipTechPageState extends State<ShipTechPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  /// Session-scoped suppression flag for the drift-confirmation dialog
+  /// ("Don't ask again this session" checkbox). Not persisted.
+  bool _suppressDriftConfirm = false;
 
   @override
   void dispose() {
@@ -132,8 +151,10 @@ class _ShipTechPageState extends State<ShipTechPage> {
       visible.add(ShipType.tn);
     }
 
-    // UN: unique ships, show in Facilities/AGT
-    if (widget.config.enableFacilities || widget.config.ownership.allGoodThings) {
+    // UN (Unique Ship): visible whenever Advanced Construction tech is
+    // available. The PP02 designer dialog gates the actual purchase, but
+    // the counter rows are shown so materialized UN counters surface here.
+    if (techs.contains(TechId.advancedCon)) {
       visible.add(ShipType.un);
     }
 
@@ -181,10 +202,52 @@ class _ShipTechPageState extends State<ShipTechPage> {
   }
 
   /// Build a counter by stamping current tech levels.
-  void _buildCounter(ShipType type, int number) {
+  ///
+  /// Smarter flow:
+  ///   1. If the player has a queued purchase of this type on Production,
+  ///      consume one and stamp the counter directly (no confirmation).
+  ///   2. Otherwise, hard-block when the counter pool for this type is full.
+  ///   3. Otherwise, ask the player to confirm a manual override stamp
+  ///      (no CP deducted — for cases where the ship was paid for outside
+  ///      the app).
+  Future<void> _buildCounter(ShipType type, int number) async {
     final idx = _indexOfCounter(type, number);
     if (idx < 0) return;
 
+    final hasQueued = (widget.queuedShipPurchases[type] ?? 0) > 0;
+
+    if (hasQueued && widget.onConsumeQueuedPurchase != null) {
+      final consumed = widget.onConsumeQueuedPurchase!(type);
+      if (consumed) {
+        _stampCounterAt(idx, type, number);
+        return;
+      }
+      // Fall through (race / stale queue) — treat like manual stamp path.
+    }
+
+    // Counter pool guard.
+    if (!_hasCounterStockFor(type)) {
+      final def = kShipDefinitions[type];
+      final abbr = def?.abbreviation ?? type.name.toUpperCase();
+      final max = def?.maxCounters ?? 0;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content:
+              Text('All $max $abbr counters are in use. Scrap one first.'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await _confirmManualStamp(context, type);
+    if (confirmed == true) {
+      _stampCounterAt(idx, type, number);
+    }
+  }
+
+  void _stampCounterAt(int idx, ShipType type, int number) {
     final stamped = ShipCounter.stampFromTech(
       type,
       number,
@@ -192,10 +255,45 @@ class _ShipTechPageState extends State<ShipTechPage> {
       facilitiesMode: widget.config.useFacilitiesCosts,
       advancedMunitions: widget.shipSpecialAbilities[type] == 11,
     );
-
     final updated = List<ShipCounter>.from(widget.shipCounters);
     updated[idx] = stamped;
     widget.onCountersChanged(updated);
+  }
+
+  bool _hasCounterStockFor(ShipType type) {
+    final def = kShipDefinitions[type];
+    if (def == null || def.maxCounters == 0) return true;
+    final built = widget.shipCounters
+        .where((c) => c.type == type && c.isBuilt)
+        .length;
+    return built < def.maxCounters;
+  }
+
+  Future<bool?> _confirmManualStamp(BuildContext context, ShipType type) {
+    final def = kShipDefinitions[type];
+    final abbr = def?.abbreviation ?? type.name.toUpperCase();
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Manual override'),
+        content: Text(
+          "You're manually marking an $abbr counter as built without going "
+          'through Production. No CP will be deducted. This is a manual '
+          "override \u2014 only use it if you've already paid for this ship "
+          'outside the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Stamp anyway'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Upgrade a built counter to current tech levels.
@@ -218,11 +316,48 @@ class _ShipTechPageState extends State<ShipTechPage> {
   }
 
   /// Update a counter from a CounterUpdate payload.
-  void _updateCounter(ShipType type, int number, CounterUpdate update) {
-    final idx = _indexOfCounter(type, number);
-    if (idx < 0) return;
+  ///
+  /// If the update would change a core A/D/T/M stat to a value that diverges
+  /// from what the current tech state would stamp (i.e. the player is manually
+  /// overriding away from canonical), prompt for confirmation via a
+  /// Material 3 AlertDialog. Session-scoped "Don't ask again" is honored via
+  /// [_suppressDriftConfirm]. The check is skipped when the proposed value
+  /// MATCHES the stamped value (restoring to canonical).
+  Future<void> _updateCounter(
+      ShipType type, int number, CounterUpdate update) async {
+    if (_indexOfCounter(type, number) < 0) return;
 
-    final counter = widget.shipCounters[idx];
+    // Drift check: only for A/D/T/M core stats. otherTechs / experience are
+    // player-tracked values that have no tech-stamped counterpart.
+    if (!_suppressDriftConfirm) {
+      final stamped = ShipCounter.stampFromTech(
+        type,
+        number,
+        widget.techState,
+        facilitiesMode: widget.config.useFacilitiesCosts,
+        advancedMunitions: widget.shipSpecialAbilities[type] == 11,
+      );
+      final drifting = ShipTechDriftCheck.firstDriftingStat(update, stamped);
+      if (drifting != null) {
+        final proposed = ShipTechDriftCheck.proposedValueFor(update, drifting);
+        final stampedValue =
+            ShipTechDriftCheck.stampedValueFor(stamped, drifting);
+        if (!mounted) return;
+        final confirmed = await _confirmDriftOverride(
+          context,
+          statName: drifting,
+          proposed: proposed,
+          stamped: stampedValue,
+        );
+        if (confirmed != true) return;
+      }
+    }
+
+    // Re-lookup index — the async dialog may have outlived a rebuild that
+    // reordered counters.
+    final curIdx = _indexOfCounter(type, number);
+    if (curIdx < 0) return;
+    final counter = widget.shipCounters[curIdx];
     final updated = List<ShipCounter>.from(widget.shipCounters);
 
     // Merge other techs if provided
@@ -239,7 +374,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
           update.experience!.clamp(0, ShipExperience.values.length - 1)];
     }
 
-    updated[idx] = counter.copyWith(
+    updated[curIdx] = counter.copyWith(
       attack: update.attack,
       defense: update.defense,
       tactics: update.tactics,
@@ -248,6 +383,63 @@ class _ShipTechPageState extends State<ShipTechPage> {
       experience: exp,
     );
     widget.onCountersChanged(updated);
+  }
+
+  /// Show the drift confirmation dialog. Returns true if the user confirmed
+  /// the override, false/null if cancelled. Updates [_suppressDriftConfirm]
+  /// when the checkbox is set.
+  Future<bool?> _confirmDriftOverride(
+    BuildContext context, {
+    required String statName,
+    required int proposed,
+    required int stamped,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        bool dontAskAgain = false;
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) => AlertDialog(
+            title: const Text('Manual override?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Setting $statName to $proposed will diverge from your '
+                  'current tech (which would stamp $stamped). Continue?',
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  value: dontAskAgain,
+                  onChanged: (v) =>
+                      setLocalState(() => dontAskAgain = v ?? false),
+                  title: const Text("Don't ask again this session"),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (dontAskAgain) {
+                    _suppressDriftConfirm = true;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Override'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -281,6 +473,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
     final hasAnyBuilt = widget.shipCounters.any((c) => c.isBuilt);
 
     return Column(
+      key: TutorialTargets.shipTechPageRoot,
       children: [
         // Header bar
         Container(
@@ -525,10 +718,21 @@ class _ShipTechPageState extends State<ShipTechPage> {
       ));
 
       // Counter rows
+      // Show the queued-purchase badge on the FIRST unbuilt row of this
+      // ship type so the player can clearly see "this is the next one
+      // that will be materialized" without spamming the badge on every row.
+      int queuedRemainingForThisType =
+          widget.queuedShipPurchases[shipType] ?? 0;
       for (final template in filteredGroup) {
         final idx = _indexOfCounter(template.type, template.counterNumber);
         final counter = idx >= 0 ? widget.shipCounters[idx] : null;
         final isBuilt = counter?.isBuilt ?? false;
+        final rowQueuedCount = (!isBuilt && queuedRemainingForThisType > 0)
+            ? queuedRemainingForThisType
+            : 0;
+        if (!isBuilt && queuedRemainingForThisType > 0) {
+          queuedRemainingForThisType = 0;
+        }
 
         // Build OtherTechDisplay list from template + counter state
         final otherDisplays = template.otherSlots.map((slot) {
@@ -548,9 +752,41 @@ class _ShipTechPageState extends State<ShipTechPage> {
               advancedMunitions: widget.shipSpecialAbilities[counter.type] == 11,
             );
 
+        // S.1: Detect stat drift between the counter's stamped levels and
+        // what the current tech state would produce. If the four core
+        // stats diverge in either direction (below OR above current tech),
+        // the user has manually edited the stamp and we badge the row.
+        bool hasManualOverride = false;
+        if (isBuilt && counter != null) {
+          final expected = ShipCounter.stampFromTech(
+            counter.type,
+            counter.number,
+            widget.techState,
+            facilitiesMode: widget.config.useFacilitiesCosts,
+            advancedMunitions:
+                widget.shipSpecialAbilities[counter.type] == 11,
+          );
+          hasManualOverride = counter.attack != expected.attack ||
+              counter.defense != expected.defense ||
+              counter.tactics != expected.tactics ||
+              counter.move != expected.move;
+        }
+
+        // PP02 §41.1.6: For materialized Unique Ship counters carrying a
+        // design payload, prefer the player-chosen ship name over the
+        // generic "UN#1" template label so the Ship Tech sheet reads
+        // "Excalibur" instead of "Unique Ship".
+        String rowLabel = template.label;
+        if (shipType == ShipType.un &&
+            counter != null &&
+            counter.uniqueDesign != null &&
+            counter.uniqueDesign!.name.isNotEmpty) {
+          rowLabel = '${counter.uniqueDesign!.name} (#${template.counterNumber})';
+        }
+
         items.add(CounterRow(
           key: ValueKey('${template.type.name}_${template.counterNumber}'),
-          label: template.label,
+          label: rowLabel,
           isBuilt: isBuilt,
           attack: counter?.attack ?? 0,
           defense: counter?.defense ?? 0,
@@ -569,11 +805,16 @@ class _ShipTechPageState extends State<ShipTechPage> {
             template.counterNumber,
           ),
           onChanged: isBuilt
-              ? (update) => _updateCounter(
+              ? (update) {
+                  // Fire-and-forget: _updateCounter may await a confirmation
+                  // dialog on drift. CounterRow's ValueChanged<CounterUpdate>
+                  // is a sync signature so the Future is intentionally dropped.
+                  _updateCounter(
                     template.type,
                     template.counterNumber,
                     update,
-                  )
+                  );
+                }
               : null,
           upgradeCost: canUpgrade ? counter.upgradeCost(facilitiesMode: widget.config.useFacilitiesCosts) : null,
           onUpgrade: canUpgrade
@@ -592,6 +833,15 @@ class _ShipTechPageState extends State<ShipTechPage> {
           onLocate: isBuilt && counter != null && widget.onLocateShip != null
               ? () => widget.onLocateShip!(counter.id)
               : null,
+          onInfoTap: () => showShipInfoDialog(
+            context,
+            template.type,
+            facilitiesMode: widget.config.useFacilitiesCosts,
+            isAlternateEmpire: widget.config.enableAlternateEmpire,
+            onRuleTap: widget.onRuleTap,
+          ),
+          queuedCount: rowQueuedCount,
+          hasManualOverride: hasManualOverride,
         ));
       }
     }
@@ -632,6 +882,68 @@ class _ShipTechPageState extends State<ShipTechPage> {
       }).toList();
       widget.onCountersChanged(updated);
     });
+  }
+}
+
+/// Pure-data helper for the drift-confirmation dialog on built-counter stat
+/// edits (PP10). Exposed as a top-level class so it can be unit-tested
+/// without instantiating the widget tree.
+///
+/// A [CounterUpdate] "drifts" when any core A/D/T/M field it carries has a
+/// value that does not match the corresponding stat on the fresh
+/// [ShipCounter.stampFromTech] result for the current tech state.
+class ShipTechDriftCheck {
+  ShipTechDriftCheck._();
+
+  /// Returns the name of the first A/D/T/M stat in [update] that diverges
+  /// from [stamped], or null if nothing drifts. Only inspects the four core
+  /// tech-stamped stats; otherTechs/experience never drift (no canonical
+  /// tech value to compare against).
+  static String? firstDriftingStat(CounterUpdate update, ShipCounter stamped) {
+    if (update.attack != null && update.attack != stamped.attack) {
+      return 'Attack';
+    }
+    if (update.defense != null && update.defense != stamped.defense) {
+      return 'Defense';
+    }
+    if (update.tactics != null && update.tactics != stamped.tactics) {
+      return 'Tactics';
+    }
+    if (update.move != null && update.move != stamped.move) {
+      return 'Move';
+    }
+    return null;
+  }
+
+  /// The proposed value in [update] for the given stat name.
+  /// [statName] must be one of 'Attack', 'Defense', 'Tactics', 'Move'.
+  static int proposedValueFor(CounterUpdate update, String statName) {
+    switch (statName) {
+      case 'Attack':
+        return update.attack ?? 0;
+      case 'Defense':
+        return update.defense ?? 0;
+      case 'Tactics':
+        return update.tactics ?? 0;
+      case 'Move':
+        return update.move ?? 0;
+    }
+    return 0;
+  }
+
+  /// The stamped canonical value on [stamped] for the given stat name.
+  static int stampedValueFor(ShipCounter stamped, String statName) {
+    switch (statName) {
+      case 'Attack':
+        return stamped.attack;
+      case 'Defense':
+        return stamped.defense;
+      case 'Tactics':
+        return stamped.tactics;
+      case 'Move':
+        return stamped.move;
+    }
+    return 0;
   }
 }
 

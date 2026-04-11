@@ -2,11 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/card_lookup.dart';
 import '../data/card_manifest.dart';
 import '../data/card_modifiers.dart';
 import '../data/counter_pool.dart' as counter_pool;
+import '../data/scenarios.dart';
+import '../data/sci_fi_names.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
+import '../data/temporal_effects.dart';
+import '../data/unique_ship_designer.dart';
 import '../models/drawn_card.dart';
 import '../models/game_config.dart';
 import '../models/game_modifier.dart';
@@ -17,6 +22,10 @@ import '../models/research_event.dart';
 import '../models/ship_counter.dart';
 import '../models/turn_summary.dart';
 import '../models/world.dart';
+import '../tutorial/tutorial_targets.dart';
+import '../widgets/card_detail_dialog.dart';
+import '../widgets/card_history_dialog.dart';
+import '../widgets/complex_behavior_banner.dart';
 import '../widgets/empire_summary_card.dart';
 import '../widgets/ledger_grid.dart';
 import '../widgets/number_input.dart';
@@ -26,6 +35,7 @@ import '../widgets/ship_info_dialog.dart';
 import '../widgets/manual_override_dialog.dart';
 import '../widgets/tech_detail_dialog.dart';
 import '../widgets/tech_tracker.dart';
+import '../widgets/unique_ship_designer_dialog.dart';
 
 // ---------------------------------------------------------------------------
 // Human-readable tech names
@@ -92,9 +102,12 @@ bool canBuildShip(
           existingPurchases.any((p) => p.type == ShipType.flag);
       return !alreadyHave;
 
-    // Unique ships: skip for now (cost 0, special)
+    // Unique ships (§41): require Advanced Construction >= 1. Cost is
+    // computed from a UniqueShipDesign payload via the designer dialog
+    // (PP02). We do not enforce per-ability tech prereqs here — those are
+    // surfaced as advisory text in the designer itself.
     case ShipType.un:
-      return false;
+      return effectiveLevel(TechId.advancedCon) >= 1;
 
     // Standard warships: require Ship Size >= prerequisite (AGT-aware)
     case ShipType.dd:
@@ -199,6 +212,7 @@ class ProductionPage extends StatefulWidget {
   final ValueChanged<List<GameModifier>>? onActiveModifiersChanged;
   final ValueChanged<String>? onLocateShip;
   final List<DrawnCard> drawnHand;
+  final List<DrawnCard> playedCards;
   final ValueChanged<List<DrawnCard>>? onDrawnHandChanged;
   final void Function(String cardName, List<GameModifier> modifiers)?
       onPlayCardAsEvent;
@@ -208,6 +222,16 @@ class ProductionPage extends StatefulWidget {
   final void Function(
           String cardName, int cpGained, String sourceCardId)?
       onPlayCardForCredits;
+
+  /// PP01: composite card-play handlers. When set, the ProductionPage
+  /// delegates the full play mutation to home_page in one step. The
+  /// legacy [onDrawnHandChanged] / [onPlayCardAsEvent] / [onPlayCardForCredits]
+  /// plumbing is bypassed for those actions.
+  final void Function(int index, List<GameModifier> modifiers)?
+      onCardPlayedAsEvent;
+  final void Function(int index, int cpGained, String sourceCardId)?
+      onCardPlayedForCredits;
+  final void Function(int index)? onCardDiscarded;
   final List<TurnSummary> turnSummaries;
 
   const ProductionPage({
@@ -226,9 +250,13 @@ class ProductionPage extends StatefulWidget {
     this.onActiveModifiersChanged,
     this.onLocateShip,
     this.drawnHand = const [],
+    this.playedCards = const [],
     this.onDrawnHandChanged,
     this.onPlayCardAsEvent,
     this.onPlayCardForCredits,
+    this.onCardPlayedAsEvent,
+    this.onCardPlayedForCredits,
+    this.onCardDiscarded,
     this.turnSummaries = const [],
   });
 
@@ -255,6 +283,20 @@ class _ProductionPageState extends State<ProductionPage>
 
   // ---- Wave 2.1: Research log expansion state ----
   bool _researchLogExpanded = false;
+
+  // ---- PP06: Jump-menu anchor keys ----
+  //
+  // Each major section on the Production page gets a GlobalKey so the
+  // quick-jump menu in the sticky header can scroll to it with
+  // Scrollable.ensureVisible. Keys are attached via KeyedSubtree in build().
+  final GlobalKey _anchorCpLedger = GlobalKey(debugLabel: 'anchor-cp-ledger');
+  final GlobalKey _anchorFleetRoster = GlobalKey(debugLabel: 'anchor-fleet-roster');
+  final GlobalKey _anchorTech = GlobalKey(debugLabel: 'anchor-tech');
+  final GlobalKey _anchorShipyards = GlobalKey(debugLabel: 'anchor-shipyards');
+  final GlobalKey _anchorShipPurchases = GlobalKey(debugLabel: 'anchor-ship-purchases');
+  final GlobalKey _anchorPipelines = GlobalKey(debugLabel: 'anchor-pipelines');
+  final GlobalKey _anchorWorlds = GlobalKey(debugLabel: 'anchor-worlds');
+  final GlobalKey _anchorCards = GlobalKey(debugLabel: 'anchor-cards');
 
   @override
   void initState() {
@@ -610,89 +652,267 @@ class _ProductionPageState extends State<ProductionPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    // PP06: sticky REMAINING CP header + quick-jump menu sit ABOVE the
+    // scrollable content so they stay visible no matter where the player
+    // has scrolled.
+    return Column(
       children: [
-        // Turn header
-        _buildTurnHeader(theme),
-        const SizedBox(height: 8),
+        _buildStickyProductionHeader(theme),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            children: [
+              // Turn header
+              _buildTurnHeader(theme),
+              const SizedBox(height: 8),
 
-        // Empire Advantage / Alternate Empire summary
-        EmpireSummaryCard(
-          empireAdvantage: config.empireAdvantage,
-          isAlternateEmpire: config.enableAlternateEmpire,
-          shipSpecialAbilities: abilities,
+              // Empire Advantage / Alternate Empire summary
+              EmpireSummaryCard(
+                empireAdvantage: config.empireAdvantage,
+                isAlternateEmpire: config.enableAlternateEmpire,
+                shipSpecialAbilities: abilities,
+              ),
+
+              // Active card-derived modifiers (chips)
+              _buildActiveModifierChips(theme),
+
+              // Carry-over warnings
+              _buildCarryOverWarning(),
+
+              // Research pre-gate soft warning (rule 9.11)
+              _buildResearchPreGateWarning(),
+
+              // Ledger sections
+              if (config.enableFacilities) ...[
+                if (config.enableLogistics) ...[
+                  _buildLpLedger(),
+                  const SizedBox(height: 16),
+                ],
+                KeyedSubtree(
+                  key: TutorialTargets.prodCpLedger,
+                  child: KeyedSubtree(
+                    key: _anchorCpLedger,
+                    child: _buildCpLedgerFacilities(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildRpLedger(),
+                if (config.enableTemporal) ...[
+                  const SizedBox(height: 16),
+                  _buildTpLedger(),
+                  if (config.enableFacilities)
+                    _buildTpEffectsSection(context),
+                ],
+              ] else ...[
+                KeyedSubtree(
+                  key: TutorialTargets.prodCpLedger,
+                  child: KeyedSubtree(
+                    key: _anchorCpLedger,
+                    child: _buildCpLedgerBase(),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              // Fleet Roster
+              KeyedSubtree(
+                key: _anchorFleetRoster,
+                child: _buildFleetRoster(context),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Technology
+              KeyedSubtree(
+                key: TutorialTargets.prodTechSection,
+                child: KeyedSubtree(
+                  key: _anchorTech,
+                  child: _buildTechSection(context),
+                ),
+              ),
+
+              // Wave 2.1: Research log (current turn audit trail)
+              _buildResearchLogSection(context),
+
+              const SizedBox(height: 16),
+
+              // Ship Purchases (Problem 4)
+              // The outer anchor lands on SHIPYARDS; a second inner anchor
+              // for SHIP PURCHASES is attached inside the builder.
+              KeyedSubtree(
+                key: _anchorShipyards,
+                child: _buildShipPurchaseSection(context),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Pipeline inventory
+              KeyedSubtree(
+                key: _anchorPipelines,
+                child: _buildPipelineSection(context),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Worlds
+              KeyedSubtree(
+                key: _anchorWorlds,
+                child: _buildWorldsSection(context),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Cards in hand (T3-C)
+              KeyedSubtree(
+                key: _anchorCards,
+                child: _buildCardsSection(context),
+              ),
+
+              const SizedBox(height: 20),
+
+              // End Turn
+              KeyedSubtree(
+                key: TutorialTargets.prodEndTurnButton,
+                child: _buildEndTurnButton(context),
+              ),
+
+              const SizedBox(height: 16),
+              _buildManualOverrideButton(context),
+
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
-
-        // Active card-derived modifiers (chips)
-        _buildActiveModifierChips(theme),
-
-        // Carry-over warnings
-        _buildCarryOverWarning(),
-
-        // Research pre-gate soft warning (rule 9.11)
-        _buildResearchPreGateWarning(),
-
-        // Ledger sections
-        if (config.enableFacilities) ...[
-          if (config.enableLogistics) ...[
-            _buildLpLedger(),
-            const SizedBox(height: 16),
-          ],
-          _buildCpLedgerFacilities(),
-          const SizedBox(height: 16),
-          _buildRpLedger(),
-          if (config.enableTemporal) ...[
-            const SizedBox(height: 16),
-            _buildTpLedger(),
-          ],
-        ] else ...[
-          _buildCpLedgerBase(),
-        ],
-
-        const SizedBox(height: 16),
-
-        // Fleet Roster
-        _buildFleetRoster(context),
-
-        const SizedBox(height: 16),
-
-        // Technology
-        _buildTechSection(context),
-
-        // Wave 2.1: Research log (current turn audit trail)
-        _buildResearchLogSection(context),
-
-        const SizedBox(height: 16),
-
-        // Ship Purchases (Problem 4)
-        _buildShipPurchaseSection(context),
-
-        const SizedBox(height: 16),
-
-        // Pipeline inventory
-        _buildPipelineSection(context),
-
-        const SizedBox(height: 16),
-
-        // Worlds
-        _buildWorldsSection(context),
-
-        const SizedBox(height: 16),
-
-        // Cards in hand (T3-C)
-        _buildCardsSection(context),
-
-        const SizedBox(height: 20),
-
-        // End Turn
-        _buildEndTurnButton(context),
-
-        const SizedBox(height: 16),
-        _buildManualOverrideButton(context),
-
-        const SizedBox(height: 32),
       ],
+    );
+  }
+
+  // ===========================================================================
+  // PP06: Sticky header (REMAINING CP, Turn, Hand) + quick-jump menu
+  // ===========================================================================
+
+  /// Slim sticky bar that always shows turn, remaining CP, and hand size.
+  /// Hosts the quick-jump popup menu on the right.
+  Widget _buildStickyProductionHeader(ThemeData theme) {
+    final remaining = production.remainingCp(
+      config,
+      shipCounters,
+      modifiers,
+      abilities,
+      mapState,
+    );
+    final handSize = widget.drawnHand.length;
+    final dim = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final accent = theme.colorScheme.primary;
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerHigh,
+      elevation: 0,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: theme.dividerColor, width: 1),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Turn N
+            Text(
+              'Turn ${widget.turnNumber}',
+              style: TextStyle(
+                fontSize: 13,
+                color: dim,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(width: 14),
+            // REMAINING CP label + value
+            Text(
+              'REMAINING',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+                color: dim,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$remaining CP',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: remaining < 0
+                    ? theme.colorScheme.error
+                    : accent,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            if (handSize > 0) ...[
+              const SizedBox(width: 14),
+              Icon(Icons.style_outlined, size: 14, color: dim),
+              const SizedBox(width: 4),
+              Text(
+                '$handSize',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: dim,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+            const Spacer(),
+            _buildJumpMenuButton(theme),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Quick-jump menu — tap to open a list of section anchors.
+  Widget _buildJumpMenuButton(ThemeData theme) {
+    return PopupMenuButton<GlobalKey>(
+      tooltip: 'Jump to section',
+      icon: const Icon(Icons.menu, size: 20),
+      padding: EdgeInsets.zero,
+      iconSize: 20,
+      onSelected: _scrollToAnchor,
+      itemBuilder: (context) => [
+        _jumpMenuItem('Income / CP Ledger', _anchorCpLedger),
+        _jumpMenuItem('Fleet Roster', _anchorFleetRoster),
+        _jumpMenuItem('Technology', _anchorTech),
+        _jumpMenuItem('Shipyards', _anchorShipyards),
+        _jumpMenuItem('Ship Purchases', _anchorShipPurchases),
+        _jumpMenuItem('Pipelines', _anchorPipelines),
+        _jumpMenuItem('Worlds', _anchorWorlds),
+        _jumpMenuItem('Cards', _anchorCards),
+      ],
+    );
+  }
+
+  PopupMenuItem<GlobalKey> _jumpMenuItem(String label, GlobalKey key) {
+    return PopupMenuItem<GlobalKey>(
+      value: key,
+      child: Text(label),
+    );
+  }
+
+  /// Scrolls the ListView so the widget attached to [key] is visible.
+  /// Silently no-ops if the key's context is not yet mounted (section may
+  /// be hidden behind a config flag, e.g. SHIPYARDS collapses out with no
+  /// purchases pending).
+  void _scrollToAnchor(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -911,6 +1131,12 @@ class _ProductionPageState extends State<ProductionPage>
     lines.add('  Advanced Construction: ${config.enableAdvancedConstruction ? "on" : "off"}');
     lines.add('  Ship Experience: ${config.enableShipExperience ? "on" : "off"}');
     lines.add('  Unpredictable Research: ${config.enableUnpredictableResearch ? "on" : "off"}');
+    lines.add('  Multi-Turn Builds: ${config.enableMultiTurnBuilds ? "on" : "off"}');
+    lines.add('  Free Ground Troops: ${config.enableFreeGroundTroops ? "on" : "off"}');
+    lines.add('  Nebula Mining: ${config.enableNebulaMining ? "on" : "off"}');
+    lines.add('  Alternate Empire: ${config.enableAlternateEmpire ? "on" : "off"}');
+    final scenario = scenarioById(config.scenarioId);
+    lines.add('  Scenario: ${scenario?.name ?? "(none)"}');
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -937,39 +1163,34 @@ class _ProductionPageState extends State<ProductionPage>
 
   void _showMaintenanceBreakdown(BuildContext context, int total) {
     final ea = config.empireAdvantage;
-    final hullMod = ea?.hullSizeModifier ?? 0;
 
-    // Collect per-type percent modifiers from GameModifier list (mirrors
-    // ProductionState.maintenanceTotal so the breakdown stays consistent).
-    final typePercentMods = <ShipType, int>{};
+    // Collect the global (across-all-types) percent modifier for display.
     int? globalPercent;
     for (final mod in modifiers) {
       if (mod.type != 'maintenanceMod') continue;
-      if (mod.isPercent) {
-        if (mod.shipType != null) {
-          typePercentMods[mod.shipType!] = mod.value;
-        } else {
-          globalPercent = mod.value;
-        }
+      if (mod.isPercent && mod.shipType == null) {
+        globalPercent = mod.value;
       }
     }
 
-    // Count built ships by type and compute per-ship maint cost.
+    // Use the canonical per-type subtotal helper so the dialog and the
+    // fleet-roster rows never disagree.
+    final subtotals =
+        production.maintenanceSubtotalsByType(shipCounters, config, modifiers);
+
+    // Per-ship cost (for the "N × Type @ X = Y CP" display line) is the
+    // subtotal / count for each type.
     final counts = <ShipType, int>{};
     final perShip = <ShipType, int>{};
-    final subtotals = <ShipType, int>{};
     for (final c in shipCounters) {
       if (!c.isBuilt) continue;
       final def = kShipDefinitions[c.type];
       if (def == null || def.maintenanceExempt) continue;
-      int m = (def.effectiveHullSize(config.useFacilitiesCosts) + hullMod)
-          .clamp(0, 99);
-      if (typePercentMods.containsKey(c.type)) {
-        m = (m * typePercentMods[c.type]! / 100).ceil();
-      }
       counts[c.type] = (counts[c.type] ?? 0) + 1;
-      perShip[c.type] = m;
-      subtotals[c.type] = (subtotals[c.type] ?? 0) + m;
+    }
+    for (final t in counts.keys) {
+      final n = counts[t] ?? 0;
+      if (n > 0) perShip[t] = (subtotals[t] ?? 0) ~/ n;
     }
 
     final lines = <Widget>[];
@@ -1017,42 +1238,99 @@ class _ProductionPageState extends State<ProductionPage>
 
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Maintenance Breakdown'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ...lines,
-              const Divider(height: 20),
-              Text(
-                'Raw ship total: $rawSum CP',
-                style: rowStyle.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Recompute the live total each build so the dialog reflects
+          // edits to maintenance inc/dec without reopening.
+          final liveTotal =
+              production.maintenanceTotal(shipCounters, config, modifiers);
+          return AlertDialog(
+            title: const Text('Maintenance Breakdown'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ...lines,
+                  const Divider(height: 20),
+                  Text(
+                    'Raw ship total: $rawSum CP',
+                    style: rowStyle.copyWith(
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.7)),
+                  ),
+                  if (adjustments.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    for (final a in adjustments)
+                      Text(a,
+                          style: rowStyle.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7))),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    'Manual adjustments',
+                    style: rowStyle.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Maintenance increase from buys',
+                          style: rowStyle,
+                        ),
+                      ),
+                      NumberInput(
+                        value: production.maintenanceIncrease,
+                        min: 0,
+                        onChanged: (v) {
+                          _update(
+                              (s) => s.copyWith(maintenanceIncrease: v));
+                          setDialogState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Maintenance decrease from losses',
+                          style: rowStyle,
+                        ),
+                      ),
+                      NumberInput(
+                        value: production.maintenanceDecrease,
+                        min: 0,
+                        onChanged: (v) {
+                          _update(
+                              (s) => s.copyWith(maintenanceDecrease: v));
+                          setDialogState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Total: $liveTotal CP',
+                    style: rowStyle.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
-              if (adjustments.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                for (final a in adjustments)
-                  Text(a,
-                      style: rowStyle.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.7))),
-              ],
-              const SizedBox(height: 6),
-              Text(
-                'Total: $total CP',
-                style: rowStyle.copyWith(fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1072,12 +1350,73 @@ class _ProductionPageState extends State<ProductionPage>
           'Normally any CP remaining at End Turn is clamped to 30 and the rest '
           'is lost. CP you earmark here is subtracted from your available CP '
           'this turn (so you can\'t spend it), and is added back on top of '
-          'the normal carry-over next turn as "+ Reserved from prev turn".',
+          'the normal carry-over next turn as '
+          '"+ Carried from last turn (above cap)".',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Upgrades CP info (BUG-L5: ledger row is now read-only / auto-accumulated)
+  // ===========================================================================
+
+  void _showUpgradesCpInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('CP spent on upgrades'),
+        content: const Text(
+          'This number is auto-accumulated from upgrade actions you take on '
+          'the Ships tab. It is read-only here to prevent accidentally '
+          'overwriting the running total.\n\n'
+          'If you need to correct the value manually, use the manual override '
+          'dialog (gear menu).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Free Ground Units info chip (BUG-L1: surfaced below the CP ledger)
+  // ===========================================================================
+
+  Widget _buildFreeGroundUnitsInfo() {
+    if (!config.enableFreeGroundTroops) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final count = production.freeGroundTroopsPlaceable(config);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Placeable this turn: $count free ground unit'
+              '${count == 1 ? '' : 's'} (rule 21.5)',
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
           ),
         ],
       ),
@@ -1379,11 +1718,11 @@ class _ProductionPageState extends State<ProductionPage>
     final totalCp = production.totalCp(config, modifiers, mapState, shipCounters);
     final subtotal = production.subtotalCp(config, shipCounters, modifiers, mapState);
     final techSpending = production.techSpendingCpDerived(config, modifiers);
-    final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
+    final shipSpending = production.shipPurchaseCost(config, modifiers, abilities);
     final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final unpredictable = config.enableUnpredictableResearch;
 
-    return LedgerGrid(
+    final ledger = LedgerGrid(
       title: 'CP LEDGER',
       rows: [
         LedgerRow(
@@ -1400,8 +1739,12 @@ class _ProductionPageState extends State<ProductionPage>
         ),
         if (production.reservedCpFromPrevTurn > 0)
           LedgerRow(
-            label: '+ Reserved from prev turn',
+            label: '+ Carried from last turn (above cap)',
             computedValue: production.reservedCpFromPrevTurn,
+            onTap: () => _showReservedCpTooltip(context),
+            onTapTooltip:
+                'CP you reserved last turn for use this turn '
+                '(above the 30-cap rollover).',
           ),
         LedgerRow(label: '+ Colony CPs', computedValue: colonyCp),
         LedgerRow(label: '+ Mineral CPs', computedValue: mineralCp),
@@ -1452,32 +1795,19 @@ class _ProductionPageState extends State<ProductionPage>
           LedgerRow(label: '- Research Grants', computedValue: production.researchGrantsCp)
         else
           LedgerRow(label: '- Technology Spending', computedValue: techSpending),
-        if (production.shipPurchases.isNotEmpty)
-          LedgerRow(
-              label: '- Ship Spending (purchases)',
-              computedValue: shipSpending)
-        else
-          LedgerRow(
-            label: '- Ship Spending',
-            value: production.shipSpendingCp,
-            isEditable: true,
-            min: 0,
-            onChanged: (v) => _update((s) => s.copyWith(shipSpendingCp: v)),
-          ),
-        if (config.enableFreeGroundTroops)
-          LedgerRow(
-            label: 'Free Ground Units (21.5)',
-            computedValue: production.freeGroundTroopsPlaceable(config),
-          ),
+        LedgerRow(
+            label: '- Ship Spending (purchases)',
+            computedValue: shipSpending),
         LedgerRow(
           label: '- CP spent on upgrades',
-          value: production.upgradesCp,
-          isEditable: true,
-          min: 0,
-          onChanged: (v) => _update((s) => s.copyWith(upgradesCp: v)),
+          computedValue: production.upgradesCp,
+          onTap: () => _showUpgradesCpInfo(context),
+          onTapTooltip:
+              'Auto-accumulated from upgrade actions on the Ships tab. '
+              'Tap for details. To override, use the manual override dialog.',
         ),
         LedgerRow(
-          label: '- Reserved for next turn (upgrades)',
+          label: '- Reserved for next turn',
           value: production.reservedCpForNextTurn,
           isEditable: true,
           min: 0,
@@ -1485,23 +1815,7 @@ class _ProductionPageState extends State<ProductionPage>
               _update((s) => s.copyWith(reservedCpForNextTurn: v)),
           onTap: () => _showReservedCpTooltip(context),
           onTapTooltip:
-              'Reserved CP carries forward above the 30-cap, for planned upgrade purchases next turn.',
-        ),
-        LedgerRow(
-          label: 'Maintenance Inc (buys)',
-          value: production.maintenanceIncrease,
-          isEditable: true,
-          min: 0,
-          onChanged: (v) =>
-              _update((s) => s.copyWith(maintenanceIncrease: v)),
-        ),
-        LedgerRow(
-          label: 'Maintenance Dec (losses)',
-          value: production.maintenanceDecrease,
-          isEditable: true,
-          min: 0,
-          onChanged: (v) =>
-              _update((s) => s.copyWith(maintenanceDecrease: v)),
+              'No restrictions — just an above-the-cap CP carry-over earmark.',
         ),
         LedgerRow(
           label: 'REMAINING CP',
@@ -1513,6 +1827,16 @@ class _ProductionPageState extends State<ProductionPage>
         ),
       ],
     );
+    if (config.enableFreeGroundTroops) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ledger,
+          _buildFreeGroundUnitsInfo(),
+        ],
+      );
+    }
+    return ledger;
   }
 
   // ===========================================================================
@@ -1578,11 +1902,11 @@ class _ProductionPageState extends State<ProductionPage>
     final totalCp = production.totalCp(config, modifiers, mapState, shipCounters);
     final penaltyLp = production.penaltyLp(config, shipCounters, modifiers);
     final subtotal = production.subtotalCp(config, shipCounters, modifiers, mapState);
-    final shipSpending = production.effectiveShipSpending(config, modifiers, abilities);
+    final shipSpending = production.shipPurchaseCost(config, modifiers, abilities);
     final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final unpredictable = config.enableUnpredictableResearch;
 
-    return LedgerGrid(
+    final ledger = LedgerGrid(
       title: 'CP LEDGER',
       rows: [
         LedgerRow(
@@ -1597,8 +1921,12 @@ class _ProductionPageState extends State<ProductionPage>
         ),
         if (production.reservedCpFromPrevTurn > 0)
           LedgerRow(
-            label: '+ Reserved from prev turn',
+            label: '+ Carried from last turn (above cap)',
             computedValue: production.reservedCpFromPrevTurn,
+            onTap: () => _showReservedCpTooltip(context),
+            onTapTooltip:
+                'CP you reserved last turn for use this turn '
+                '(above the 30-cap rollover).',
           ),
         LedgerRow(label: '+ Colony/Facility CP', computedValue: colonyCp),
         LedgerRow(
@@ -1645,32 +1973,19 @@ class _ProductionPageState extends State<ProductionPage>
         ),
         if (unpredictable)
           LedgerRow(label: '- Research Grants', computedValue: production.researchGrantsCp),
-        if (production.shipPurchases.isNotEmpty)
-          LedgerRow(
-              label: '- Purchases (from list)',
-              computedValue: shipSpending)
-        else
-          LedgerRow(
-            label: '- Purchases (Ship Spending)',
-            value: production.shipSpendingCp,
-            isEditable: true,
-            min: 0,
-            onChanged: (v) => _update((s) => s.copyWith(shipSpendingCp: v)),
-          ),
-        if (config.enableFreeGroundTroops)
-          LedgerRow(
-            label: 'Free Ground Units (21.5)',
-            computedValue: production.freeGroundTroopsPlaceable(config),
-          ),
+        LedgerRow(
+            label: '- Purchases (from list)',
+            computedValue: shipSpending),
         LedgerRow(
           label: '- CP spent on upgrades',
-          value: production.upgradesCp,
-          isEditable: true,
-          min: 0,
-          onChanged: (v) => _update((s) => s.copyWith(upgradesCp: v)),
+          computedValue: production.upgradesCp,
+          onTap: () => _showUpgradesCpInfo(context),
+          onTapTooltip:
+              'Auto-accumulated from upgrade actions on the Ships tab. '
+              'Tap for details. To override, use the manual override dialog.',
         ),
         LedgerRow(
-          label: '- Reserved for next turn (upgrades)',
+          label: '- Reserved for next turn',
           value: production.reservedCpForNextTurn,
           isEditable: true,
           min: 0,
@@ -1678,7 +1993,7 @@ class _ProductionPageState extends State<ProductionPage>
               _update((s) => s.copyWith(reservedCpForNextTurn: v)),
           onTap: () => _showReservedCpTooltip(context),
           onTapTooltip:
-              'Reserved CP carries forward above the 30-cap, for planned upgrade purchases next turn.',
+              'No restrictions — just an above-the-cap CP carry-over earmark.',
         ),
         LedgerRow(
           label: 'REMAINING CP (30 Max)',
@@ -1689,6 +2004,16 @@ class _ProductionPageState extends State<ProductionPage>
         ),
       ],
     );
+    if (config.enableFreeGroundTroops) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ledger,
+          _buildFreeGroundUnitsInfo(),
+        ],
+      );
+    }
+    return ledger;
   }
 
   // ===========================================================================
@@ -1742,11 +2067,8 @@ class _ProductionPageState extends State<ProductionPage>
         ),
         LedgerRow(label: '+ Colony/Facility TP', computedValue: colonyTp),
         LedgerRow(
-          label: '- TP Spending',
-          value: production.tpSpending,
-          isEditable: true,
-          min: 0,
-          onChanged: (v) => _update((s) => s.copyWith(tpSpending: v)),
+          label: '- TP Spending (effects)',
+          computedValue: production.tpSpendingDerived(),
         ),
         LedgerRow(
           label: 'REMAINING TP (unlimited)',
@@ -1755,6 +2077,228 @@ class _ProductionPageState extends State<ProductionPage>
         ),
       ],
     );
+  }
+
+  // ===========================================================================
+  // TP Effects shopping cart (WP4)
+  // ===========================================================================
+
+  Widget _buildTpEffectsSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final expenditures = production.tpExpenditures;
+    final totalCost = production.tpSpendingDerived();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'TP EFFECTS',
+          subtitle: totalCost > 0 ? '$totalCost TP' : null,
+        ),
+        if (expenditures.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'Spend TP to activate temporal effects during your turn.',
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        for (int i = 0; i < expenditures.length; i++)
+          _buildTpExpenditureRow(context, i, expenditures[i]),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextButton.icon(
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Effect'),
+            onPressed: () => _showAddEffectDialog(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTpExpenditureRow(BuildContext context, int index, TpExpenditure exp) {
+    final theme = Theme.of(context);
+    if (exp.effectIndex < 0 || exp.effectIndex >= kTemporalEffects.length) {
+      return const SizedBox.shrink();
+    }
+    final effect = kTemporalEffects[exp.effectIndex];
+    final cost = exp.cost();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(effect.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(
+                  effect.costDescription,
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                ),
+              ],
+            ),
+          ),
+          if (effect.perUnit)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.remove, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: exp.quantity <= 1 ? null : () {
+                    _updateTpExpenditure(index, exp.copyWith(quantity: exp.quantity - 1));
+                  },
+                ),
+                SizedBox(width: 28, child: Text('${exp.quantity}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14))),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    _updateTpExpenditure(index, exp.copyWith(quantity: exp.quantity + 1));
+                  },
+                ),
+              ],
+            ),
+          if (effect.perHullPoint)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('HP:', style: TextStyle(fontSize: 12)),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.remove, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: exp.hullPoints <= 0 ? null : () {
+                    _updateTpExpenditure(index, exp.copyWith(hullPoints: exp.hullPoints - 1));
+                  },
+                ),
+                SizedBox(width: 28, child: Text('${exp.hullPoints}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14))),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    _updateTpExpenditure(index, exp.copyWith(hullPoints: exp.hullPoints + 1));
+                  },
+                ),
+              ],
+            ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 50,
+            child: Text('$cost TP', textAlign: TextAlign.end,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: theme.colorScheme.error),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _removeTpExpenditure(index),
+          ),
+        ],
+        ),
+      ),
+    );
+  }
+
+  void _updateTpExpenditure(int index, TpExpenditure updated) {
+    final list = List<TpExpenditure>.from(production.tpExpenditures);
+    list[index] = updated;
+    widget.onProductionChanged(production.copyWith(tpExpenditures: list));
+  }
+
+  void _removeTpExpenditure(int index) {
+    final list = List<TpExpenditure>.from(production.tpExpenditures)..removeAt(index);
+    widget.onProductionChanged(production.copyWith(tpExpenditures: list));
+  }
+
+  void _showAddEffectDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    final groups = <TemporalRange, List<(int, TemporalEffect)>>{};
+    for (int i = 0; i < kTemporalEffects.length; i++) {
+      final e = kTemporalEffects[i];
+      groups.putIfAbsent(e.locationRequirement, () => []).add((i, e));
+    }
+
+    final rangeLabels = {
+      TemporalRange.sameHex: 'Same Hex as Temporal Engine',
+      TemporalRange.within3: 'Within 3 Hexes of Temporal Engine',
+      TemporalRange.anywhere: 'Temporal Engine Anywhere on Board',
+    };
+
+    showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Add Temporal Effect'),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          for (final range in TemporalRange.values)
+            if (groups[range] != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+                child: Text(
+                  rangeLabels[range]!,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              for (final (idx, effect) in groups[range]!)
+                InkWell(
+                  onTap: () => Navigator.of(ctx).pop(idx),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(effect.name, style: const TextStyle(fontSize: 14)),
+                              Text(
+                                effect.costDescription,
+                                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text('${effect.baseCost} TP',
+                          style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+        ],
+      ),
+    ).then((effectIndex) {
+      if (effectIndex != null) {
+        final list = List<TpExpenditure>.from(production.tpExpenditures)
+          ..add(TpExpenditure(effectIndex: effectIndex));
+        widget.onProductionChanged(
+          production.copyWith(tpExpenditures: list),
+        );
+      }
+    });
   }
 
   // ===========================================================================
@@ -1885,7 +2429,12 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildFleetRosterRow(ThemeData theme, ShipType type, int count) {
     final def = kShipDefinitions[type]!;
     final exempt = def.maintenanceExempt;
-    final maintCost = exempt ? null : def.effectiveHullSize(config.useFacilitiesCosts) * count;
+    // Use the canonical per-type subtotal so row values always agree with
+    // the header's total (which goes through maintenanceTotal). This
+    // applies EA hull-size mod, per-type percent modifiers, etc.
+    final subtotals =
+        production.maintenanceSubtotalsByType(shipCounters, config, modifiers);
+    final maintCost = exempt ? null : (subtotals[type] ?? 0);
     final maintText = exempt ? 'exempt' : 'maint: $maintCost';
 
     return Padding(
@@ -1907,7 +2456,7 @@ class _ProductionPageState extends State<ProductionPage>
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             visualDensity: VisualDensity.compact,
-            onPressed: () => showShipInfoDialog(context, type, facilitiesMode: config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
+            onPressed: () => showShipInfoDialog(context, type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, onRuleTap: widget.onRuleTap),
           ),
           const SizedBox(width: 4),
           SizedBox(
@@ -2163,12 +2712,9 @@ class _ProductionPageState extends State<ProductionPage>
   Widget _buildShipyardSummaryChip(BuildContext context) {
     final theme = Theme.of(context);
     final syLevel = _effectiveLevel(TechId.shipYard);
-    // Rule 9.6: Lvl 1 = 1 HP, Lvl 2 = 1.5 HP, Lvl 3 = 2 HP per turn per shipyard.
-    final double hpPerSy = switch (syLevel) {
-      <= 1 => 1.0,
-      2 => 1.5,
-      _ => 2.0,
-    };
+    // Rule 9.6: Lvl 1 = 1 HP, Lvl 2 = 2 HP, Lvl 3 = 3 HP per turn per shipyard.
+    // Source of truth: ProductionState.hullPointsPerShipyard.
+    final double hpPerSy = ProductionState.hullPointsPerShipyard(syLevel);
     final owned = shipCounters
         .where((c) => c.type == ShipType.shipyard && c.isBuilt)
         .length;
@@ -2428,44 +2974,101 @@ class _ProductionPageState extends State<ProductionPage>
     final purchases = production.shipPurchases;
     final totalCost = production.shipPurchaseCost(config, modifiers, abilities);
 
+    final shipyardInfos = _shipyardHexes();
+    // Warning trigger: queued non-SY, non-exempt ships but no active SY hex.
+    final hasQueuedNonSyShips = purchases.any((p) =>
+        p.type != ShipType.shipyard &&
+        !(kShipDefinitions[p.type]?.isShipyardExempt ?? true));
+    final showShipyardWarning =
+        hasQueuedNonSyShips && shipyardInfos.isEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SectionHeader(
-          title: 'SHIP PURCHASES',
-          subtitle: purchases.isNotEmpty ? 'total: ${totalCost}CP' : null,
+        // SHIPYARDS section — hoisted so the player can see at a glance
+        // where ships will be built (or that they have none yet).
+        KeyedSubtree(
+          key: TutorialTargets.prodShipyardsSection,
+          child: SectionHeader(
+            title: 'SHIPYARDS',
+            subtitle: shipyardInfos.isEmpty
+                ? 'none yet'
+                : '${shipyardInfos.length} active',
+            trailing: IconButton(
+              icon: const Icon(Icons.info_outline, size: 18),
+              tooltip: 'About Shipyards',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: () => _showShipyardHelpDialog(context),
+            ),
+          ),
         ),
         const SizedBox(height: 4),
         // QW-2: Per-hex capacity strip so the player always knows how much
         // shipyard HP budget each hex has remaining this turn.
         _buildShipyardHexCapacityStrip(context),
+        if (shipyardInfos.isEmpty) _buildShipyardEmptyStateCard(context),
+        const SizedBox(height: 8),
+        KeyedSubtree(
+          key: TutorialTargets.prodPurchasesSection,
+          child: KeyedSubtree(
+            key: _anchorShipPurchases,
+            child: SectionHeader(
+              title: 'SHIP PURCHASES',
+              subtitle: purchases.isNotEmpty ? 'total: ${totalCost}CP' : null,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (showShipyardWarning) _buildNoShipyardWarningCard(context),
         for (int i = 0; i < purchases.length; i++)
           _buildShipPurchaseRow(i, purchases[i], theme),
         const SizedBox(height: 4),
-        // F7: Maintenance forecast
+        // F7: Maintenance forecast. To stay consistent with the header
+        // maintenance total, we construct hypothetical ShipCounter objects
+        // that represent what each queued purchase will materialize into,
+        // then run the whole list through the canonical maintenanceTotal
+        // pipeline (EA hull-size mod, per-type and global modifier %, etc).
         Builder(builder: (context) {
-          int newMaint = 0;
+          final hypotheticals = <ShipCounter>[];
           for (final p in purchases) {
             final def = kShipDefinitions[p.type];
-            if (def != null && !def.maintenanceExempt) {
-              newMaint += def.effectiveHullSize(config.useFacilitiesCosts) * p.quantity;
+            if (def == null || def.maintenanceExempt) continue;
+            for (int i = 0; i < p.quantity; i++) {
+              // number is irrelevant for maintenance math; use a sentinel.
+              hypotheticals.add(ShipCounter(
+                type: p.type,
+                number: -1 - i,
+                isBuilt: true,
+              ));
             }
           }
-          if (newMaint > 0) {
-            final currentMaint = production.maintenanceTotal(shipCounters, config, modifiers);
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: Text(
-                'Next turn maint: ${currentMaint + newMaint} (+$newMaint)',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-            );
+          if (hypotheticals.isEmpty) {
+            return const SizedBox.shrink();
           }
-          return const SizedBox.shrink();
+          final currentMaint =
+              production.maintenanceTotal(shipCounters, config, modifiers);
+          final hypotheticalMaint = production.maintenanceTotal(
+            [...shipCounters, ...hypotheticals],
+            config,
+            modifiers,
+          );
+          final delta = hypotheticalMaint - currentMaint;
+          if (delta <= 0) {
+            return const SizedBox.shrink();
+          }
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Text(
+              'Next turn maint: $hypotheticalMaint (+$delta)',
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          );
         }),
         Align(
           alignment: Alignment.centerLeft,
@@ -2486,26 +3089,204 @@ class _ProductionPageState extends State<ProductionPage>
     );
   }
 
+  /// Empty-state card shown above SHIP PURCHASES when the player has no
+  /// active shipyards. Explains the requirement and offers a one-tap path
+  /// to queue a Shipyard purchase.
+  Widget _buildShipyardEmptyStateCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Card(
+        color: theme.colorScheme.surfaceContainerHigh,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.construction,
+                color: theme.colorScheme.primary,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You have no Shipyards yet.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Ships must be built at a hex that has a Shipyard. '
+                      'Buy one below and assign it to a colony hex; next '
+                      'turn it will be placed there.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: () => _showAddShipDialog(context),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Buy Shipyard'),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Amber warning shown above the purchase rows when the player has queued
+  /// non-shipyard ships but has no active shipyard hex to materialize them.
+  Widget _buildNoShipyardWarningCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Card(
+        color: Colors.amber.withValues(alpha: 0.18),
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: Colors.amber.shade700, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: Colors.amber.shade800, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Warning: you have ship purchases queued but no active '
+                  'Shipyard. Queue a Shipyard too \u2014 it will be placed '
+                  'at End Turn.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Help dialog explaining what Shipyards are and how they work.
+  void _showShipyardHelpDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('About Shipyards'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Shipyards (SY) are the factories that let you build ships. '
+            'Every ship purchase must be assigned to a hex that already has '
+            'a Shipyard \u2014 the hex provides hull-point (HP) capacity '
+            'each Economic Phase, scaled by your Shipyard tech level.\n\n'
+            'To get one:\n'
+            '  1. Add a Shipyard purchase from the Add Ship dialog and '
+            'assign it to a colony hex.\n'
+            '  2. At End Turn, the Shipyard is placed on that hex and '
+            'becomes active next turn.\n'
+            '  3. From then on, ships queued at that hex will draw HP from '
+            'its Shipyard pool.\n\n'
+            'You can also adjust a hex\u2019s Shipyard count manually from '
+            'the Map tab\u2019s hex inspector.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildShipPurchaseRow(
       int index, ShipPurchase purchase, ThemeData theme) {
     final def = kShipDefinitions[purchase.type];
     final name = def?.name ?? purchase.type.name;
     final abbr = def?.abbreviation ?? '';
-    final unitCost = def?.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts) ?? 0;
+    // Route through the canonical per-unit pricer so display, affordability,
+    // and the charged total always agree (AGT mode, alternate empire, EA
+    // modifiers, card `costMod`s, scenario multipliers, and ability-12
+    // discount all flow through ProductionState.effectiveUnitShipCost).
+    final unitCost = def == null
+        ? 0
+        : production.effectiveUnitShipCost(
+            purchase.type,
+            config,
+            modifiers: modifiers,
+            shipSpecialAbilities: abilities,
+            uniqueDesign: purchase.uniqueDesign,
+          );
+    final lineCost = unitCost * purchase.quantity;
 
     // Task 3B: bounce animation on the last added row
     final shouldBounce = _lastBouncedIndex == index;
 
     // QW-2: Resolve the friendly label of the assigned shipyard hex, if any.
+    // Prefer the colony / world name (users remember names, not coords).
     String? hexLabel;
     if (purchase.shipyardHexId != null && mapState != null) {
       for (final hex in mapState!.hexes) {
         if (hex.coord.id == purchase.shipyardHexId) {
-          hexLabel = hex.label.isNotEmpty ? hex.label : hex.coord.id;
+          hexLabel = _friendlyHexLabel(hex);
           break;
         }
       }
       hexLabel ??= purchase.shipyardHexId;
+    }
+
+    // PP08: Multi-turn build progress forecast. When the purchase is
+    // tracking `totalHpNeeded`, surface X/Y HP + an estimated turn count
+    // alongside a slim progress bar. Instant builds (totalHpNeeded == null)
+    // still materialize on End Turn and are rendered without the chip.
+    final int? progressNeed = purchase.totalHpNeeded;
+    final bool showProgress = progressNeed != null && progressNeed > 0;
+    int progressDone = 0;
+    double progressFraction = 0;
+    int turnsRemaining = 0;
+    if (showProgress) {
+      progressDone = purchase.buildProgressHp.clamp(0, progressNeed);
+      progressFraction =
+          progressNeed == 0 ? 0 : progressDone / progressNeed;
+      final map = mapState;
+      if (map != null) {
+        final techState = production.techState.withPending(
+          production.pendingTechPurchases,
+        );
+        turnsRemaining = production.turnsRemainingFor(
+          purchase,
+          map,
+          techState,
+          facilitiesMode: config.useFacilitiesCosts,
+          modifiers: modifiers,
+        );
+      }
     }
 
     Widget row = Padding(
@@ -2518,16 +3299,147 @@ class _ProductionPageState extends State<ProductionPage>
         ),
         child: Row(
           children: [
-            // Ship name
+            // Ship name + optional "Build at: …" chip on a second line.
             Expanded(
-              child: Text(
-                hexLabel != null
-                    ? '$name ($abbr) @ $hexLabel'
-                    : '$name ($abbr)',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: theme.colorScheme.onSurface,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$name ($abbr)',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  if (hexLabel != null) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.place,
+                            size: 11,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            'Build at: $hexLabel',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  // PP02 §41.1.6: Unique Ship design summary chip. Tap to
+                  // re-open the designer dialog with the current design as
+                  // its initial value.
+                  if (purchase.uniqueDesign != null) ...[
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      onTap: () => _editUniqueShipDesign(index, purchase),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiaryContainer
+                              .withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.science_outlined,
+                              size: 11,
+                              color: theme.colorScheme.tertiary,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              _uniqueDesignLabel(purchase.uniqueDesign!),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 10,
+                              color: theme.colorScheme.tertiary
+                                  .withValues(alpha: 0.7),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  // PP08: Build progress row (multi-turn builds only).
+                  if (showProgress) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.build_circle_outlined,
+                          size: 11,
+                          color: theme.colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Build progress: $progressDone/$progressNeed HP',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                            color: theme.colorScheme.tertiary,
+                          ),
+                        ),
+                        if (turnsRemaining > 0) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '~$turnsRemaining turn${turnsRemaining == 1 ? '' : 's'} remaining',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: SizedBox(
+                        height: 4,
+                        width: 180,
+                        child: LinearProgressIndicator(
+                          value: progressFraction.clamp(0.0, 1.0),
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            theme.colorScheme.tertiary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             IconButton(
@@ -2535,7 +3447,7 @@ class _ProductionPageState extends State<ProductionPage>
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               visualDensity: VisualDensity.compact,
-              onPressed: () => showShipInfoDialog(context, purchase.type, facilitiesMode: config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
+              onPressed: () => showShipInfoDialog(context, purchase.type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, onRuleTap: widget.onRuleTap),
             ),
             const SizedBox(width: 4),
             // Quantity controls
@@ -2583,7 +3495,10 @@ class _ProductionPageState extends State<ProductionPage>
               child: Builder(
                 builder: (context) {
                   final hasStock = _hasCounterStock(purchase.type);
-                  final canAfford = _canAffordOneMore(purchase.type);
+                  final canAfford = _canAffordOneMore(
+                    purchase.type,
+                    uniqueDesign: purchase.uniqueDesign,
+                  );
                   // Bug A: enforce shipyard HP capacity at +1 time. When
                   // enableMultiTurnBuilds is ON the user may intentionally
                   // over-queue to build across turns, so we don't block.
@@ -2638,7 +3553,11 @@ class _ProductionPageState extends State<ProductionPage>
                       behavior: HitTestBehavior.translucent,
                       onTap: enabled
                           ? null
-                          : () => HapticFeedback.selectionClick(),
+                          : () {
+                              if (config.strongHaptics) {
+                                HapticFeedback.selectionClick();
+                              }
+                            },
                       child: button,
                     ),
                   );
@@ -2650,7 +3569,7 @@ class _ProductionPageState extends State<ProductionPage>
             SizedBox(
               width: 52,
               child: Text(
-                '${purchase.cost}CP',
+                '${lineCost}CP',
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontSize: 14,
@@ -2710,12 +3629,49 @@ class _ProductionPageState extends State<ProductionPage>
     return row;
   }
 
+  /// PP02 §41.1.6: Short summary string for a Unique Ship design — used as
+  /// the chip label in [_buildShipPurchaseRow]. Falls back to the abbreviated
+  /// "Unique Ship" if the player never named the design.
+  String _uniqueDesignLabel(UniqueShipDesign d) {
+    final shipName = d.name.isEmpty ? 'Unique Ship' : d.name;
+    final cnt = d.abilityIds.length;
+    final abilWord = cnt == 1 ? 'ability' : 'abilities';
+    return '$shipName (Hull ${d.hullSize}, '
+        'Class ${d.weaponClass.label}, $cnt $abilWord)';
+  }
+
+  /// PP02 §41.1.6: Re-open the Unique Ship designer for an existing
+  /// purchase. The Save result replaces the design on the queued
+  /// [ShipPurchase] without altering its quantity / hex assignment.
+  Future<void> _editUniqueShipDesign(int index, ShipPurchase purchase) async {
+    final updated = await showUniqueShipDesignerDialog(
+      context,
+      initial: purchase.uniqueDesign,
+    );
+    if (updated == null) return;
+    if (!mounted) return;
+    final list = List<ShipPurchase>.from(production.shipPurchases);
+    if (index < 0 || index >= list.length) return;
+    list[index] = list[index].copyWith(uniqueDesign: updated);
+    widget.onProductionChanged(production.copyWith(shipPurchases: list));
+  }
+
   /// Task 2: Check if player can afford one more of this ship type.
-  bool _canAffordOneMore(ShipType type) {
+  /// Uses the canonical modifier pipeline so affordability matches the
+  /// charged total (Empire Advantage mods, card `costMod`s, scenario
+  /// multipliers, and the ability-12 discount all count).
+  bool _canAffordOneMore(ShipType type, {UniqueShipDesign? uniqueDesign}) {
     final def = kShipDefinitions[type];
     if (def == null) return false;
     final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
-    return remaining >= def.effectiveBuildCost(config.enableAlternateEmpire, facilitiesMode: config.useFacilitiesCosts);
+    final unitCost = production.effectiveUnitShipCost(
+      type,
+      config,
+      modifiers: modifiers,
+      shipSpecialAbilities: abilities,
+      uniqueDesign: uniqueDesign,
+    );
+    return remaining >= unitCost;
   }
 
   /// T1-C: Hard block — true if at least one blank counter is available.
@@ -2797,11 +3753,9 @@ class _ProductionPageState extends State<ProductionPage>
         facilitiesMode: facilitiesMode,
       );
       final isBlocked = cap <= 0 && hex.shipyardCount > 0;
-      // Prefer the hex label, fall back to coord id.
-      final displayLabel = hex.label.isNotEmpty ? hex.label : hex.coord.id;
       result.add(_ShipyardHexInfo(
         hexId: hex.coord.id,
-        label: displayLabel,
+        label: _friendlyHexLabel(hex),
         shipyardCount: hex.shipyardCount,
         capacity: cap,
         used: used,
@@ -2810,6 +3764,37 @@ class _ProductionPageState extends State<ProductionPage>
       ));
     }
     // Homeworld first, then others.
+    result.sort((a, b) {
+      if (a.isHomeworld != b.isHomeworld) return a.isHomeworld ? -1 : 1;
+      return a.label.compareTo(b.label);
+    });
+    return result;
+  }
+
+  /// All non-blockaded colony hexes (for SY placement — rule 8.2).
+  List<_ShipyardHexInfo> _colonyHexes() {
+    final map = mapState;
+    if (map == null) return const [];
+    final isAlt = config.enableAlternateEmpire;
+    final result = <_ShipyardHexInfo>[];
+    for (final hex in map.hexes) {
+      final wid = hex.worldId;
+      if (wid == null || wid.isEmpty) continue;
+      // Skip blockaded colonies.
+      final isBlocked = production.worlds.any(
+        (w) => w.id == wid && w.isBlocked,
+      );
+      if (isBlocked) continue;
+      result.add(_ShipyardHexInfo(
+        hexId: hex.coord.id,
+        label: _friendlyHexLabel(hex),
+        shipyardCount: hex.shipyardCount,
+        capacity: 0,
+        used: 0,
+        isBlocked: false,
+        isHomeworld: _isHomeworldHex(hex, isAlt: isAlt),
+      ));
+    }
     result.sort((a, b) {
       if (a.isHomeworld != b.isHomeworld) return a.isHomeworld ? -1 : 1;
       return a.label.compareTo(b.label);
@@ -2826,57 +3811,176 @@ class _ProductionPageState extends State<ProductionPage>
     return false;
   }
 
+  /// Friendly display label for a hex: prefers the colony / world name on
+  /// the hex (e.g. "Homeworld", "Alpha Centauri"), then falls back to the
+  /// user-provided hex label, then finally the raw axial coord id (e.g.
+  /// "3,2"). Coordinates are only shown when the hex has neither a world
+  /// nor a custom label, since users remember names — not coords.
+  String _friendlyHexLabel(MapHexState hex) {
+    final wid = hex.worldId;
+    if (wid != null && wid.isNotEmpty) {
+      for (final w in production.worlds) {
+        if (w.id == wid && w.name.isNotEmpty) return w.name;
+      }
+    }
+    if (hex.label.isNotEmpty) return hex.label;
+    return hex.coord.id;
+  }
+
   /// QW-2: Short summary of shipyards (e.g. "HW: 2/4 HP") for display next to
   /// the purchase list.
   Widget _buildShipyardHexCapacityStrip(BuildContext context) {
     final theme = Theme.of(context);
-    final infos = _shipyardHexes();
+    final shipyardInfos = _shipyardHexes();
+    final colonyInfos = _colonyHexes();
+    final syHexIds = shipyardInfos.map((i) => i.hexId).toSet();
+    final infos = [
+      ...shipyardInfos,
+      ...colonyInfos.where((c) => !syHexIds.contains(c.hexId)),
+    ];
     if (infos.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        children: [
-          for (final info in infos)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
+      child: SizedBox(
+        height: 88,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: infos.length,
+          itemBuilder: (context, index) {
+            final info = infos[index];
+            final isColonyOnly = info.shipyardCount == 0;
+            final remaining = info.capacity - info.used;
+            final ratio = info.capacity > 0 ? info.used / info.capacity : 0.0;
+            final progressColor = ratio > 0.8
+                ? Colors.red
+                : ratio >= 0.5
+                    ? Colors.amber
+                    : Colors.green;
+
+            return SizedBox(
+              width: 160,
+              child: Card(
                 color: info.isBlocked
                     ? theme.colorScheme.error.withValues(alpha: 0.10)
-                    : theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: info.isBlocked
-                      ? theme.colorScheme.error.withValues(alpha: 0.35)
-                      : theme.colorScheme.primary.withValues(alpha: 0.30),
-                  width: 0.8,
+                    : isColonyOnly
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.06)
+                        : null,
+                elevation: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: info.shipyardCount > 0
+                            ? '${info.shipyardCount} Shipyard'
+                                '${info.shipyardCount == 1 ? '' : 's'} '
+                                '(SY) at this hex'
+                            : 'No Shipyard (SY) at this hex',
+                        child: Text(
+                          info.shipyardCount > 0
+                              ? '${info.label} \u00B7 '
+                                  '${info.shipyardCount} SY'
+                              : info.label,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (info.isBlocked)
+                        Text(
+                          'Blocked',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.error,
+                          ),
+                        )
+                      else if (isColonyOnly)
+                        Text(
+                          'No SY',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.45),
+                          ),
+                        )
+                      else ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            backgroundColor:
+                                theme.colorScheme.onSurface.withValues(alpha: 0.10),
+                            color: progressColor,
+                            minHeight: 6,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              '${info.used}/${info.capacity} HP',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (remaining > 0)
+                              SizedBox(
+                                height: 36,
+                                child: TextButton(
+                                  onPressed: () => _showAddShipDialog(
+                                    context,
+                                    preselectedHexId: info.hexId,
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    minimumSize: const Size(48, 32),
+                                    textStyle: const TextStyle(fontSize: 12),
+                                  ),
+                                  child: const Text('+ Build'),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-              child: Text(
-                info.isBlocked
-                    ? '${info.label}: blocked'
-                    : '${info.label}: ${info.used}/${info.capacity} HP',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  void _showAddShipDialog(BuildContext context) {
+  void _showAddShipDialog(BuildContext context, {String? preselectedHexId}) {
     // Task 2: Filter to ships the player has tech to build AND can afford
     final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
 
     final isAlt = config.enableAlternateEmpire;
     final facilitiesMode = config.useFacilitiesCosts;
+    // Route all per-unit cost reads through the canonical pipeline so that
+    // the filter, sort, and display agree with what the player is actually
+    // charged at purchase time.
+    int unitCostFor(ShipType type) => production.effectiveUnitShipCost(
+          type,
+          config,
+          modifiers: modifiers,
+          shipSpecialAbilities: abilities,
+        );
     final buyableShips = kShipDefinitions.entries
+        // Skip ships whose base table value is 0 (flagship, starbase, etc. —
+        // these are placed by other mechanisms, not via the purchase dialog).
         .where((e) => e.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode) > 0)
         .where((e) => canBuildShip(
               e.key,
@@ -2885,31 +3989,43 @@ class _ProductionPageState extends State<ProductionPage>
               production.shipPurchases,
               shipCounters,
             ))
-        .where((e) => e.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode) <= remaining)
+        .where((e) => unitCostFor(e.key) <= remaining)
         // T1-C: hard block when all physical counters of this type are in use.
         .where((e) => _hasCounterStock(e.key))
         .toList()
-      ..sort((a, b) => a.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode)
-          .compareTo(b.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode)));
+      ..sort((a, b) => unitCostFor(a.key).compareTo(unitCostFor(b.key)));
 
     // QW-2: Surface shipyard hexes so the player can pick where each purchase
     // is built. Zero-capacity hexes (blocked or no capacity remaining) are
-    // still listed but greyed out.
+    // still listed but greyed out. Colony-only hexes (no SY) are included so
+    // that new shipyards can be placed there (rule 8.2).
     final shipyardInfos = _shipyardHexes();
+    final colonyInfos = _colonyHexes();
+    // Merge: shipyard hexes first (with capacity data), then colony-only hexes.
+    final syHexIds = shipyardInfos.map((i) => i.hexId).toSet();
+    final allHexInfos = [
+      ...shipyardInfos,
+      ...colonyInfos.where((c) => !syHexIds.contains(c.hexId)),
+    ];
     final selectableInfos =
-        shipyardInfos.where((i) => !i.isBlocked && i.capacity > 0).toList();
+        allHexInfos.where((i) => !i.isBlocked && (i.capacity > 0 || i.shipyardCount == 0)).toList();
 
-    showDialog<({ShipType type, String? hexId})>(
+    showDialog<({ShipType type, String? hexId, UniqueShipDesign? uniqueDesign})>(
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
         // Default to Homeworld hex, else first selectable.
-        String? selectedHexId = selectableInfos.isNotEmpty
+        final validPreselect = preselectedHexId != null &&
+            selectableInfos.any((i) => i.hexId == preselectedHexId)
+            ? preselectedHexId
+            : null;
+        String? selectedHexId = validPreselect ?? (selectableInfos.isNotEmpty
             ? (selectableInfos.firstWhere(
                 (i) => i.isHomeworld,
                 orElse: () => selectableInfos.first,
               )).hexId
-            : null;
+            : null);
+        final noShipyards = _shipyardHexes().isEmpty;
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return SimpleDialog(
@@ -2917,7 +4033,38 @@ class _ProductionPageState extends State<ProductionPage>
               contentPadding:
                   const EdgeInsets.symmetric(vertical: 12),
               children: [
-                if (shipyardInfos.isNotEmpty)
+                if (noShipyards)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.construction,
+                              color: theme.colorScheme.onSecondaryContainer),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No Shipyards yet. Buy a Shipyard (SY) below '
+                              'and assign it to a colony hex. At End Turn '
+                              'it will land on that hex and enable ship '
+                              'production there.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color:
+                                    theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (allHexInfos.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                     child: Column(
@@ -2925,7 +4072,7 @@ class _ProductionPageState extends State<ProductionPage>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Shipyard',
+                          'Build at hex',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -2943,21 +4090,23 @@ class _ProductionPageState extends State<ProductionPage>
                               : (v) =>
                                   setDialogState(() => selectedHexId = v),
                           items: [
-                            for (final info in shipyardInfos)
+                            for (final info in allHexInfos)
                               DropdownMenuItem<String>(
                                 value: info.hexId,
-                                enabled:
-                                    !info.isBlocked && info.capacity > 0,
+                                enabled: !info.isBlocked &&
+                                    (info.capacity > 0 || info.shipyardCount == 0),
                                 child: Text(
                                   info.isBlocked
                                       ? '${info.label} \u00B7 blocked'
-                                      : '${info.label} \u00B7 '
-                                          '${info.capacity - info.used}'
-                                          '/${info.capacity} HP remaining',
+                                      : info.shipyardCount == 0
+                                          ? '${info.label} \u00B7 no SY \u2014 place one here'
+                                          : '${info.label} \u00B7 '
+                                              '${info.capacity - info.used}'
+                                              '/${info.capacity} HP remaining',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color:
-                                        (info.isBlocked || info.capacity == 0)
+                                        (info.isBlocked || (info.capacity == 0 && info.shipyardCount > 0))
                                             ? theme.colorScheme.onSurface
                                                 .withValues(alpha: 0.4)
                                             : theme.colorScheme.onSurface,
@@ -2985,27 +4134,73 @@ class _ProductionPageState extends State<ProductionPage>
                   ),
                 for (final entry in buyableShips)
                   Builder(builder: (_) {
+                    final isSyExempt = entry.value.isShipyardExempt;
+                    final isSyPurchase = entry.key == ShipType.shipyard;
+                    final isUniquePurchase = entry.key == ShipType.un;
+                    // Rule 8.2: one SY per hex per Economic Phase.
+                    final syAlreadyQueued = isSyPurchase &&
+                        selectedHexId != null &&
+                        production.hasShipyardPurchaseInHex(selectedHexId!);
                     // Bug A: grey out ships whose hull size exceeds the
                     // remaining HP capacity of the selected shipyard hex.
-                    // Skip the check entirely when multi-turn builds are
-                    // enabled (house rule) or when no hex is selectable.
+                    // SY-exempt types skip capacity check (they don't use SY).
                     final hull = entry.value
                         .effectiveHullSize(facilitiesMode);
                     final remainingHp = selectedHexId == null
                         ? 0
                         : _remainingHpForHex(selectedHexId!);
-                    final overCapacity = selectedHexId != null &&
+                    // Colony-only hex (no existing SY): block non-exempt,
+                    // non-SY ships — they need an existing shipyard.
+                    final noSyAtHex = !isSyExempt &&
+                        !isSyPurchase &&
+                        selectedHexId != null &&
+                        !syHexIds.contains(selectedHexId);
+                    final overCapacity = !isSyExempt &&
+                        !noSyAtHex &&
+                        selectedHexId != null &&
                         !config.enableMultiTurnBuilds &&
                         hull > remainingHp;
-                    final dim = overCapacity
+                    final blocked =
+                        overCapacity || syAlreadyQueued || noSyAtHex;
+                    final dim = blocked
                         ? theme.colorScheme.onSurface.withValues(alpha: 0.35)
                         : null;
+                    // Blocking reason for display.
+                    final String? blockReason = syAlreadyQueued
+                        ? '${entry.value.name} (one SY per hex per turn)'
+                        : noSyAtHex
+                            ? '${entry.value.name} (no shipyard at hex)'
+                            : overCapacity
+                                ? '${entry.value.name} (needs $hull HP — '
+                                    '$remainingHp HP left)'
+                                : null;
+                    final remaining = counter_pool.countersRemaining(
+                        entry.key, shipCounters, production.shipPurchases);
                     final row = InkWell(
-                      onTap: overCapacity
+                      onTap: blocked
                           ? null
-                          : () => Navigator.of(ctx).pop(
-                                (type: entry.key, hexId: selectedHexId),
-                              ),
+                          : () async {
+                              if (isUniquePurchase) {
+                                // PP02 §41.1.6: UN entries open the designer
+                                // dialog first. The Save result becomes the
+                                // design payload on the new ShipPurchase.
+                                final design =
+                                    await showUniqueShipDesignerDialog(ctx);
+                                if (design == null) return;
+                                if (!ctx.mounted) return;
+                                Navigator.of(ctx).pop((
+                                  type: entry.key,
+                                  hexId: selectedHexId,
+                                  uniqueDesign: design,
+                                ));
+                                return;
+                              }
+                              Navigator.of(ctx).pop((
+                                type: entry.key,
+                                hexId: selectedHexId,
+                                uniqueDesign: null,
+                              ));
+                            },
                       child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
@@ -3024,15 +4219,21 @@ class _ProductionPageState extends State<ProductionPage>
                           ),
                           Expanded(
                             child: Text(
-                              overCapacity
-                                  ? '${entry.value.name} (needs $hull HP — '
-                                      '$remainingHp HP left)'
-                                  : entry.value.name,
-                              style: TextStyle(fontSize: 15, color: dim),
+                              blockReason ?? (isUniquePurchase
+                                  ? '${entry.value.name} \u2014 design first'
+                                  : (remaining != null && remaining <= 2
+                                      ? '${entry.value.name} ($remaining left)'
+                                      : entry.value.name)),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: dim ?? (remaining != null && remaining <= 2
+                                    ? Colors.amber.shade700
+                                    : null),
+                              ),
                             ),
                           ),
                           Text(
-                            '${entry.value.effectiveBuildCost(isAlt, facilitiesMode: facilitiesMode)}CP',
+                            isUniquePurchase ? '?CP' : '${unitCostFor(entry.key)}CP',
                             style: TextStyle(
                               fontSize: 14,
                               color: dim ?? theme.colorScheme.onSurface
@@ -3049,6 +4250,7 @@ class _ProductionPageState extends State<ProductionPage>
                               ctx,
                               entry.key,
                               facilitiesMode: facilitiesMode,
+                              isAlternateEmpire: isAlt,
                               onRuleTap: widget.onRuleTap,
                             ),
                           ),
@@ -3069,7 +4271,10 @@ class _ProductionPageState extends State<ProductionPage>
         // totalHpNeeded so prepareForNextTurn can accumulate progress on
         // ships that can't complete this turn.
         final def = kShipDefinitions[result.type];
-        final hull = def?.effectiveHullSize(config.useFacilitiesCosts) ?? 0;
+        // PP02 §41.1.6: For Unique Ships, the hull size comes from the
+        // player-chosen design, not the static table.
+        final hull = result.uniqueDesign?.hullSize ??
+            (def?.effectiveHullSize(config.useFacilitiesCosts) ?? 0);
         final updated =
             List<ShipPurchase>.from(production.shipPurchases)
               ..add(ShipPurchase(
@@ -3077,6 +4282,7 @@ class _ProductionPageState extends State<ProductionPage>
                 shipyardHexId: result.hexId,
                 totalHpNeeded:
                     config.enableMultiTurnBuilds ? hull : null,
+                uniqueDesign: result.uniqueDesign,
               ));
         widget.onProductionChanged(
             production.copyWith(shipPurchases: updated));
@@ -3245,33 +4451,44 @@ class _ProductionPageState extends State<ProductionPage>
                 ),
               ],
             ),
-            // Line 2: Facility (if enabled) + mineral/pipeline
-            if (config.enableFacilities) ...[
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (config.enableFacilities) ...[
-                    _LabeledWorldControl(
-                      label: 'Facility',
-                      helpText:
-                          'Facilities are optional colony improvements. IC = Industrial Center, RC = Research Center, LC = Logistics Center, and TC = Temporal Center.',
-                      child: _FacilityChip(
-                        facility: world.facility,
-                        onChanged: (f) => _updateWorld(
-                          index,
-                          (w) => f == null
-                              ? w.copyWith(clearFacility: true)
-                              : w.copyWith(facility: f),
-                        ),
+            // Line 2: Facility (if enabled) + garrison
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (config.enableFacilities)
+                  _LabeledWorldControl(
+                    label: 'Facility',
+                    helpText:
+                        'Facilities are optional colony improvements. IC = Industrial Center, RC = Research Center, LC = Logistics Center, and TC = Temporal Center.',
+                    child: _FacilityChip(
+                      facility: world.facility,
+                      onChanged: (f) => _updateWorld(
+                        index,
+                        (w) => f == null
+                            ? w.copyWith(clearFacility: true)
+                            : w.copyWith(facility: f),
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ],
+                  ),
+                // PP15: Garrison Ground Units count for the homeworld.
+                _LabeledWorldControl(
+                  label: 'Garrison',
+                  helpText:
+                      'Number of Ground Units (GU) garrisoned on the '
+                      'homeworld (rules 21.x). GUs are tracked here because '
+                      'they are not represented as ship counters on the '
+                      'Ship Technology sheet.',
+                  child: _GarrisonStepper(
+                    value: world.garrisonGu,
+                    onChanged: (v) =>
+                        _updateWorld(index, (w) => w.copyWith(garrisonGu: v)),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -3430,6 +4647,20 @@ class _ProductionPageState extends State<ProductionPage>
                     ),
                   ),
                 ],
+                // PP15: Garrison Ground Units count, with inline +/- controls.
+                _LabeledWorldControl(
+                  label: 'Garrison',
+                  helpText:
+                      'Number of Ground Units (GU) garrisoned on this '
+                      'colony (rules 21.x). GUs are tracked here because '
+                      'they are not represented as ship counters on the '
+                      'Ship Technology sheet.',
+                  child: _GarrisonStepper(
+                    value: world.garrisonGu,
+                    onChanged: (v) =>
+                        _updateWorld(index, (w) => w.copyWith(garrisonGu: v)),
+                  ),
+                ),
               ],
             ),
           ],
@@ -3474,13 +4705,12 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _addColony() {
-    final colonies =
-        production.worlds.where((w) => !w.isHomeworld).toList();
-    final nextNum = colonies.length + 1;
+    final taken = {for (final w in production.worlds) w.name};
+    final defaultName = pickUnusedName(kPlanetNames, taken, fallbackPrefix: 'Colony');
     final updated = List<WorldState>.from(production.worlds)
       ..add(WorldState(
         id: 'world-${production.worlds.length + 1}',
-        name: 'Colony $nextNum',
+        name: defaultName,
       ));
     widget.onProductionChanged(production.copyWith(worlds: updated));
   }
@@ -3570,17 +4800,44 @@ class _ProductionPageState extends State<ProductionPage>
         SectionHeader(
           title: 'CARDS',
           subtitle: hand.isEmpty ? 'empty hand' : '${hand.length} in hand',
-          trailing: Semantics(
-            label: 'Draw card',
-            child: TextButton.icon(
-              onPressed: () => _showDrawCardDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Draw'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.help_outline, size: 18),
+                tooltip: 'How do cards work?',
+                onPressed: () => _showCardHelpDialog(context),
                 visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                constraints: const BoxConstraints(),
               ),
-            ),
+              TextButton.icon(
+                onPressed: widget.playedCards.isEmpty
+                    ? null
+                    : () => _showCardHistoryDialog(context),
+                icon: const Icon(Icons.history, size: 16),
+                label: const Text(
+                  'History',
+                  style: TextStyle(fontSize: 11),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              Semantics(
+                label: 'Draw card',
+                child: TextButton.icon(
+                  onPressed: () => _showDrawCardDialog(context),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Draw'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -3612,6 +4869,17 @@ class _ProductionPageState extends State<ProductionPage>
         : '#${card.cardNumber}';
     final typeLabel = entry?.type ?? 'unknown';
     final canPlayAsEvent = card.assignedModifiers.isNotEmpty;
+    final binding = cardModifiersFor(card.cardNumber);
+    final complexNote = binding?.complexBehaviorNote;
+    String? attachedWorldName;
+    if (card.attachedWorldId != null) {
+      for (final w in widget.production.worlds) {
+        if (w.id == card.attachedWorldId) {
+          attachedWorldName = w.name;
+          break;
+        }
+      }
+    }
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -3632,15 +4900,43 @@ class _ProductionPageState extends State<ProductionPage>
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
               const SizedBox(width: 6),
+              // PP04: tapping the title row opens the universal card
+              // detail dialog with assigned modifiers + complex note.
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                child: InkWell(
+                  onTap: entry == null
+                      ? null
+                      : () => showCardDetailDialog(
+                            context,
+                            card: entry,
+                            assignedModifiers: card.assignedModifiers,
+                            complexBehaviorNote: complexNote,
+                          ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
+              if (attachedWorldName != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '\u{1F4CD} $attachedWorldName',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.tertiary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
               Text(
                 '$typeLabel \u00B7 T${card.drawnOnTurn}',
                 style: TextStyle(
@@ -3672,6 +4968,8 @@ class _ProductionPageState extends State<ProductionPage>
               ),
             ),
           ],
+          if (complexNote != null)
+            ComplexBehaviorBanner(note: complexNote),
           const SizedBox(height: 4),
           Wrap(
             spacing: 4,
@@ -3729,12 +5027,8 @@ class _ProductionPageState extends State<ProductionPage>
     );
   }
 
-  static CardEntry? _lookupCardEntry(int cardNumber) {
-    for (final c in kAllCards) {
-      if (c.number == cardNumber) return c;
-    }
-    return null;
-  }
+  static CardEntry? _lookupCardEntry(int cardNumber) =>
+      lookupCardByNumber(cardNumber);
 
   Future<void> _showDrawCardDialog(BuildContext context) async {
     String query = '';
@@ -3799,6 +5093,9 @@ class _ProductionPageState extends State<ProductionPage>
                         itemCount: filtered.length,
                         itemBuilder: (_, i) {
                           final card = filtered[i];
+                          final binding = cardModifiersFor(card.number);
+                          final isComplex =
+                              binding?.complexBehaviorNote != null;
                           return ListTile(
                             dense: true,
                             title: Text(
@@ -3806,10 +5103,50 @@ class _ProductionPageState extends State<ProductionPage>
                               style: const TextStyle(fontSize: 13),
                             ),
                             subtitle: Text(
-                              '${card.type} \u00B7 ${card.description}',
+                              isComplex
+                                  ? '${card.type} \u00B7 Complex — '
+                                      'see note after drawing'
+                                  : '${card.type} \u00B7 ${card.description}',
                               style: const TextStyle(fontSize: 11),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
+                            ),
+                            // PP04: the info button is a "peek" at the
+                            // full card text without committing to the
+                            // draw. The row tap still selects the card
+                            // for drawing as before.
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isComplex)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 2),
+                                    child: Icon(
+                                      Icons.warning_amber,
+                                      size: 14,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.info_outline,
+                                    size: 18,
+                                  ),
+                                  tooltip: 'Read full description',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  onPressed: () => showCardDetailDialog(
+                                    ctx,
+                                    card: card,
+                                    complexBehaviorNote:
+                                        binding?.complexBehaviorNote,
+                                  ),
+                                ),
+                              ],
                             ),
                             onTap: () => Navigator.pop(ctx, card),
                           );
@@ -3853,6 +5190,12 @@ class _ProductionPageState extends State<ProductionPage>
   void _playCardAsEvent(int index) {
     final card = widget.drawnHand[index];
     if (card.assignedModifiers.isEmpty) return;
+    final composite = widget.onCardPlayedAsEvent;
+    if (composite != null) {
+      composite(index, card.assignedModifiers);
+      return;
+    }
+    // Legacy fall-back path: two separate state mutations.
     final entry = _lookupCardEntry(card.cardNumber);
     final name = entry?.name ?? 'Card #${card.cardNumber}';
     widget.onPlayCardAsEvent?.call(name, card.assignedModifiers);
@@ -3912,14 +5255,80 @@ class _ProductionPageState extends State<ProductionPage>
     final typeLabel = entry?.type ?? 'unknown';
     final sourceId =
         'card:$typeLabel:${card.cardNumber}:credits:${widget.turnNumber}';
+    final composite = widget.onCardPlayedForCredits;
+    if (composite != null) {
+      composite(index, result, sourceId);
+      return;
+    }
+    // Legacy fall-back path.
     widget.onPlayCardForCredits?.call(name, result, sourceId);
     final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
     widget.onDrawnHandChanged?.call(updated);
   }
 
   void _discardCard(int index) {
+    final composite = widget.onCardDiscarded;
+    if (composite != null) {
+      composite(index);
+      return;
+    }
     final updated = List<DrawnCard>.from(widget.drawnHand)..removeAt(index);
     widget.onDrawnHandChanged?.call(updated);
+  }
+
+  void _showCardHistoryDialog(BuildContext context) {
+    showCardHistoryDialog(
+      context,
+      playedCards: widget.playedCards,
+      production: widget.production,
+    );
+  }
+
+  void _showCardHelpDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('How cards work'),
+        content: const SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _HelpBullet(
+                  'Crew cards represent officers — keep them drawn while '
+                  'the officer is alive.',
+                ),
+                _HelpBullet(
+                  'Mission cards are objectives — keep drawn until '
+                  'completed. The app does not enforce mission completion — '
+                  'discard manually when done.',
+                ),
+                _HelpBullet(
+                  'Resource / Action cards may be played as events for '
+                  'their modifier effect, or played for credits for a '
+                  'one-time CP gain.',
+                ),
+                _HelpBullet(
+                  "Scenario Modifier cards marked as 'complex' need manual "
+                  'handling via Manual Override.',
+                ),
+                _HelpBullet(
+                  'Planet Attributes are attached to colonies and discard '
+                  'when the colony is destroyed.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _toggleCardFaceUp(int index) {
@@ -4398,6 +5807,71 @@ class _LabeledWorldControl extends StatelessWidget {
   }
 }
 
+/// PP15: Compact +/- stepper for the colony Garrison GU count. Shows the
+/// current value with a shield icon and clamps the result at zero.
+class _GarrisonStepper extends StatelessWidget {
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  const _GarrisonStepper({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            iconSize: 18,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.remove, color: muted),
+            onPressed: value > 0 ? () => onChanged(value - 1) : null,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shield_outlined, size: 14, color: muted),
+            const SizedBox(width: 2),
+            SizedBox(
+              width: 32,
+              child: Text(
+                'GU $value',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            iconSize: 18,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.add, color: muted),
+            onPressed: () => onChanged(value + 1),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// QW-2: Per-hex shipyard summary used by the Add Ship dialog and the
 /// shipyard capacity strip.
 class _ShipyardHexInfo {
@@ -4434,4 +5908,29 @@ void _showInlineHelp(BuildContext context, String title, String text) {
       ],
     ),
   );
+}
+
+/// PP01: single bullet row used by `_showCardHelpDialog`.
+class _HelpBullet extends StatelessWidget {
+  final String text;
+  const _HelpBullet(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('\u2022  ', style: TextStyle(fontSize: 12)),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

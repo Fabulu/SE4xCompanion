@@ -1,6 +1,7 @@
 // Top-level game state, saved game wrapper, and app state.
 
 import '../data/ship_definitions.dart';
+import '../tutorial/tutorial_state.dart';
 import 'alien_economy.dart';
 import 'drawn_card.dart';
 import 'game_config.dart';
@@ -26,6 +27,11 @@ class GameState {
   /// real card state until played or discarded.
   final List<DrawnCard> drawnHand;
 
+  /// Cards that have been played / discarded. Preserved for the card
+  /// history view and undo replay. Each entry carries a non-null
+  /// `disposition` field. Append-only during normal play.
+  final List<DrawnCard> playedCards;
+
   /// Alternate Empire: random special abilities per ship type (Rule 24.2/24.3).
   final Map<ShipType, int> shipSpecialAbilities;
 
@@ -50,6 +56,7 @@ class GameState {
     this.turnSummaries = const [],
     this.activeModifiers = const [],
     this.drawnHand = const [],
+    this.playedCards = const [],
     this.shipSpecialAbilities = const {},
     this.victoryPoints = 0,
     this.replicatorState,
@@ -69,6 +76,7 @@ class GameState {
     List<TurnSummary>? turnSummaries,
     List<GameModifier>? activeModifiers,
     List<DrawnCard>? drawnHand,
+    List<DrawnCard>? playedCards,
     Map<ShipType, int>? shipSpecialAbilities,
     int? victoryPoints,
     ReplicatorState? replicatorState,
@@ -85,6 +93,7 @@ class GameState {
     turnSummaries: turnSummaries ?? this.turnSummaries,
     activeModifiers: activeModifiers ?? this.activeModifiers,
     drawnHand: drawnHand ?? this.drawnHand,
+    playedCards: playedCards ?? this.playedCards,
     shipSpecialAbilities: shipSpecialAbilities ?? this.shipSpecialAbilities,
     victoryPoints: victoryPoints ?? this.victoryPoints,
     replicatorState: clearReplicatorState
@@ -105,6 +114,7 @@ class GameState {
     'turnSummaries': turnSummaries.map((s) => s.toJson()).toList(),
     'activeModifiers': activeModifiers.map((m) => m.toJson()).toList(),
     'drawnHand': drawnHand.map((c) => c.toJson()).toList(),
+    'playedCards': playedCards.map((c) => c.toJson()).toList(),
     'shipSpecialAbilities': shipSpecialAbilities.map(
       (k, v) => MapEntry(k.name, v),
     ),
@@ -132,16 +142,10 @@ class GameState {
     final rawMapState = json['mapState'] != null
         ? GameMapState.fromJson(json['mapState'] as Map<String, dynamic>)
         : GameMapState.initial();
-    final legacyPipelineIds = {
-      for (final hex in rawMapState.hexes) ...hex.pipelineIds,
-    };
-    final normalizedProduction =
-        production.pipelineConnectedColonies == 0 &&
-            legacyPipelineIds.isNotEmpty
-        ? production.copyWith(
-            pipelineConnectedColonies: legacyPipelineIds.length,
-          )
-        : production;
+    // Layer 1 pipeline placement (hex.pipelineIds) has been removed.
+    // Pipeline income is tracked exclusively by
+    // ProductionState.pipelineConnectedColonies (Layer 2).
+    final normalizedProduction = production;
     final shipCounters =
         (json['shipCounters'] as List?)
             ?.map((c) => ShipCounter.fromJson(c as Map<String, dynamic>))
@@ -157,13 +161,11 @@ class GameState {
         .where((counter) => counter.isBuilt)
         .map((counter) => counter.id)
         .toSet();
-    final validPipelineIds = normalizedProduction.pipelineAssetIds.toSet();
     final mapState = rawMapState
         .migrateLegacyWorldNames(worldIdByName)
         .sanitizeAgainstLedger(
           validWorldIds: validWorldIds,
           validShipIds: validShipIds,
-          validPipelineIds: validPipelineIds,
         );
 
     return GameState(
@@ -190,6 +192,11 @@ class GameState {
           const [],
       drawnHand:
           (json['drawnHand'] as List?)
+              ?.map((c) => DrawnCard.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      playedCards:
+          (json['playedCards'] as List?)
               ?.map((c) => DrawnCard.fromJson(c as Map<String, dynamic>))
               .toList() ??
           const [],
@@ -265,6 +272,16 @@ class GameState {
           .toList();
     }
 
+    List<DrawnCard> restoredPlayedCards = playedCards;
+    final rawPlayed = gss['playedCards'];
+    if (rawPlayed is List) {
+      restoredPlayedCards = rawPlayed
+          .map((c) => c is Map<String, dynamic>
+              ? DrawnCard.fromJson(c)
+              : DrawnCard.fromJson(Map<String, dynamic>.from(c as Map)))
+          .toList();
+    }
+
     List<GameModifier> restoredModifiers = activeModifiers;
     final rawMods = gss['activeModifiers'];
     if (rawMods is List) {
@@ -288,6 +305,7 @@ class GameState {
     return copyWith(
       production: restoredProduction,
       drawnHand: restoredDrawnHand,
+      playedCards: restoredPlayedCards,
       activeModifiers: restoredModifiers,
       shipCounters: restoredCounters,
       turnSummaries: nextSummaries,
@@ -354,24 +372,53 @@ class SavedGame {
 class AppState {
   final String? activeGameId;
   final List<SavedGame> games;
+  final TutorialState tutorial;
 
-  const AppState({this.activeGameId, this.games = const []});
+  /// App-level preference (PP13): show an "Are you sure?" confirmation
+  /// dialog before End Turn finalizes the turn. On by default; power
+  /// users can disable it from Settings.
+  final bool confirmEndTurn;
+
+  /// App-level preference (PP18): global text scale multiplier applied
+  /// via `MediaQuery.textScaler` in the root MaterialApp builder.
+  /// Default `1.0` (no scaling). Legal range in the UI slider is
+  /// `0.85` .. `1.5`, but the model itself stores any double so that
+  /// future UI changes can widen/narrow the slider without touching
+  /// persistence.
+  final double textScale;
+
+  const AppState({
+    this.activeGameId,
+    this.games = const [],
+    this.tutorial = const TutorialState(),
+    this.confirmEndTurn = true,
+    this.textScale = 1.0,
+  });
 
   AppState copyWith({
     String? activeGameId,
     bool clearActiveGameId = false,
     List<SavedGame>? games,
+    TutorialState? tutorial,
+    bool? confirmEndTurn,
+    double? textScale,
   }) => AppState(
     activeGameId: clearActiveGameId
         ? null
         : (activeGameId ?? this.activeGameId),
     games: games ?? this.games,
+    tutorial: tutorial ?? this.tutorial,
+    confirmEndTurn: confirmEndTurn ?? this.confirmEndTurn,
+    textScale: textScale ?? this.textScale,
   );
 
   Map<String, dynamic> toJson() => {
     'version': 1,
     'activeGameId': activeGameId,
     'games': games.map((g) => g.toJson()).toList(),
+    'tutorial': tutorial.toJson(),
+    'confirmEndTurn': confirmEndTurn,
+    'textScale': textScale,
   };
 
   factory AppState.fromJson(Map<String, dynamic> json) {
@@ -384,6 +431,13 @@ class AppState {
               ?.map((g) => SavedGame.fromJson(g as Map<String, dynamic>))
               .toList() ??
           const [],
+      tutorial: migrated['tutorial'] != null
+          ? TutorialState.fromJson(
+              migrated['tutorial'] as Map<String, dynamic>,
+            )
+          : const TutorialState(),
+      confirmEndTurn: migrated['confirmEndTurn'] as bool? ?? true,
+      textScale: (migrated['textScale'] as num?)?.toDouble() ?? 1.0,
     );
   }
 

@@ -51,6 +51,7 @@ class GameConfig {
   final bool enableUnpredictableResearch;
   final bool enableAlternateEmpire;
   final int? selectedEmpireAdvantage;
+  final ShipType? temporalEngineShipType;
 
   /// House rule: allow ships to be built across multiple turns using partial
   /// HP contributions from shipyards. Off by default (RAW). See T2-A spec.
@@ -60,6 +61,10 @@ class GameConfig {
   /// un-blockaded 5-CP colonies (excluding the Homeworld) at the start of
   /// every Economic Phase, rounded down. Off by default. See T3-F spec.
   final bool enableFreeGroundTroops;
+
+  /// Optional Rule 34.0: Miners in Nebula hexes produce CP income when
+  /// Terraforming level 2 is researched. On by default (most players use this).
+  final bool enableNebulaMining;
 
   // Scenario overrides
   final String? scenarioId;
@@ -87,8 +92,10 @@ class GameConfig {
     this.enableUnpredictableResearch = false,
     this.enableAlternateEmpire = false,
     this.selectedEmpireAdvantage,
+    this.temporalEngineShipType,
     this.enableMultiTurnBuilds = false,
     this.enableFreeGroundTroops = false,
+    this.enableNebulaMining = true,
     this.scenarioId,
     this.replicatorDifficulty,
     this.shipCostMultiplier = 1.0,
@@ -101,7 +108,7 @@ class GameConfig {
   });
 
   /// Whether to use the facilities cost table instead of the base cost table.
-  bool get useFacilitiesCosts => enableFacilities;
+  bool get useFacilitiesCosts => enableFacilities || ownership.allGoodThings;
 
   /// The selected Empire Advantage card, if any.
   EmpireAdvantage? get empireAdvantage {
@@ -141,8 +148,11 @@ class GameConfig {
     bool? enableAlternateEmpire,
     int? selectedEmpireAdvantage,
     bool clearEmpireAdvantage = false,
+    ShipType? temporalEngineShipType,
+    bool clearTemporalEngineShipType = false,
     bool? enableMultiTurnBuilds,
     bool? enableFreeGroundTroops,
+    bool? enableNebulaMining,
     String? scenarioId,
     bool clearScenario = false,
     String? replicatorDifficulty,
@@ -170,10 +180,14 @@ class GameConfig {
     selectedEmpireAdvantage: clearEmpireAdvantage
         ? null
         : (selectedEmpireAdvantage ?? this.selectedEmpireAdvantage),
+    temporalEngineShipType: clearTemporalEngineShipType
+        ? null
+        : (temporalEngineShipType ?? this.temporalEngineShipType),
     enableMultiTurnBuilds:
         enableMultiTurnBuilds ?? this.enableMultiTurnBuilds,
     enableFreeGroundTroops:
         enableFreeGroundTroops ?? this.enableFreeGroundTroops,
+    enableNebulaMining: enableNebulaMining ?? this.enableNebulaMining,
     scenarioId: clearScenario ? null : (scenarioId ?? this.scenarioId),
     replicatorDifficulty: clearScenario
         ? null
@@ -200,8 +214,10 @@ class GameConfig {
     'enableUnpredictableResearch': enableUnpredictableResearch,
     'enableAlternateEmpire': enableAlternateEmpire,
     'selectedEmpireAdvantage': selectedEmpireAdvantage,
+    'temporalEngineShipType': temporalEngineShipType?.name,
     'enableMultiTurnBuilds': enableMultiTurnBuilds,
     'enableFreeGroundTroops': enableFreeGroundTroops,
+    'enableNebulaMining': enableNebulaMining,
     'scenarioId': scenarioId,
     'replicatorDifficulty': replicatorDifficulty,
     'shipCostMultiplier': shipCostMultiplier,
@@ -230,9 +246,18 @@ class GameConfig {
         json['enableUnpredictableResearch'] as bool? ?? false,
     enableAlternateEmpire: json['enableAlternateEmpire'] as bool? ?? false,
     selectedEmpireAdvantage: json['selectedEmpireAdvantage'] as int?,
+    temporalEngineShipType: () {
+      final name = json['temporalEngineShipType'] as String?;
+      if (name == null) return null;
+      for (final t in ShipType.values) {
+        if (t.name == name) return t;
+      }
+      return null;
+    }(),
     enableMultiTurnBuilds: json['enableMultiTurnBuilds'] as bool? ?? false,
     enableFreeGroundTroops:
         json['enableFreeGroundTroops'] as bool? ?? false,
+    enableNebulaMining: json['enableNebulaMining'] as bool? ?? true,
     scenarioId: json['scenarioId'] as String?,
     replicatorDifficulty: json['replicatorDifficulty'] as String?,
     shipCostMultiplier: (json['shipCostMultiplier'] as num?)?.toDouble() ?? 1.0,

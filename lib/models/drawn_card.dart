@@ -27,12 +27,29 @@ class DrawnCard {
   /// Usually populated from `card_modifiers.dart` at draw time.
   final List<GameModifier> assignedModifiers;
 
+  /// If this card is a Planet Attribute tied to a specific colony, this is
+  /// the `WorldState.id` it is attached to. Null for unattached cards.
+  final String? attachedWorldId;
+
+  /// Disposition of a card that has been played / discarded:
+  ///   - `'event'`     — played as event; modifiers appended to active ledger
+  ///   - `'credits'`   — played for a one-time CP bonus
+  ///   - `'discarded'` — discarded without effect
+  ///   - `null`        — still in hand
+  final String? disposition;
+
+  /// CP gained when disposition == `'credits'`. Null otherwise.
+  final int? cpGained;
+
   const DrawnCard({
     required this.cardNumber,
     required this.drawnOnTurn,
     this.isFaceUp = true,
     this.notes = '',
     this.assignedModifiers = const [],
+    this.attachedWorldId,
+    this.disposition,
+    this.cpGained,
   });
 
   DrawnCard copyWith({
@@ -41,12 +58,18 @@ class DrawnCard {
     bool? isFaceUp,
     String? notes,
     List<GameModifier>? assignedModifiers,
+    String? attachedWorldId,
+    String? disposition,
+    int? cpGained,
   }) => DrawnCard(
         cardNumber: cardNumber ?? this.cardNumber,
         drawnOnTurn: drawnOnTurn ?? this.drawnOnTurn,
         isFaceUp: isFaceUp ?? this.isFaceUp,
         notes: notes ?? this.notes,
         assignedModifiers: assignedModifiers ?? this.assignedModifiers,
+        attachedWorldId: attachedWorldId ?? this.attachedWorldId,
+        disposition: disposition ?? this.disposition,
+        cpGained: cpGained ?? this.cpGained,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +79,9 @@ class DrawnCard {
         'notes': notes,
         'assignedModifiers':
             assignedModifiers.map((m) => m.toJson()).toList(),
+        if (attachedWorldId != null) 'attachedWorldId': attachedWorldId,
+        if (disposition != null) 'disposition': disposition,
+        if (cpGained != null) 'cpGained': cpGained,
       };
 
   factory DrawnCard.fromJson(Map<String, dynamic> json) => DrawnCard(
@@ -67,5 +93,8 @@ class DrawnCard {
                 ?.map((m) => GameModifier.fromJson(m as Map<String, dynamic>))
                 .toList() ??
             const <GameModifier>[],
+        attachedWorldId: json['attachedWorldId'] as String?,
+        disposition: json['disposition'] as String?,
+        cpGained: json['cpGained'] as int?,
       );
 }

@@ -80,17 +80,25 @@ class ShipDefinition {
       (facilitiesMode && agtWeaponClass != null) ? agtWeaponClass! : weaponClass;
 
   /// Returns the effective build cost accounting for AGT mode and alternate empire.
+  ///
+  /// In AGT/Facilities mode the AGT cost table takes priority because the AGT
+  /// Alternate-Empire Player Aid Card uses standard AGT costs, not the base-game
+  /// alternate costs.  Outside AGT mode, alternate empire costs apply.
   int effectiveBuildCost(bool isAlternateEmpire, {bool facilitiesMode = false}) {
-    // Alternate empire cost takes priority (it's specific to that variant)
-    if (isAlternateEmpire && alternateBuildCost != null) {
-      return alternateBuildCost!;
-    }
-    // AGT mode cost
+    // AGT mode cost takes priority — the AGT Alternate Empire Player Aid Card
+    // uses standard AGT prices, not the base-game alternate costs.
     if (facilitiesMode && agtBuildCost != null) {
       return agtBuildCost!;
     }
+    // Base-game alternate empire cost (only outside AGT mode)
+    if (isAlternateEmpire && alternateBuildCost != null) {
+      return alternateBuildCost!;
+    }
     return buildCost;
   }
+
+  /// True for unit types that do not consume shipyard capacity (rule 8.2).
+  bool get isShipyardExempt => maxCounters == 0;
 
   /// Ship Size tech level required to build this ship, or null if not SS-gated.
   int? requiredShipSize(bool facilitiesMode) {
@@ -174,9 +182,21 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     ruleSection: '22.0',
     agtHullSize: 5, agtShipSizeReq: 7,
   ),
+  // Unique Ship (UN) — §41.0
+  //
+  // BUG U1 / minimum-cost floor: the full Unique Ship pricer follows the
+  // size table in §41.1.6 (Hull 1 = 6 CP, 2 = 9, 3 = 12, 4 = 15, 5 = 20,
+  // 6 = 24, 7 = 32) plus per-ability surcharges, with a §41.1.5 minimum of
+  // 5 CP. Implementing that properly requires the Unique Ship design state
+  // (abilities, size, mounts), which lives outside this static table.
+  //
+  // TODO(§41.1.6): replace this static 5 with a design-based pricer once
+  // the Unique Ship designer state is wired into the production pipeline.
+  // Until then, the 5 CP floor from §41.1.5 is used so queueing a UN never
+  // yields a free ship (the old value of `0` did).
   ShipType.un: ShipDefinition(
     type: ShipType.un, abbreviation: 'UN', name: 'Unique Ship',
-    hullSize: 3, buildCost: 0, maxCounters: 6, weaponClass: 'A',
+    hullSize: 3, buildCost: 5, maxCounters: 6, weaponClass: 'A',
     description: 'Custom ship with random special abilities.',
     prerequisite: 'Advanced Construction',
     ruleSection: '41.0',
@@ -215,7 +235,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     hullSize: 3, buildCost: 15, maxCounters: 6, weaponClass: 'B',
     description: 'Battle Carrier. Holds 6 Fighters. Has Anti-Sensor Hull (immune to mines).',
     prerequisite: 'Advanced Con 2',
-    ruleSection: '38.6',
+    ruleSection: '38.6.2',
     agtBuildCost: 20,
   ),
   ShipType.sw: ShipDefinition(
@@ -227,7 +247,7 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
   ),
   ShipType.bdMb: ShipDefinition(
     type: ShipType.bdMb, abbreviation: 'BD/MB', name: 'Boarding Ship / Missile Boat',
-    hullSize: 1, buildCost: 9, maxCounters: 6, weaponClass: 'C',
+    hullSize: 1, buildCost: 9, maxCounters: 6, weaponClass: 'F',
     description: 'Dual counter: Boarding Ship (F-class boarding attacks) or Missile Boat (A-class missiles, 2 damage).',
     prerequisite: 'Boarding 1 or Missile Boats 1',
     ruleSection: '19.0',
@@ -268,15 +288,15 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
   ),
   ShipType.base: ShipDefinition(
     type: ShipType.base, abbreviation: 'BA', name: 'Base',
-    hullSize: 3, buildCost: 12, maintenanceExempt: true, maxCounters: 0,
-    description: 'Stationary defense at colonies. No Shipyard needed. Cannot move.',
+    hullSize: 3, buildCost: 12, maintenanceExempt: true, maxCounters: 0, weaponClass: 'A',
+    description: 'Stationary defense at colonies. No Shipyard needed. Cannot move. A-class, 2 attacks.',
     prerequisite: 'Ship Size 2',
     ruleSection: '8.1',
   ),
   ShipType.starbase: ShipDefinition(
     type: ShipType.starbase, abbreviation: 'SB', name: 'Starbase',
-    hullSize: 5, buildCost: 0, maintenanceExempt: true, maxCounters: 0,
-    description: 'Powerful stationary defense. 2 attacks/round. Cannot retreat or be boarded.',
+    hullSize: 5, buildCost: 0, maintenanceExempt: true, maxCounters: 0, weaponClass: 'A',
+    description: 'Powerful stationary defense. A-class, 2 attacks/round. Cannot retreat or be boarded.',
     prerequisite: 'Advanced Con 2',
     ruleSection: '38.5',
     agtBuildCost: 12, agtHullSize: 4,
@@ -300,6 +320,20 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
     description: 'Bluff unit. Eliminated before combat. Moves at current Movement tech. No maintenance.',
     ruleSection: '8.3',
   ),
+  // War Sun (WS) — DEAD DATA.
+  //
+  // Retained so that `ShipType.warSun` continues to resolve inside
+  // `kShipDefinitions` (removal would be invasive: it would break every
+  // `.values` iterator, JSON round-trip, and every `!` lookup against the
+  // map). The War Sun is NEVER directly purchasable via the production
+  // page. Instead, Empire Advantage #187 (War Sun) grants a single War Sun
+  // for free, and the game client materializes it as a Titan with the WS
+  // art/rules applied. The `buildCost` and `maintenanceExempt` values here
+  // are therefore vestigial and should not be read by the purchase or
+  // affordability pipelines.
+  //
+  // TODO: once EA #187 materialization is audited we can retire this entry
+  // behind a feature flag. For now, treat it as inert documentation.
   ShipType.warSun: ShipDefinition(
     type: ShipType.warSun, abbreviation: 'WS', name: 'War Sun',
     hullSize: 5, buildCost: 30, maintenanceExempt: false, maxCounters: 1,

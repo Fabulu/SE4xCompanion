@@ -131,17 +131,18 @@ void main() {
     });
   });
 
-  group('effectiveBuildCost priority: alternate empire > AGT > base', () {
-    test('alternate empire cost overrides AGT cost', () {
+  group('effectiveBuildCost priority: AGT > alternate empire > base', () {
+    test('AGT cost overrides alternate empire cost in facilities mode', () {
       final dd = kShipDefinitions[ShipType.dd]!;
-      // Alt empire: 10 (not AGT's 9, not base's 6)
-      expect(dd.effectiveBuildCost(true, facilitiesMode: true), 10);
-      expect(dd.effectiveBuildCost(true, facilitiesMode: false), 10);
+      // AGT DD = 9, not alt-empire's 10 — AGT Alternate Empire card uses AGT prices
+      expect(dd.effectiveBuildCost(true, facilitiesMode: true), 9);
+      expect(dd.effectiveBuildCost(false, facilitiesMode: true), 9);
     });
 
-    test('AGT cost used when not alternate empire', () {
+    test('alternate empire cost used outside AGT mode', () {
       final dd = kShipDefinitions[ShipType.dd]!;
-      expect(dd.effectiveBuildCost(false, facilitiesMode: true), 9);
+      // Base-game alternate empire DD = 10 CP (alternateBuildCost field)
+      expect(dd.effectiveBuildCost(true, facilitiesMode: false), 10);
     });
 
     test('base cost used when neither AGT nor alternate', () {
@@ -624,30 +625,17 @@ void main() {
     final config = const GameConfig(selectedEmpireAdvantage: 49);
 
     test('pipeline income doubled with EA #49', () {
-      final ps = ProductionState(worlds: [
-        WorldState(name: 'C1', growthMarkerLevel: 2, pipelineIncome: 3),
-      ]);
+      const ps = ProductionState(pipelineConnectedColonies: 3);
       expect(ps.pipelineCp(config), 6); // 3 * 2
     });
 
     test('pipeline income normal without EA #49', () {
-      final ps = ProductionState(worlds: [
-        WorldState(name: 'C1', growthMarkerLevel: 2, pipelineIncome: 3),
-      ]);
+      const ps = ProductionState(pipelineConnectedColonies: 3);
       expect(ps.pipelineCp(baseConfig), 3);
     });
 
     test('zero pipeline income unaffected', () {
-      final ps = ProductionState(worlds: [
-        WorldState(name: 'C1', growthMarkerLevel: 2, pipelineIncome: 0),
-      ]);
-      expect(ps.pipelineCp(config), 0);
-    });
-
-    test('blocked worlds excluded', () {
-      final ps = ProductionState(worlds: [
-        WorldState(name: 'C1', growthMarkerLevel: 2, pipelineIncome: 3, isBlocked: true),
-      ]);
+      const ps = ProductionState(pipelineConnectedColonies: 0);
       expect(ps.pipelineCp(config), 0);
     });
   });

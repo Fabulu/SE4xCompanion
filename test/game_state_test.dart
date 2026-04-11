@@ -4,6 +4,7 @@ import 'package:se4x/data/tech_costs.dart';
 import 'package:se4x/data/alien_tables.dart';
 import 'package:se4x/models/alien_economy.dart';
 import 'package:se4x/models/game_config.dart';
+import 'package:se4x/models/drawn_card.dart';
 import 'package:se4x/models/game_state.dart';
 import 'package:se4x/models/map_state.dart';
 import 'package:se4x/models/production_state.dart';
@@ -82,7 +83,6 @@ void main() {
       expect(restored.config.ownership.allGoodThings, true);
       expect(restored.production.cpCarryOver, 15);
       expect(restored.production.pipelineConnectedColonies, 1);
-      expect(restored.production.pipelineAssetIds, ['pipeline-1']);
       expect(restored.production.worlds.length, 1);
       expect(restored.production.worlds[0].homeworldValue, 25);
       expect(restored.production.techState.getLevel(TechId.attack), 2);
@@ -112,7 +112,7 @@ void main() {
       expect(restored.mapState.layoutPreset, MapLayoutPreset.standard4p);
     });
 
-    test('legacy map world names and pipeline counts migrate on load', () {
+    test('legacy map world names migrate on load', () {
       final restored = GameState.fromJson({
         'turnNumber': 2,
         'production': {
@@ -127,6 +127,9 @@ void main() {
             {
               'coord': {'q': 3, 'r': 0},
               'worldName': 'Homeworld',
+              // Legacy 'pipelines' / 'pipelineIds' keys are silently
+              // ignored on load — Layer 1 visual pipeline placement
+              // has been removed.
               'pipelines': 2,
             },
           ],
@@ -137,14 +140,10 @@ void main() {
       expect(restored.production.worlds[0].id, isNotEmpty);
       expect(restored.production.worlds[1].id, isNotEmpty);
       expect(placedHex?.worldId, restored.production.worlds[0].id);
-      // Legacy pipeline hex placements are pruned during sanitize (their
-      // synthetic IDs no longer match the new {pipeline-1, pipeline-2} pool),
-      // but the connected-colony count migrates correctly.
-      expect(restored.production.pipelineConnectedColonies, 2);
-      expect(restored.production.pipelineAssetIds, [
-        'pipeline-1',
-        'pipeline-2',
-      ]);
+      // Legacy 'pipelines' hex counts are dropped on load. Pipeline income
+      // is now driven exclusively by ProductionState.pipelineConnectedColonies
+      // (Layer 2), which defaults to 0 when not present in the saved JSON.
+      expect(restored.production.pipelineConnectedColonies, 0);
     });
   });
 
@@ -214,6 +213,96 @@ void main() {
       expect(restored.games[0].name, 'First');
       expect(restored.games[1].isArchived, true);
     });
+
+    group('confirmEndTurn (PP13)', () {
+      test('default AppState has confirmEndTurn == true', () {
+        const app = AppState();
+        expect(app.confirmEndTurn, true);
+      });
+
+      test('round-trips when toggled off', () {
+        const app = AppState(confirmEndTurn: false);
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.confirmEndTurn, false);
+      });
+
+      test('round-trips when explicitly on', () {
+        const app = AppState(confirmEndTurn: true);
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.confirmEndTurn, true);
+      });
+
+      test('legacy JSON without confirmEndTurn defaults to true', () {
+        // Simulates a save written before PP13 shipped: no
+        // 'confirmEndTurn' key at all.
+        final restored = AppState.fromJson({
+          'version': 1,
+          'activeGameId': null,
+          'games': [],
+        });
+        expect(restored.confirmEndTurn, true);
+      });
+
+      test('copyWith updates confirmEndTurn', () {
+        const app = AppState();
+        final updated = app.copyWith(confirmEndTurn: false);
+        expect(updated.confirmEndTurn, false);
+        // Original is unchanged.
+        expect(app.confirmEndTurn, true);
+      });
+
+      test('copyWith preserves confirmEndTurn when not specified', () {
+        const app = AppState(confirmEndTurn: false);
+        final updated = app.copyWith(activeGameId: 'g1');
+        expect(updated.confirmEndTurn, false);
+        expect(updated.activeGameId, 'g1');
+      });
+    });
+
+    group('textScale (PP18)', () {
+      test('default AppState has textScale == 1.0', () {
+        const app = AppState();
+        expect(app.textScale, 1.0);
+      });
+
+      test('round-trips when scaled up', () {
+        const app = AppState(textScale: 1.25);
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.textScale, 1.25);
+      });
+
+      test('round-trips when scaled down', () {
+        const app = AppState(textScale: 0.85);
+        final restored = AppState.fromJson(app.toJson());
+        expect(restored.textScale, 0.85);
+      });
+
+      test('legacy JSON without textScale defaults to 1.0', () {
+        // Simulates a save written before PP18 shipped: no
+        // 'textScale' key at all.
+        final restored = AppState.fromJson({
+          'version': 1,
+          'activeGameId': null,
+          'games': [],
+        });
+        expect(restored.textScale, 1.0);
+      });
+
+      test('copyWith updates textScale', () {
+        const app = AppState();
+        final updated = app.copyWith(textScale: 1.5);
+        expect(updated.textScale, 1.5);
+        // Original is unchanged.
+        expect(app.textScale, 1.0);
+      });
+
+      test('copyWith preserves textScale when not specified', () {
+        const app = AppState(textScale: 1.2);
+        final updated = app.copyWith(activeGameId: 'g1');
+        expect(updated.textScale, 1.2);
+        expect(updated.activeGameId, 'g1');
+      });
+    });
   });
 
   group('Default game creation', () {
@@ -238,6 +327,14 @@ void main() {
 
       const fac = GameConfig(enableFacilities: true);
       expect(fac.useFacilitiesCosts, true);
+    });
+
+    test('useFacilitiesCosts is true when AGT is owned without Facilities', () {
+      const agtNoFac = GameConfig(
+        ownership: ExpansionOwnership(allGoodThings: true),
+      );
+      expect(agtNoFac.useFacilitiesCosts, true);
+      expect(agtNoFac.enableFacilities, false);
     });
   });
 
@@ -473,6 +570,128 @@ void main() {
       const insectoids = GameConfig(selectedEmpireAdvantage: 43);
       expect(giantRace.shipCostModifiers, isEmpty);
       expect(insectoids.shipCostModifiers, isEmpty);
+    });
+  });
+
+  group('GameState.playedCards', () {
+    test('default GameState has empty playedCards', () {
+      const gs = GameState();
+      expect(gs.playedCards, isEmpty);
+    });
+
+    test('playedCards round-trips through JSON', () {
+      final gs = GameState(
+        playedCards: const [
+          DrawnCard(
+            cardNumber: 85,
+            drawnOnTurn: 2,
+            disposition: 'credits',
+            cpGained: 10,
+          ),
+          DrawnCard(
+            cardNumber: 1,
+            drawnOnTurn: 3,
+            disposition: 'event',
+          ),
+          DrawnCard(
+            cardNumber: 1001,
+            drawnOnTurn: 4,
+            disposition: 'discarded',
+            attachedWorldId: 'world-1',
+          ),
+        ],
+      );
+      final restored = GameState.fromJson(gs.toJson());
+      expect(restored.playedCards, hasLength(3));
+      expect(restored.playedCards[0].disposition, 'credits');
+      expect(restored.playedCards[0].cpGained, 10);
+      expect(restored.playedCards[1].disposition, 'event');
+      expect(restored.playedCards[2].disposition, 'discarded');
+      expect(restored.playedCards[2].attachedWorldId, 'world-1');
+    });
+
+    test('legacy JSON without playedCards key decodes to empty list', () {
+      final legacy = const GameState().toJson();
+      legacy.remove('playedCards');
+      final restored = GameState.fromJson(legacy);
+      expect(restored.playedCards, isEmpty);
+    });
+
+    test('copyWith replaces playedCards', () {
+      const gs = GameState();
+      final next = gs.copyWith(
+        playedCards: const [
+          DrawnCard(
+            cardNumber: 5,
+            drawnOnTurn: 1,
+            disposition: 'discarded',
+          ),
+        ],
+      );
+      expect(next.playedCards, hasLength(1));
+      expect(next.playedCards.first.disposition, 'discarded');
+    });
+
+    test('reopenLastTurn restores playedCards from gameStateSnapshot', () {
+      // Simulate a committed turn whose snapshot carries a playedCards entry
+      // that is different from the current state's playedCards list.
+      final snapshotPlayed = const [
+        DrawnCard(
+          cardNumber: 85,
+          drawnOnTurn: 1,
+          disposition: 'credits',
+          cpGained: 12,
+        ),
+      ];
+      final summary = TurnSummary(
+        turnNumber: 1,
+        completedAt: DateTime.utc(2025, 1, 1),
+        productionSnapshot: const ProductionState(),
+        gameStateSnapshot: {
+          'production': const ProductionState().toJson(),
+          'drawnHand': const <dynamic>[],
+          'playedCards': [for (final c in snapshotPlayed) c.toJson()],
+          'activeModifiers': const <dynamic>[],
+          'shipCounters': const <dynamic>[],
+        },
+      );
+      final gs = GameState(
+        turnNumber: 2,
+        turnSummaries: [summary],
+        playedCards: const [],
+      );
+      final reopened = gs.reopenLastTurn();
+      expect(reopened.playedCards, hasLength(1));
+      expect(reopened.playedCards.first.cardNumber, 85);
+      expect(reopened.playedCards.first.disposition, 'credits');
+      expect(reopened.turnNumber, 1);
+      expect(reopened.turnSummaries, isEmpty);
+    });
+
+    test('reopenLastTurn legacy path (no gss) keeps playedCards unchanged',
+        () {
+      final summary = TurnSummary(
+        turnNumber: 1,
+        completedAt: DateTime.utc(2025, 1, 1),
+        productionSnapshot: const ProductionState(),
+      );
+      final gs = GameState(
+        turnNumber: 2,
+        turnSummaries: [summary],
+        playedCards: const [
+          DrawnCard(
+            cardNumber: 5,
+            drawnOnTurn: 1,
+            disposition: 'discarded',
+          ),
+        ],
+      );
+      final reopened = gs.reopenLastTurn();
+      // Legacy path falls back to production + turnNumber only, so the
+      // current playedCards list is preserved unchanged.
+      expect(reopened.playedCards, hasLength(1));
+      expect(reopened.playedCards.first.cardNumber, 5);
+      expect(reopened.turnNumber, 1);
     });
   });
 }

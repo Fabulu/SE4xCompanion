@@ -7,6 +7,7 @@ import '../data/card_modifiers.dart';
 import '../data/rules_data.dart';
 import '../data/rules_phases.dart';
 import '../models/game_modifier.dart';
+import '../tutorial/tutorial_targets.dart';
 import '../widgets/rule_text.dart';
 
 enum _ViewMode { phase, full, cards, search }
@@ -215,6 +216,7 @@ class RulesReferencePageState extends State<RulesReferencePage> {
     final theme = Theme.of(context);
 
     return Column(
+      key: TutorialTargets.rulesPageRoot,
       children: [
         // Search bar
         Padding(

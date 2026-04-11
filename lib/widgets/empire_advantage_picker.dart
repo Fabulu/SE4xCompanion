@@ -6,7 +6,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../data/card_manifest.dart';
 import '../data/empire_advantages.dart';
+import 'card_detail_dialog.dart';
 
 /// Visual style of the picker rows.
 enum EmpireAdvantagePickerStyle {
@@ -39,103 +41,47 @@ class EmpireAdvantagePicker extends StatelessWidget {
     this.scrollController,
   });
 
-  // QW-6: Expand a card's full text so players can read descriptions before
-  // committing. Shows name, card number, full description, reveal condition,
-  // support status badge and implementation notes.
+  // PP04: delegate to the universal card-detail dialog. Map the EA
+  // onto a `CardEntry` on the fly so the dialog can render its title,
+  // type chip, support badge, and full description uniformly. The EA
+  // implementation note (if any) is surfaced via a simple complex-
+  // behavior banner.
   static void _showFullCardDialog(BuildContext context, EmpireAdvantage ea) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        Color badgeColor;
-        String badgeText;
-        switch (ea.supportStatus) {
-          case EaSupportStatus.implemented:
-            badgeColor = theme.colorScheme.primary;
-            badgeText = 'Implemented';
-            break;
-          case EaSupportStatus.partial:
-            badgeColor = theme.colorScheme.tertiary;
-            badgeText = 'Partial';
-            break;
-          case EaSupportStatus.referenceOnly:
-            badgeColor = theme.colorScheme.outline;
-            badgeText = 'Reference only';
-            break;
-        }
-        return AlertDialog(
-          title: Text('#${ea.cardNumber} ${ea.name}'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: badgeColor, width: 0.5),
-                  ),
-                  child: Text(
-                    badgeText,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: badgeColor,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(ea.description, style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 12),
-                Text(
-                  'Reveal:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface
-                        .withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(ea.revealCondition,
-                    style: const TextStyle(fontSize: 12)),
-                if (ea.implementationNote != null &&
-                    ea.implementationNote!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Implementation note:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(ea.implementationNote!,
-                      style: const TextStyle(fontSize: 12)),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+    CardSupportStatus status;
+    switch (ea.supportStatus) {
+      case EaSupportStatus.implemented:
+        status = CardSupportStatus.supported;
+        break;
+      case EaSupportStatus.partial:
+        status = CardSupportStatus.partial;
+        break;
+      case EaSupportStatus.referenceOnly:
+        status = CardSupportStatus.referenceOnly;
+        break;
+    }
+    final entry = CardEntry(
+      number: ea.cardNumber,
+      name: ea.name,
+      type: ea.isReplicator ? 'replicatorEmpire' : 'empire',
+      description: ea.description,
+      revealCondition: ea.revealCondition,
+      supportStatus: status,
+    );
+    showCardDetailDialog(
+      context,
+      card: entry,
+      complexBehaviorNote:
+          (ea.implementationNote != null && ea.implementationNote!.isNotEmpty)
+              ? ea.implementationNote
+              : null,
     );
   }
 
   List<EmpireAdvantage> _filtered() {
     return kEmpireAdvantages
         .where((ea) => ea.isReplicator == showReplicatorAdvantages)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
   String _truncate(String desc) {

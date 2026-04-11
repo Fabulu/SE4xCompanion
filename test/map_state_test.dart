@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/models/map_state.dart';
+import 'package:se4x/models/ship_counter.dart';
 
 void main() {
   group('GameMapState', () {
@@ -77,7 +79,6 @@ void main() {
           label: 'Home',
           worldId: 'world-home',
           minerals: 2,
-          pipelineIds: const ['pipeline-1'],
           terrain: HexTerrain.asteroid,
         ),
       );
@@ -87,15 +88,14 @@ void main() {
       expect(restored?.label, 'Home');
       expect(restored?.worldId, 'world-home');
       expect(restored?.minerals, 2);
-      expect(restored?.pipelineIds, ['pipeline-1']);
       expect(restored?.terrain, HexTerrain.asteroid);
     });
 
-    test('sanitizeAgainstLedger deduplicates worlds, ships, and pipelines', () {
+    test('sanitizeAgainstLedger deduplicates worlds and ships', () {
       final state = GameMapState.initial().copyWith(
         hexes: [
-          stateHex(const HexCoord(0, 0), worldId: 'world-1', pipelineIds: const ['pipe-1']),
-          stateHex(const HexCoord(1, 0), worldId: 'world-1', pipelineIds: const ['pipe-1', 'pipe-2']),
+          stateHex(const HexCoord(0, 0), worldId: 'world-1'),
+          stateHex(const HexCoord(1, 0), worldId: 'world-1'),
         ],
         fleets: const [
           FleetStackState(
@@ -116,13 +116,10 @@ void main() {
       final sanitized = state.sanitizeAgainstLedger(
         validWorldIds: {'world-1'},
         validShipIds: {'dd:1'},
-        validPipelineIds: {'pipe-1'},
       );
 
       expect(sanitized.hexAt(const HexCoord(0, 0))?.worldId, 'world-1');
       expect(sanitized.hexAt(const HexCoord(1, 0))?.worldId, isNull);
-      expect(sanitized.hexAt(const HexCoord(0, 0))?.pipelineIds, ['pipe-1']);
-      expect(sanitized.hexAt(const HexCoord(1, 0))?.pipelineIds, isEmpty);
       expect(sanitized.fleetById('fleet-1')?.shipCounterIds, ['dd:1']);
       expect(sanitized.fleetById('fleet-2'), isNull);
     });
@@ -130,7 +127,7 @@ void main() {
     test('sanitizeAgainstLedger prunes removed ledger assets', () {
       final state = GameMapState.initial().copyWith(
         hexes: [
-          stateHex(const HexCoord(0, 0), worldId: 'world-1', pipelineIds: const ['pipe-1']),
+          stateHex(const HexCoord(0, 0), worldId: 'world-1'),
         ],
         fleets: const [
           FleetStackState(
@@ -145,12 +142,350 @@ void main() {
       final sanitized = state.sanitizeAgainstLedger(
         validWorldIds: const {},
         validShipIds: const {},
-        validPipelineIds: const {},
       );
 
       expect(sanitized.hexAt(const HexCoord(0, 0))?.worldId, isNull);
-      expect(sanitized.hexAt(const HexCoord(0, 0))?.pipelineIds, isEmpty);
       expect(sanitized.fleets, isEmpty);
+    });
+  });
+
+  group('GameMapState.moveFleet auto-reveal (rule 6.1)', () {
+    GameMapState buildMoveState({bool isEnemy = false}) {
+      // Use a tiny explicit hex set so distances are predictable and the
+      // standard 12x12 layout's unrelated hexes do not interfere.
+      // Hexes laid out so we can assert reveal at distance 0, 1, and 2 from
+      // HexCoord(1, 0). Using axial hex distance:
+      //   (1,0)->(2,0) = 1, (1,0)->(0,1) = 1, (1,0)->(1,1) = 1,
+      //   (1,0)->(3,0) = 2, (1,0)->(4,0) = 3 (out-of-range sentinel).
+      return const GameMapState(
+        hexes: [
+          MapHexState(coord: HexCoord(0, 0), explored: true),
+          MapHexState(coord: HexCoord(1, 0)),
+          MapHexState(coord: HexCoord(2, 0)),
+          MapHexState(coord: HexCoord(3, 0)),
+          MapHexState(coord: HexCoord(4, 0)),
+          MapHexState(coord: HexCoord(0, 1)),
+          MapHexState(coord: HexCoord(1, 1)),
+        ],
+        fleets: [
+          FleetStackState(
+            id: 'fleet-1',
+            owner: 'Blue',
+            coord: HexCoord(0, 0),
+            shipCounterIds: ['dd:1'],
+          ),
+        ],
+      ).copyWith(
+        fleets: [
+          FleetStackState(
+            id: 'fleet-1',
+            owner: 'Blue',
+            coord: const HexCoord(0, 0),
+            isEnemy: isEnemy,
+            shipCounterIds: const ['dd:1'],
+          ),
+        ],
+      );
+    }
+
+    test('friendly move reveals destination hex (exploration 0)', () {
+      final state = buildMoveState();
+      expect(state.hexAt(const HexCoord(1, 0))?.explored, isFalse);
+
+      final moved = state.moveFleet('fleet-1', const HexCoord(1, 0));
+
+      expect(moved.hexAt(const HexCoord(1, 0))?.explored, isTrue);
+      // Neighboring hexes should still be unexplored at level 0.
+      expect(moved.hexAt(const HexCoord(2, 0))?.explored, isFalse);
+      expect(moved.hexAt(const HexCoord(0, 1))?.explored, isFalse);
+      expect(moved.hexAt(const HexCoord(1, 1))?.explored, isFalse);
+      expect(moved.fleetById('fleet-1')?.coord, const HexCoord(1, 0));
+    });
+
+    test('exploration level 1 also reveals hexes adjacent to destination', () {
+      final state = buildMoveState();
+
+      final moved = state.moveFleet(
+        'fleet-1',
+        const HexCoord(1, 0),
+        explorationLevel: 1,
+      );
+
+      // Destination and all hexes within 1 step are revealed.
+      expect(moved.hexAt(const HexCoord(1, 0))?.explored, isTrue);
+      expect(moved.hexAt(const HexCoord(2, 0))?.explored, isTrue);
+      expect(moved.hexAt(const HexCoord(0, 1))?.explored, isTrue);
+      expect(moved.hexAt(const HexCoord(1, 1))?.explored, isTrue);
+      // A hex 2 steps away stays hidden.
+      expect(moved.hexAt(const HexCoord(3, 0))?.explored, isFalse);
+    });
+
+    test('exploration level 2 extends reveal ring to distance 2', () {
+      final state = buildMoveState();
+
+      final moved = state.moveFleet(
+        'fleet-1',
+        const HexCoord(1, 0),
+        explorationLevel: 2,
+      );
+
+      // The distance-2 hex is now revealed as well.
+      expect(moved.hexAt(const HexCoord(3, 0))?.explored, isTrue);
+      // But not distance-3.
+      expect(moved.hexAt(const HexCoord(4, 0))?.explored, isFalse);
+    });
+
+    test('enemy fleet moves do not reveal anything', () {
+      final state = buildMoveState(isEnemy: true);
+
+      final moved = state.moveFleet(
+        'fleet-1',
+        const HexCoord(1, 0),
+        explorationLevel: 2,
+      );
+
+      expect(moved.hexAt(const HexCoord(1, 0))?.explored, isFalse);
+      expect(moved.hexAt(const HexCoord(2, 0))?.explored, isFalse);
+      // Fleet still moved even though no reveal happens.
+      expect(moved.fleetById('fleet-1')?.coord, const HexCoord(1, 0));
+    });
+
+    test('already-explored hex is left alone', () {
+      final state = buildMoveState();
+
+      final moved = state.moveFleet('fleet-1', const HexCoord(0, 0));
+
+      expect(moved.hexAt(const HexCoord(0, 0))?.explored, isTrue);
+      // Was already explored; no change, no crash.
+      expect(moved.fleetById('fleet-1')?.coord, const HexCoord(0, 0));
+    });
+
+    test('unknown fleet id is a no-op', () {
+      final state = buildMoveState();
+
+      final moved = state.moveFleet('fleet-nope', const HexCoord(1, 0));
+
+      expect(identical(moved, state), isTrue);
+    });
+  });
+
+  group('Movement allowance (PP09)', () {
+    // Small predictable 5-hex axial strip so distance assertions are easy.
+    GameMapState buildAllowanceState({
+      bool hasMovedThisTurn = false,
+      List<String> shipCounterIds = const ['dd:1'],
+    }) {
+      return GameMapState(
+        hexes: const [
+          MapHexState(coord: HexCoord(0, 0), explored: true),
+          MapHexState(coord: HexCoord(1, 0)),
+          MapHexState(coord: HexCoord(2, 0)),
+          MapHexState(coord: HexCoord(3, 0)),
+          MapHexState(coord: HexCoord(4, 0)),
+        ],
+        fleets: [
+          FleetStackState(
+            id: 'fleet-1',
+            owner: 'Blue',
+            coord: const HexCoord(0, 0),
+            shipCounterIds: shipCounterIds,
+            hasMovedThisTurn: hasMovedThisTurn,
+          ),
+        ],
+      );
+    }
+
+    ShipCounter shipCounter(String id, int move) {
+      final parts = id.split(':');
+      final type = ShipType.values.firstWhere(
+        (t) => t.name == parts[0],
+        orElse: () => ShipType.dd,
+      );
+      final number = int.parse(parts[1]);
+      return ShipCounter(
+        type: type,
+        number: number,
+        isBuilt: true,
+        move: move,
+      );
+    }
+
+    test('base moveFleet still works without validation', () {
+      final state = buildAllowanceState();
+      // Base moveFleet is the "force move" API — it ignores allowance and
+      // the hasMovedThisTurn flag by design.
+      final moved = state.moveFleet('fleet-1', const HexCoord(4, 0));
+      expect(moved.fleetById('fleet-1')?.coord, const HexCoord(4, 0));
+      // And it does NOT auto-mark the fleet as moved — marking belongs to
+      // the validated wrapper.
+      expect(moved.fleetById('fleet-1')?.hasMovedThisTurn, isFalse);
+    });
+
+    test('moveFleetWithAllowance blocks out-of-range moves', () {
+      final state = buildAllowanceState();
+      final blocked = state.moveFleetWithAllowance(
+        'fleet-1',
+        const HexCoord(4, 0),
+        allowance: 2,
+        shipCounters: [shipCounter('dd:1', 2)],
+      );
+      expect(identical(blocked, state), isTrue);
+      expect(blocked.fleetById('fleet-1')?.coord, const HexCoord(0, 0));
+    });
+
+    test('moveFleetWithAllowance blocks fleets that already moved', () {
+      final state = buildAllowanceState(hasMovedThisTurn: true);
+      final blocked = state.moveFleetWithAllowance(
+        'fleet-1',
+        const HexCoord(1, 0),
+        allowance: 5,
+        shipCounters: [shipCounter('dd:1', 2)],
+      );
+      expect(identical(blocked, state), isTrue);
+      expect(blocked.fleetById('fleet-1')?.coord, const HexCoord(0, 0));
+    });
+
+    test('moveFleetWithAllowance marks fleet as moved on success', () {
+      final state = buildAllowanceState();
+      final moved = state.moveFleetWithAllowance(
+        'fleet-1',
+        const HexCoord(2, 0),
+        allowance: 3,
+        shipCounters: [shipCounter('dd:1', 3)],
+      );
+      final fleet = moved.fleetById('fleet-1');
+      expect(fleet?.coord, const HexCoord(2, 0));
+      expect(fleet?.hasMovedThisTurn, isTrue);
+    });
+
+    test('moveFleetWithAllowance still auto-reveals the destination', () {
+      final state = buildAllowanceState();
+      expect(state.hexAt(const HexCoord(2, 0))?.explored, isFalse);
+      final moved = state.moveFleetWithAllowance(
+        'fleet-1',
+        const HexCoord(2, 0),
+        allowance: 3,
+        shipCounters: [shipCounter('dd:1', 3)],
+      );
+      expect(moved.hexAt(const HexCoord(2, 0))?.explored, isTrue);
+    });
+
+    test('clearAllFleetMoveFlags clears the flag on every fleet', () {
+      final state = GameMapState(
+        hexes: const [MapHexState(coord: HexCoord(0, 0))],
+        fleets: const [
+          FleetStackState(
+            id: 'a',
+            coord: HexCoord(0, 0),
+            hasMovedThisTurn: true,
+          ),
+          FleetStackState(
+            id: 'b',
+            coord: HexCoord(0, 0),
+            hasMovedThisTurn: true,
+          ),
+          FleetStackState(
+            id: 'c',
+            coord: HexCoord(0, 0),
+          ),
+        ],
+      );
+      final cleared = state.clearAllFleetMoveFlags();
+      for (final f in cleared.fleets) {
+        expect(f.hasMovedThisTurn, isFalse);
+      }
+    });
+
+    test('slowestShipMoveInFleet returns the min move across ships', () {
+      final state = buildAllowanceState(
+        shipCounterIds: const ['dd:1', 'dd:2', 'dd:3'],
+      );
+      final fleet = state.fleetById('fleet-1')!;
+      final result = state.slowestShipMoveInFleet(fleet, [
+        shipCounter('dd:1', 3),
+        shipCounter('dd:2', 1),
+        shipCounter('dd:3', 2),
+      ]);
+      expect(result, 1);
+    });
+
+    test('slowestShipMoveInFleet returns null for an empty fleet', () {
+      final state = buildAllowanceState(shipCounterIds: const []);
+      final fleet = state.fleetById('fleet-1')!;
+      final result = state.slowestShipMoveInFleet(fleet, const []);
+      expect(result, isNull);
+    });
+
+    test('fleetMoveAllowance falls back to player tech on empty fleet', () {
+      final state = buildAllowanceState(shipCounterIds: const []);
+      final fleet = state.fleetById('fleet-1')!;
+      final allowance = state.fleetMoveAllowance(fleet, const [], 4);
+      expect(allowance, 4);
+    });
+
+    test('fleetMoveAllowance uses slowest ship when ships are present', () {
+      final state = buildAllowanceState(
+        shipCounterIds: const ['dd:1', 'dd:2'],
+      );
+      final fleet = state.fleetById('fleet-1')!;
+      final allowance = state.fleetMoveAllowance(
+        fleet,
+        [shipCounter('dd:1', 2), shipCounter('dd:2', 5)],
+        9, // player tech 9 is ignored when ships are present
+      );
+      expect(allowance, 2);
+    });
+
+    test(
+      'reachableHexes returns hexes within allowance and excludes current hex',
+      () {
+        final state = buildAllowanceState();
+        final fleet = state.fleetById('fleet-1')!;
+        final reachable = state.reachableHexes(fleet, 2);
+        expect(reachable, contains(const HexCoord(1, 0)));
+        expect(reachable, contains(const HexCoord(2, 0)));
+        expect(reachable, isNot(contains(const HexCoord(3, 0))));
+        expect(reachable, isNot(contains(const HexCoord(0, 0))));
+      },
+    );
+
+    test('reachableHexes is empty when allowance is 0', () {
+      final state = buildAllowanceState();
+      final fleet = state.fleetById('fleet-1')!;
+      final reachable = state.reachableHexes(fleet, 0);
+      expect(reachable, isEmpty);
+    });
+
+    test('FleetStackState json round-trips hasMovedThisTurn', () {
+      const fleet = FleetStackState(
+        id: 'fleet-1',
+        owner: 'Blue',
+        coord: HexCoord(0, 0),
+        hasMovedThisTurn: true,
+      );
+      final restored = FleetStackState.fromJson(fleet.toJson());
+      expect(restored.hasMovedThisTurn, isTrue);
+    });
+
+    test(
+      'FleetStackState legacy decode defaults hasMovedThisTurn to false',
+      () {
+        final legacyJson = <String, dynamic>{
+          'id': 'fleet-1',
+          'owner': 'Blue',
+          'coord': const HexCoord(1, -1).toJson(),
+          // No hasMovedThisTurn key — simulates a save from before PP09.
+        };
+        final restored = FleetStackState.fromJson(legacyJson);
+        expect(restored.hasMovedThisTurn, isFalse);
+      },
+    );
+
+    test('markMoved and clearMoveFlag helpers flip the flag', () {
+      const fleet = FleetStackState(id: 'f', coord: HexCoord(0, 0));
+      expect(fleet.hasMovedThisTurn, isFalse);
+      expect(fleet.markMoved().hasMovedThisTurn, isTrue);
+      expect(fleet.markMoved().clearMoveFlag().hasMovedThisTurn, isFalse);
     });
   });
 
@@ -287,12 +622,10 @@ void main() {
 MapHexState stateHex(
   HexCoord coord, {
   String? worldId,
-  List<String> pipelineIds = const [],
 }) {
   return MapHexState(
     coord: coord,
     worldId: worldId,
-    pipelineIds: pipelineIds,
   );
 }
 

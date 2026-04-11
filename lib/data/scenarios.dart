@@ -64,6 +64,12 @@ class ScenarioPreset {
   /// Optional Replicator setup metadata.
   final ReplicatorScenarioConfig? replicatorSetup;
 
+  /// Card numbers (matching `CardEntry.number` in card_manifest.dart) that
+  /// should be auto-drawn as face-up scenario modifier cards when a new
+  /// game is created with this scenario. Empty for scenarios that do not
+  /// use a pre-built scenario modifier card.
+  final List<int> scenarioModifierCards;
+
   const ScenarioPreset({
     required this.id,
     required this.name,
@@ -81,6 +87,7 @@ class ScenarioPreset {
     this.blockedShipTypes = const [],
     this.victoryPoints,
     this.replicatorSetup,
+    this.scenarioModifierCards = const [],
   });
 }
 
@@ -215,6 +222,7 @@ const List<ScenarioPreset> kScenarios = [
     playerCount: 4,
     blockedTechs: [TechId.mines, TechId.mineSweep],
     blockedShipTypes: [ShipType.mine, ShipType.sw],
+    scenarioModifierCards: [148],
   ),
 
   // ── Handicap ──
@@ -233,7 +241,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_small_easy',
     name: 'DM Small - Easy',
-    section: '2.7',
+    section: 'SSB 2.7',
     description: 'Solo. Small map, 3 DMs. Arrive turns 7/9/11 at ratings 1/3/5.',
     playerCount: 1,
   ),
@@ -241,7 +249,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_small_normal',
     name: 'DM Small - Normal',
-    section: '2.7',
+    section: 'SSB 2.7',
     description: 'Solo. Small map, 3 DMs. Arrive turns 7/9/10 at ratings 2/4/6.',
     playerCount: 1,
   ),
@@ -249,7 +257,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_small_hard',
     name: 'DM Small - Hard',
-    section: '2.7',
+    section: 'SSB 2.7',
     description: 'Solo. Small map, 3 DMs. Arrive turns 6/8/10 at ratings 1/3/5.',
     playerCount: 1,
   ),
@@ -257,7 +265,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_large_easy',
     name: 'DM Large - Easy',
-    section: '2.8',
+    section: 'SSB 2.8',
     description: 'Solo. Large map, 3 DMs. Arrive turns 8/10/12 at ratings 5/7/9.',
     playerCount: 1,
   ),
@@ -265,7 +273,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_large_normal',
     name: 'DM Large - Normal',
-    section: '2.8',
+    section: 'SSB 2.8',
     description: 'Solo. Large map, 3 DMs. Arrive turns 8/10/11 at ratings 6/8/10.',
     playerCount: 1,
   ),
@@ -275,7 +283,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_coop_2p_easy',
     name: 'DM Coop 2P - Easy',
-    section: '8.0',
+    section: 'SSB 8.0',
     description: 'Coop 2P. 5 DMs arrive turns 6/8/7/10/12. VP track: 10 = loss.',
     playerCount: 2,
     victoryPoints: VictoryPointConfig(
@@ -288,7 +296,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'dm_coop_2p_normal',
     name: 'DM Coop 2P - Normal',
-    section: '8.0',
+    section: 'SSB 8.0',
     description: 'Coop 2P. 5 DMs arrive turns 6/8/7/10/12 at higher ratings. VP track.',
     playerCount: 2,
     victoryPoints: VictoryPointConfig(
@@ -303,7 +311,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'alien_vp_easy',
     name: 'Alien Empire VP - Easy',
-    section: '6.0',
+    section: 'SSB 6.0',
     description: 'Solo vs 2 APs. VP track: 10 AP VP = loss. Start with Terra 1 + Explore 1.',
     playerCount: 1,
     startingTechOverrides: {TechId.terraforming: 1, TechId.exploration: 1},
@@ -317,7 +325,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'alien_vp_normal',
     name: 'Alien Empire VP - Normal',
-    section: '6.0',
+    section: 'SSB 6.0',
     description: 'Solo vs 2 APs. VP track: 10 AP VP = loss. 10 CP/roll. Start with Terra 1 + Explore 1.',
     playerCount: 1,
     startingTechOverrides: {TechId.terraforming: 1, TechId.exploration: 1},
@@ -333,7 +341,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'replicator_standard',
     name: 'Replicator - Standard',
-    section: '7.13',
+    section: 'SSB 7.13',
     description: 'Solo vs Replicators. Standard map. 4 Colony Ships, 4 SY, 3 SC, 1 Miner.',
     playerCount: 1,
     startingFleet: {
@@ -351,7 +359,7 @@ const List<ScenarioPreset> kScenarios = [
   ScenarioPreset(
     id: 'replicator_large',
     name: 'Replicator - Large',
-    section: '7.14',
+    section: 'SSB 7.14',
     description: 'Solo vs Replicators. Large map. Same starting forces.',
     playerCount: 1,
     startingFleet: {

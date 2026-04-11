@@ -2,10 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../data/sci_fi_names.dart';
 import '../data/ship_definitions.dart';
 import '../models/map_state.dart';
 import '../models/ship_counter.dart';
 import '../models/world.dart';
+import '../tutorial/tutorial_targets.dart';
+import '../util/combat_resolution.dart';
+import '../widgets/combat_resolution_dialog.dart';
 
 typedef MapStateChanged = void Function(
   GameMapState state, {
@@ -17,24 +21,30 @@ class MapPage extends StatefulWidget {
   final GameMapState state;
   final List<WorldState> productionWorlds;
   final List<ShipCounter> shipCounters;
-  final List<String> pipelineAssetIds;
   final String? focusShipId;
   final int focusRequestId;
   final int terraformingLevel;
+  final int explorationLevel;
+  final int playerMoveLevel;
+  final Map<String, ({int used, int total})> shipyardCapacity;
   final VoidCallback? onColonizeCandidatesTapped;
   final MapStateChanged onChanged;
+  final void Function(CombatResolution)? onResolveCombat;
 
   const MapPage({
     super.key,
     required this.state,
     required this.productionWorlds,
     required this.shipCounters,
-    this.pipelineAssetIds = const [],
     this.focusShipId,
     this.focusRequestId = 0,
     this.terraformingLevel = 0,
+    this.explorationLevel = 0,
+    this.playerMoveLevel = 0,
+    this.shipyardCapacity = const {},
     this.onColonizeCandidatesTapped,
     required this.onChanged,
+    this.onResolveCombat,
   });
 
   @override
@@ -43,7 +53,6 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   final GlobalKey<_MapCanvasState> _mapCanvasKey = GlobalKey<_MapCanvasState>();
-  bool _pipelinePlacementMode = false;
 
   @override
   void initState() {
@@ -96,14 +105,6 @@ class _MapPageState extends State<MapPage> {
       ..sort((a, b) => a.id.compareTo(b.id));
   }
 
-  List<String> _availablePipelineAssets({String? excludeHexId}) {
-    final placed = _state.placedPipelineIds(excludeHexId: excludeHexId);
-    return widget.pipelineAssetIds
-        .where((id) => !placed.contains(id))
-        .toList()
-      ..sort();
-  }
-
   void _apply(
     GameMapState next, {
     String? description,
@@ -152,6 +153,24 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
+  Future<void> _openCombatResolutionDialog(HexCoord coord) async {
+    final callback = widget.onResolveCombat;
+    if (callback == null) return;
+    final fleetsAtHex = _state.fleetsAt(coord);
+    if (fleetsAtHex.isEmpty) return;
+    final result = await showCombatResolutionDialog(
+      context,
+      hex: coord,
+      fleetsAtHex: fleetsAtHex,
+      shipCounters: widget.shipCounters,
+      mapState: _state,
+      playerMoveLevel: widget.playerMoveLevel,
+    );
+    if (result != null) {
+      callback(result);
+    }
+  }
+
   Future<void> _changePreset(MapLayoutPreset preset) async {
     if (preset == _state.layoutPreset) return;
     if (_state.hasAnyMeaningfulContent) {
@@ -195,6 +214,8 @@ class _MapPageState extends State<MapPage> {
       return;
     }
     final id = 'fleet-${DateTime.now().microsecondsSinceEpoch}';
+    final taken = {for (final f in _state.fleets) f.label};
+    final defaultLabel = pickUnusedName(kFleetNames, taken, fallbackPrefix: 'Fleet');
     _apply(
       _state.copyWith(
         fleets: [
@@ -203,7 +224,7 @@ class _MapPageState extends State<MapPage> {
             id: id,
             coord: coord,
             owner: 'Player',
-            label: 'Fleet',
+            label: defaultLabel,
             shipCounterIds: [availableShips.first.id],
           ),
         ],
@@ -216,6 +237,9 @@ class _MapPageState extends State<MapPage> {
 
   void _addEnemyFleet(HexCoord coord) {
     final id = 'enemy-${DateTime.now().microsecondsSinceEpoch}';
+    final taken = {for (final f in _state.fleets) f.label};
+    final defaultLabel =
+        pickUnusedName(kEnemyFleetNames, taken, fallbackPrefix: 'Enemy Fleet');
     _apply(
       _state.copyWith(
         fleets: [
@@ -224,7 +248,7 @@ class _MapPageState extends State<MapPage> {
             id: id,
             coord: coord,
             owner: 'Enemy',
-            label: 'Enemy Fleet',
+            label: defaultLabel,
             isEnemy: true,
             composition: const {'Unknown': 1},
             facedown: true,
@@ -267,44 +291,87 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  void _togglePipelineAt(MapHexState hex) {
-    if (hex.pipelineIds.isNotEmpty) {
-      _apply(
-        _state.replaceHex(hex.copyWith(pipelineIds: const [])),
-        description: 'Pipeline',
-      );
-      return;
+  /// Returns the homeworld WorldState if one exists in production, else null.
+  WorldState? get _homeworld {
+    for (final w in widget.productionWorlds) {
+      if (w.isHomeworld) return w;
     }
-    final available = _availablePipelineAssets(excludeHexId: hex.coord.id);
-    if (available.isEmpty) {
-      _showSnack('No pipeline assets available. Add one in Production.');
-      return;
-    }
-    _apply(
-      _state.replaceHex(hex.copyWith(pipelineIds: [available.first])),
-      description: 'Pipeline',
-    );
+    return null;
   }
 
-  void _togglePipelineAtSelected() {
-    setState(() => _pipelinePlacementMode = !_pipelinePlacementMode);
+  /// True iff the player has a homeworld and starting shipyard counters but
+  /// no map hex yet hosts the homeworld. This is the new-game onboarding
+  /// state — we show a tutorial banner and the next hex tap places the
+  /// homeworld + auto-deploys the starting shipyards on it.
+  bool get _needsHomeworldPlacement {
+    final hw = _homeworld;
+    if (hw == null) return false;
+    final hwId = hw.id.isNotEmpty ? hw.id : hw.name;
+    for (final hex in _state.hexes) {
+      if (hex.worldId == hwId) return false;
+    }
+    // Only prompt if there's actually something to deploy — built SY
+    // counters are the unmistakable signal that this is a fresh start.
+    return widget.shipCounters
+        .any((c) => c.type == ShipType.shipyard && c.isBuilt);
+  }
+
+  /// Counts built starting shipyards waiting to be deployed on the homeworld.
+  int get _undeployedShipyardCount => widget.shipCounters
+      .where((c) => c.type == ShipType.shipyard && c.isBuilt)
+      .length;
+
+  /// Places the homeworld on [coord] and auto-deploys the starting shipyards
+  /// there. Used by the new-game tutorial flow.
+  void _placeHomeworldAt(HexCoord coord) {
+    final hw = _homeworld;
+    if (hw == null) return;
+    final hex = _state.hexAt(coord);
+    if (hex == null) return;
+    final hwId = hw.id.isNotEmpty ? hw.id : hw.name;
+    final syCount = _undeployedShipyardCount;
+    _apply(
+      _state.replaceHex(hex.copyWith(
+        worldId: hwId,
+        shipyardCount: hex.shipyardCount + syCount,
+        explored: true,
+      )).copyWith(selectedHex: coord),
+      description: 'Place Homeworld',
+    );
+    _showSnack(syCount > 0
+        ? 'Homeworld placed at ${coord.id}. $syCount Shipyard${syCount == 1 ? '' : 's'} deployed.'
+        : 'Homeworld placed at ${coord.id}.');
   }
 
   void _onHexTapped(HexCoord coord) {
-    _selectHex(coord);
-    if (_pipelinePlacementMode) {
-      final hex = _state.hexAt(coord);
-      if (hex != null) _togglePipelineAt(hex);
+    // Onboarding takeover: while the player has not yet placed their
+    // homeworld, every hex tap is a homeworld placement action. This is the
+    // tutorial flow that walks new players through SE4X setup.
+    if (_needsHomeworldPlacement) {
+      _placeHomeworldAt(coord);
       return;
     }
-    // Opening the inspector on tap restores the pre-regression behaviour:
-    // one tap both selects the hex and surfaces its contents.
-    _openInspector();
+    // Two-step selection:
+    // - First tap on a new hex → select only (info shows in the selection card).
+    // - Second tap on the already-selected hex → open the detail inspector.
+    final previouslySelected = _state.selectedHex;
+    if (previouslySelected == coord) {
+      _openInspector(forCoord: coord);
+      return;
+    }
+    _selectHex(coord);
   }
 
-  Future<void> _openInspector() async {
-    final selectedHex = _state.selectedHex != null ? _state.hexAt(_state.selectedHex!) : null;
-    if (selectedHex == null || !mounted) return;
+  Future<void> _openInspector({HexCoord? forCoord}) async {
+    // IMPORTANT: Resolve the target coord from the explicit parameter first.
+    // Reading _state.selectedHex synchronously after _selectHex() yields a
+    // stale value because MapPage's state is owned by HomePage and flows
+    // back via widget.onChanged on the next frame. Passing coord explicitly
+    // prevents the "actions go to the previously selected hex" bug.
+    final targetCoord = forCoord ?? _state.selectedHex;
+    if (targetCoord == null || !mounted) return;
+    final selectedHex = _state.hexAt(targetCoord);
+    if (selectedHex == null) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -315,8 +382,10 @@ class _MapPageState extends State<MapPage> {
           heightFactor: 0.62,
           child: StatefulBuilder(
             builder: (context, setSheetState) {
-              final latestHex =
-                  _state.selectedHex != null ? _state.hexAt(_state.selectedHex!) : null;
+              // Prefer the explicitly requested coord; fall back to
+              // _state.selectedHex only if that is newer/still valid.
+              final effectiveCoord = _state.selectedHex ?? targetCoord;
+              final latestHex = _state.hexAt(effectiveCoord);
               if (latestHex == null) return const SizedBox.shrink();
               final latestWorld = _findWorld(latestHex.worldId);
               final latestFleetId = _state.selectedFleetId;
@@ -400,32 +469,143 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  Future<void> _showShipInventory() async {
-    final builtShips = widget.shipCounters.where((counter) => counter.isBuilt).toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
-    if (!mounted) return;
-    await showDialog<void>(
+  /// Global overflow menu handler for the floating top-right button on
+  /// the map canvas. Replaces the old header-bar overflow popup.
+  void _handleOverflowMenu({
+    required BuildContext context,
+    required String value,
+    required bool hasSelection,
+    required MapHexState? selected,
+  }) {
+    switch (value) {
+      case 'layout':
+        _showLayoutPicker();
+        break;
+      case 'inventory':
+        _showInventorySheet();
+        break;
+      case 'reset_view':
+        _resetViewport();
+        break;
+      case 'add_enemy':
+        if (hasSelection && selected != null) {
+          _addEnemyFleet(selected.coord);
+        }
+        break;
+      case 'map_stats':
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Map Stats'),
+            content: Text(
+              '${_state.hexes.length} hex${_state.hexes.length == 1 ? '' : 'es'}\n'
+              '${_state.fleets.length} fleet${_state.fleets.length == 1 ? '' : 's'}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+        break;
+    }
+  }
+
+  void _showLayoutPicker() {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Built Ships'),
-        content: SizedBox(
-          width: 420,
-          child: builtShips.isEmpty
-              ? const Text('No built ships are currently in the ledger.')
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: builtShips.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final ship = builtShips[index];
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text(
+                'Map layout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                _state.layoutPreset == MapLayoutPreset.standard4p
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: const Text('Standard 4P Map'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _changePreset(MapLayoutPreset.standard4p);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                _state.layoutPreset == MapLayoutPreset.special5p
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: const Text('Special 5P Map'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _changePreset(MapLayoutPreset.special5p);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Unified inventory sheet: ships and unplaced worlds.
+  /// Replaces the old two-pill + dialog split in the header toolbar.
+  Future<void> _showInventorySheet() async {
+    if (!mounted) return;
+    final builtShips =
+        widget.shipCounters.where((counter) => counter.isBuilt).toList()
+          ..sort((a, b) => a.id.compareTo(b.id));
+    final unplacedWorlds = _availableWorlds();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              children: [
+                // ── Ships ──
+                _InventorySectionHeader(
+                  icon: Icons.directions_boat,
+                  label: 'Built Ships',
+                  count: builtShips.length,
+                ),
+                if (builtShips.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('No built ships in the ledger.'),
+                  )
+                else
+                  ...builtShips.map((ship) {
                     final fleetId = _state.fleetIdForShip(ship.id);
-                    final fleet = fleetId == null ? null : _state.fleetById(fleetId);
+                    final fleet =
+                        fleetId == null ? null : _state.fleetById(fleetId);
                     final subtitle = fleet == null
                         ? 'Unassigned'
                         : '${fleet.label.isEmpty ? fleet.owner : fleet.label} @ ${fleet.coord.id}';
                     return ListTile(
                       dense: true,
-                      selected: fleetId != null && fleetId == _state.selectedFleetId,
+                      selected: fleetId != null &&
+                          fleetId == _state.selectedFleetId,
                       title: Text(ship.id),
                       subtitle: Text(subtitle),
                       trailing: fleet == null
@@ -434,20 +614,42 @@ class _MapPageState extends State<MapPage> {
                       onTap: fleet == null
                           ? null
                           : () {
-                              Navigator.of(context).pop();
+                              Navigator.of(sheetContext).pop();
                               _jumpToShip(ship.id);
                             },
                     );
-                  },
+                  }),
+                const SizedBox(height: 12),
+                // ── Worlds ──
+                _InventorySectionHeader(
+                  icon: Icons.public,
+                  label: 'Worlds available',
+                  count: unplacedWorlds.length,
                 ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+                if (unplacedWorlds.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('All worlds are placed on the map.'),
+                  )
+                else
+                  ...unplacedWorlds.map((w) => ListTile(
+                        dense: true,
+                        leading: Icon(
+                          w.isHomeworld ? Icons.flag : Icons.public,
+                          size: 18,
+                        ),
+                        title: Text(w.name.isEmpty ? '(unnamed)' : w.name),
+                        subtitle: Text(
+                          w.isHomeworld
+                              ? 'Homeworld'
+                              : 'Colony L${w.growthMarkerLevel}',
+                        ),
+                      )),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -479,13 +681,8 @@ class _MapPageState extends State<MapPage> {
   Widget build(BuildContext context) {
     final selectedHex =
         _state.selectedHex != null ? _state.hexAt(_state.selectedHex!) : null;
-    final availableWorlds = _availableWorlds(
-      excludeHexId: selectedHex?.coord.id,
-      includeWorldId: selectedHex?.worldId,
-    );
-    final availablePipelines =
-        _availablePipelineAssets(excludeHexId: selectedHex?.coord.id);
-    final builtShipCount = widget.shipCounters.where((counter) => counter.isBuilt).length;
+    final builtShipCount =
+        widget.shipCounters.where((counter) => counter.isBuilt).length;
 
     // Find fleets that contain a built Colony Ship on a colonizable hex.
     // These get a green pulse marker on the canvas and drive the
@@ -505,159 +702,108 @@ class _MapPageState extends State<MapPage> {
     };
 
     final theme = Theme.of(context);
+    // Capture the current selection in a local so nested closures have a
+    // stable non-null reference (Dart flow analysis can't promote
+    // `selectedHex` across closure boundaries).
+    final selected = selectedHex;
+    final needsHomeworldPlacement = _needsHomeworldPlacement;
+    final undeployedSy = _undeployedShipyardCount;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Row(
-              children: [
-                PopupMenuButton<MapLayoutPreset>(
-                  tooltip: 'Map preset',
-                  initialValue: _state.layoutPreset,
-                  onSelected: _changePreset,
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: MapLayoutPreset.standard4p,
-                      child: Text('Standard 4P Map'),
-                    ),
-                    PopupMenuItem(
-                      value: MapLayoutPreset.special5p,
-                      child: Text('Special 5P Map'),
-                    ),
-                  ],
-                  child: Semantics(
-                    button: true,
-                    label: 'Map layout: '
-                        '${_state.layoutPreset == MapLayoutPreset.standard4p ? '4-player' : '5-player'}',
-                    child: ExcludeSemantics(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.map, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              _state.layoutPreset == MapLayoutPreset.standard4p
-                                  ? '4P'
-                                  : '5P',
-                              style: theme.textTheme.labelMedium,
-                            ),
-                            const Icon(Icons.arrow_drop_down, size: 16),
-                          ],
-                        ),
-                      ),
-                    ),
+        if (needsHomeworldPlacement)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: KeyedSubtree(
+              key: TutorialTargets.homeworldBanner,
+              child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: theme.colorScheme.primary,
+                  width: 1.5,
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.flag,
+                    color: theme.colorScheme.primary,
+                    size: 28,
                   ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${_state.hexes.length}h/${_state.fleets.length}f'
-                  '${selectedHex == null ? '' : ' · ${selectedHex.coord.id}'}',
-                  style: theme.textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _ToolbarActionButton(
-                          icon: Icons.public,
-                          label: 'Place World',
-                          onPressed: selectedHex == null ? null : () => _placeWorld(selectedHex),
-                        ),
-                        const SizedBox(width: 4),
-                        _ToolbarActionButton(
-                          icon: Icons.directions_boat,
-                          label: 'Add Fleet',
-                          onPressed: selectedHex == null
-                              ? null
-                              : () => _addFriendlyFleet(selectedHex.coord),
-                        ),
-                        const SizedBox(width: 4),
-                        _ToolbarActionButton(
-                          icon: Icons.alt_route,
-                          label: _pipelinePlacementMode ? 'Pipeline On' : 'Pipeline',
-                          onPressed: _togglePipelineAtSelected,
-                        ),
-                        const SizedBox(width: 4),
-                        Semantics(
-                          label: 'Edit hex',
-                          button: true,
-                          enabled: selectedHex != null,
-                          child: ExcludeSemantics(
-                            child: _ToolbarActionButton(
-                              icon: Icons.tune,
-                              label: 'Edit',
-                              onPressed: selectedHex == null
-                                  ? null
-                                  : _openInspector,
-                            ),
+                        Text(
+                          'Welcome — place your Homeworld',
+                          style:
+                              theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color:
+                                theme.colorScheme.onPrimaryContainer,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        _AssetPill(label: 'Worlds', value: availableWorlds.length),
-                        const SizedBox(width: 4),
-                        _AssetPill(
-                          label: 'Ships',
-                          value: builtShipCount,
-                          onTap: _showShipInventory,
-                        ),
-                        const SizedBox(width: 4),
-                        _AssetPill(label: 'Pipelines', value: availablePipelines.length),
-                        if (colonizeCandidates.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _ColonizeReadyChip(
-                            count: colonizeCandidates.length,
-                            onTap: widget.onColonizeCandidatesTapped,
+                        const SizedBox(height: 2),
+                        Text(
+                          undeployedSy > 0
+                              ? 'Tap any hex on the map to plant your '
+                                  'Homeworld there. Your $undeployedSy '
+                                  'starting Shipyard'
+                                  '${undeployedSy == 1 ? '' : 's'} will '
+                                  'auto-deploy on it.'
+                              : 'Tap any hex on the map to plant your '
+                                  'Homeworld there.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color:
+                                theme.colorScheme.onPrimaryContainer,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'More actions',
-                  icon: const Icon(Icons.more_vert, size: 20),
-                  padding: EdgeInsets.zero,
-                  iconSize: 20,
-                  onSelected: (value) {
-                    if (value == 'add_enemy' && selectedHex != null) {
-                      _addEnemyFleet(selectedHex.coord);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'add_enemy',
-                      enabled: selectedHex != null,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.visibility_off, size: 18),
-                          SizedBox(width: 8),
-                          Text('Add Enemy'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
+            ),
             ),
           ),
-        ),
+        // ── Selection card (only when a hex is selected) ──
+        // When no hex is selected, NO chrome is rendered above the map
+        // canvas — this is intentional. Global actions live in the
+        // floating overflow button on the map canvas itself.
+        if (!needsHomeworldPlacement && selected != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+            child: _SelectionCard(
+              hex: selected,
+              world: _findWorld(selected.worldId),
+              fleetCount: _state.fleetsAt(selected.coord).length,
+              colonizeReadyHere:
+                  colonizeCandidates.any((c) => c.coord == selected.coord),
+              onPlaceWorld: () => _placeWorld(selected),
+              onAddFleet: () => _addFriendlyFleet(selected.coord),
+              onOpenInspector: () => _openInspector(forCoord: selected.coord),
+              onAddEnemy: () => _addEnemyFleet(selected.coord),
+              onResolveCombat: widget.onResolveCombat == null
+                  ? null
+                  : () => _openCombatResolutionDialog(selected.coord),
+              onDismissSelection: () {
+                _apply(
+                  _state.copyWith(
+                    clearSelectedHex: true,
+                    clearSelectedFleetId: true,
+                  ),
+                  recordUndo: false,
+                );
+              },
+            ),
+          ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF0A1226),
@@ -668,18 +814,45 @@ class _MapPageState extends State<MapPage> {
                 borderRadius: BorderRadius.circular(18),
                 child: Stack(
                   children: [
-                    _MapCanvas(
+                    KeyedSubtree(
+                      key: TutorialTargets.mapCanvas,
+                      child: _MapCanvas(
                       key: _mapCanvasKey,
                       state: _state,
                       productionWorlds: widget.productionWorlds,
+                      shipCounters: widget.shipCounters,
+                      playerMoveLevel: widget.playerMoveLevel,
                       colonizeReadyFleetIds: colonizeReadyFleetIds,
+                      shipyardCapacity: widget.shipyardCapacity,
                       onHexTap: _onHexTapped,
                       onFleetTap: _selectFleet,
                       onFleetDrop: (fleetId, target) {
-                        _apply(
-                          _state.moveFleet(fleetId, target),
-                          description: 'Move Fleet',
+                        final fleet = _state.fleetById(fleetId);
+                        if (fleet == null) return;
+                        final allowance = _state.fleetMoveAllowance(
+                          fleet,
+                          widget.shipCounters,
+                          widget.playerMoveLevel,
                         );
+                        final next = _state.moveFleetWithAllowance(
+                          fleetId,
+                          target,
+                          allowance: allowance,
+                          shipCounters: widget.shipCounters,
+                          explorationLevel: widget.explorationLevel,
+                        );
+                        if (identical(next, _state)) {
+                          // Move rejected (already moved this turn, out of
+                          // range, or same hex) — surface a small hint so
+                          // the drop silently failing doesn't feel broken.
+                          if (fleet.hasMovedThisTurn) {
+                            _showSnack('Fleet already moved this turn.');
+                          } else if (fleet.coord != target) {
+                            _showSnack('Out of range (allowance $allowance).');
+                          }
+                          return;
+                        }
+                        _apply(next, description: 'Move Fleet');
                       },
                       onViewportChanged: (zoom, panX, panY, rotation) {
                         _apply(
@@ -693,36 +866,74 @@ class _MapPageState extends State<MapPage> {
                         );
                       },
                     ),
+                    ),
+                    // Top-right: reset view + global overflow.
                     Positioned(
                       top: 8,
                       right: 8,
-                      // Enforce the 48dp minimum tap target. The small
-                      // FAB variant is only 40dp, below the a11y minimum,
-                      // so we wrap it in a transparent GestureDetector
-                      // padded to 48dp that forwards taps to _resetViewport.
-                      child: Semantics(
-                        button: true,
-                        label: 'Reset map view',
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _resetViewport,
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            color: Colors.transparent,
-                            alignment: Alignment.center,
-                            child: ExcludeSemantics(
-                              child: FloatingActionButton.small(
-                                heroTag: 'map-reset-viewport',
-                                tooltip: 'Reset view',
-                                onPressed: _resetViewport,
-                                child: const Icon(Icons.center_focus_strong),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!needsHomeworldPlacement)
+                            _OverflowMenuButton(
+                              onSelected: (value) => _handleOverflowMenu(
+                                context: context,
+                                value: value,
+                                hasSelection: selected != null,
+                                selected: selected,
+                              ),
+                              hasSelection: selected != null,
+                            ),
+                          const SizedBox(width: 4),
+                          Semantics(
+                            button: true,
+                            label: 'Reset map view',
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _resetViewport,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                color: Colors.transparent,
+                                alignment: Alignment.center,
+                                child: ExcludeSemantics(
+                                  child: FloatingActionButton.small(
+                                    heroTag: 'map-reset-viewport',
+                                    tooltip: 'Reset view',
+                                    onPressed: _resetViewport,
+                                    child:
+                                        const Icon(Icons.center_focus_strong),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
+                    // Bottom-right: stacked FAB column.
+                    if (!needsHomeworldPlacement)
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (colonizeCandidates.isNotEmpty) ...[
+                              _ColonizeReadyFab(
+                                count: colonizeCandidates.length,
+                                onTap: widget.onColonizeCandidatesTapped,
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            _InventoryFab(
+                              shipCount: builtShipCount,
+                              onTap: _showInventorySheet,
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -737,7 +948,10 @@ class _MapPageState extends State<MapPage> {
 class _MapCanvas extends StatefulWidget {
   final GameMapState state;
   final List<WorldState> productionWorlds;
+  final List<ShipCounter> shipCounters;
+  final int playerMoveLevel;
   final Set<String> colonizeReadyFleetIds;
+  final Map<String, ({int used, int total})> shipyardCapacity;
   final ValueChanged<HexCoord> onHexTap;
   final ValueChanged<String> onFleetTap;
   final void Function(String fleetId, HexCoord target) onFleetDrop;
@@ -748,7 +962,10 @@ class _MapCanvas extends StatefulWidget {
     super.key,
     required this.state,
     required this.productionWorlds,
+    this.shipCounters = const [],
+    this.playerMoveLevel = 0,
     this.colonizeReadyFleetIds = const {},
+    this.shipyardCapacity = const {},
     required this.onHexTap,
     required this.onFleetTap,
     required this.onFleetDrop,
@@ -930,11 +1147,39 @@ class _MapCanvasState extends State<_MapCanvas> {
     final height = metrics.height;
     final fanOffsets = _fleetFanOutOffsets(widget.state.fleets);
 
+    // Compute the reachable set for the currently-selected friendly fleet
+    // (if any). We derive this in build() rather than storing it so the
+    // highlight always reflects the latest map state and selection.
+    Set<HexCoord> reachableHexes = const {};
+    final selectedFleetId = widget.state.selectedFleetId;
+    if (selectedFleetId != null) {
+      final selectedFleet = widget.state.fleetById(selectedFleetId);
+      if (selectedFleet != null &&
+          !selectedFleet.isEnemy &&
+          !selectedFleet.hasMovedThisTurn) {
+        final allowance = widget.state.fleetMoveAllowance(
+          selectedFleet,
+          widget.shipCounters,
+          widget.playerMoveLevel,
+        );
+        reachableHexes =
+            widget.state.reachableHexes(selectedFleet, allowance);
+      }
+    }
+
+    // Give the user scroll leeway past the map edges so the outer hexes
+    // aren't pinned hard against the viewport. The 5P map in particular
+    // is much larger than the 4P map and needs a generous margin so you
+    // can pan a peripheral hex towards the center for inspection.
+    final boundaryLeeway = widget.state.layoutPreset == MapLayoutPreset.special5p
+        ? 320.0
+        : 200.0;
     return InteractiveViewer(
       transformationController: _controller,
       minScale: 0.2,
       maxScale: 6.0,
       constrained: false,
+      boundaryMargin: EdgeInsets.all(boundaryLeeway),
       onInteractionStart: (_) {
         _gestureStartRotation = _appliedRotation;
       },
@@ -952,35 +1197,38 @@ class _MapCanvasState extends State<_MapCanvas> {
           angle: _appliedRotation,
           child: Stack(
             children: [
-              // Pipeline overlay: draws connections between hexes that share
-              // a pipeline ID so users can see the network on the map.
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _PipelinePainter(
-                      hexes: widget.state.hexes,
-                      positions: positions,
-                      minX: minX,
-                      minY: minY,
-                      padding: padding,
-                      hexWidth: metrics.hexWidth,
-                      hexHeight: metrics.hexHeight,
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
-                  ),
-                ),
-              ),
               for (final hex in widget.state.hexes)
                 Builder(
                   builder: (context) {
                     final pos = positions[hex.coord.id]!;
                     final world = _findWorld(hex.worldId);
                     final selected = widget.state.selectedHex == hex.coord;
+                    final isReachable = reachableHexes.contains(hex.coord);
                     return Positioned(
                       left: pos.dx - minX + padding,
                       top: pos.dy - minY + padding,
                       child: DragTarget<String>(
-                        onWillAcceptWithDetails: (_) => true,
+                        onWillAcceptWithDetails: (details) {
+                          // Validate the dragged fleet can reach this hex.
+                          // We derive the allowance directly from the fleet
+                          // being dragged (not the selected one) so a user
+                          // can drag any fleet without having to tap-select
+                          // it first. The selected-fleet reachable ring is
+                          // purely a visual hint — this is the authoritative
+                          // pre-drop check.
+                          final fleetId = details.data;
+                          final dragged = widget.state.fleetById(fleetId);
+                          if (dragged == null) return false;
+                          if (dragged.hasMovedThisTurn) return false;
+                          if (dragged.coord == hex.coord) return false;
+                          final allowance = widget.state.fleetMoveAllowance(
+                            dragged,
+                            widget.shipCounters,
+                            widget.playerMoveLevel,
+                          );
+                          return dragged.coord.distanceTo(hex.coord) <=
+                              allowance;
+                        },
                         onAcceptWithDetails: (details) =>
                             widget.onFleetDrop(details.data, hex.coord),
                         builder: (context, candidateData, rejectedData) => GestureDetector(
@@ -992,51 +1240,84 @@ class _MapCanvasState extends State<_MapCanvas> {
                               fillColor: _terrainColor(hex, hasWorld: world != null),
                               borderColor: selected ? Colors.amber : Colors.white54,
                               selected: selected,
+                              reachable: isReachable,
                             ),
                             child: SizedBox(
                               width: metrics.hexWidth,
                               height: metrics.hexHeight,
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          hex.label.isEmpty ? hex.coord.id : hex.label,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: hex.label.isEmpty ? 9 : 10,
-                                            fontWeight:
-                                                selected ? FontWeight.w700 : FontWeight.w500,
-                                          ),
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              hex.label.isEmpty ? hex.coord.id : hex.label,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: hex.label.isEmpty ? 9 : 10,
+                                                fontWeight:
+                                                    selected ? FontWeight.w700 : FontWeight.w500,
+                                              ),
+                                            ),
+                                            if (world != null)
+                                              Text(
+                                                _worldSummary(world),
+                                                style: const TextStyle(
+                                                  color: Colors.lightGreenAccent,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            if (_tokenSummary(hex).isNotEmpty)
+                                              Text(
+                                                _tokenSummary(hex),
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 10,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                          ],
                                         ),
-                                        if (world != null)
-                                          Text(
-                                            _worldSummary(world),
-                                            style: const TextStyle(
-                                              color: Colors.lightGreenAccent,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        if (_tokenSummary(hex).isNotEmpty)
-                                          Text(
-                                            _tokenSummary(hex),
-                                            style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 9,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  // Shipyard capacity bar overlay
+                                  if (widget.shipyardCapacity[hex.coord.id]
+                                          case final cap?
+                                      when cap.total > 0)
+                                    Positioned(
+                                      left: metrics.hexWidth * 0.15,
+                                      right: metrics.hexWidth * 0.15,
+                                      bottom: metrics.hexHeight * 0.17,
+                                      child: IgnorePointer(
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(2.0),
+                                          child: SizedBox(
+                                            height: 4,
+                                            child: LinearProgressIndicator(
+                                              value: (cap.used / cap.total).clamp(0.0, 1.0),
+                                              backgroundColor: Colors.white12,
+                                              valueColor: AlwaysStoppedAnimation(
+                                                (cap.used / cap.total) < 0.5
+                                                    ? const Color(0xFF4CAF50)
+                                                    : (cap.used / cap.total) < 0.85
+                                                        ? const Color(0xFFFFC107)
+                                                        : const Color(0xFFEF5350),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -1292,201 +1573,402 @@ class _HexInspector extends StatelessWidget {
     }
     final hasWorldPlacement = hex.worldId != null && hex.worldId!.isNotEmpty;
 
+    final theme = Theme.of(context);
+    final subtleStyle = TextStyle(
+      fontSize: 11,
+      fontStyle: FontStyle.italic,
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+    );
+    final helpStyle = TextStyle(
+      fontSize: 11,
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+      height: 1.3,
+    );
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Hex ${hex.coord.id}', style: Theme.of(context).textTheme.titleMedium),
+        Text('Hex ${hex.coord.id}', style: theme.textTheme.titleMedium),
         const SizedBox(height: 12),
-        // ── FLEETS FIRST ─────────────────────────────────────────────────────
-        // Fleets on this hex are the primary thing players need to reach —
-        // surfaced before hex metadata so it takes zero scrolling.
-        Text('Fleets', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
-        if (fleets.isEmpty)
-          const Text('No fleets on this hex.')
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final fleet in fleets)
-                ChoiceChip(
-                  label: Text(fleet.label.isEmpty ? fleet.id : fleet.label),
-                  selected: fleet.id == selectedFleetId,
-                  onSelected: (_) => onFleetSelected(fleet.id),
-                ),
-            ],
-          ),
-        if (selectedFleet != null) ...[
-          const SizedBox(height: 12),
-          _SyncedTextField(
-            text: selectedFleet.owner,
-            decoration: const InputDecoration(labelText: 'Owner'),
-            onChanged: (value) =>
-                onFleetChanged(selectedFleet!.copyWith(owner: value)),
-          ),
-          const SizedBox(height: 12),
-          _SyncedTextField(
-            text: selectedFleet.label,
-            decoration: const InputDecoration(labelText: 'Fleet Name'),
-            onChanged: (value) =>
-                onFleetChanged(selectedFleet!.copyWith(label: value)),
-          ),
-          SwitchListTile(
-            value: selectedFleet.facedown,
-            title: const Text('Facedown'),
-            contentPadding: EdgeInsets.zero,
-            onChanged: (value) =>
-                onFleetChanged(selectedFleet!.copyWith(facedown: value)),
-          ),
-          SwitchListTile(
-            value: selectedFleet.inSupply,
-            title: const Text('In Supply'),
-            contentPadding: EdgeInsets.zero,
-            onChanged: (value) =>
-                onFleetChanged(selectedFleet!.copyWith(inSupply: value)),
-          ),
-          if (selectedFleet.isEnemy)
+
+        // ── GROUP: TERRAIN & EXPLORATION ────────────────────────────────────
+        _InspectorGroup(
+          title: 'Terrain & Exploration',
+          children: [
             _SyncedTextField(
-              text: _formatComposition(selectedFleet.composition),
-              decoration: const InputDecoration(labelText: 'Composition'),
-              onChanged: (value) => onFleetChanged(
-                selectedFleet!.copyWith(composition: _parseComposition(value)),
+              text: hex.label,
+              decoration: const InputDecoration(labelText: 'Label'),
+              onChanged: (value) =>
+                  onHexChanged(hex.copyWith(label: value)),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<HexTerrain>(
+              initialValue: hex.terrain,
+              decoration: const InputDecoration(labelText: 'Terrain'),
+              items: [
+                for (final terrain in HexTerrain.values)
+                  DropdownMenuItem(
+                    value: terrain,
+                    child: Text(_terrainLabel(terrain)),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) onHexChanged(hex.copyWith(terrain: value));
+              },
+            ),
+            SwitchListTile(
+              value: hex.explored,
+              title: const Text('Explored'),
+              contentPadding: EdgeInsets.zero,
+              onChanged: (value) =>
+                  onHexChanged(hex.copyWith(explored: value)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── GROUP: WORLD ────────────────────────────────────────────────────
+        _InspectorGroup(
+          title: 'World',
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(world?.name ?? hex.worldId ?? 'No world placed'),
+              subtitle: Text(
+                hasWorldPlacement
+                    ? 'Ledger-backed world placement'
+                    : 'No world placed at this hex',
               ),
-            )
-          else ...[
-            const SizedBox(height: 8),
-            Text('Assign Built Ships', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8),
-            if (availableShips.isEmpty)
-              const Text('No built ships are currently available.')
+              trailing: Wrap(
+                spacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: onPlaceWorld,
+                    child: const Text('Place'),
+                  ),
+                  if (hasWorldPlacement)
+                    TextButton(
+                      onPressed: onClearWorld,
+                      child: const Text('Unplace'),
+                    ),
+                ],
+              ),
+            ),
+            // PP15: Garrison Ground Units display. Read-only here — actual
+            // edits are wired into the Production page colony rows so the
+            // map inspector stays free of world-edit plumbing.
+            if (world != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Tooltip(
+                  message:
+                      'Adjust the Garrison count from the Production tab '
+                      'colony row, or via Manual Override.',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.shield_outlined,
+                        size: 16,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Garrison: ${world!.garrisonGu} GU',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── GROUP: ECONOMY ──────────────────────────────────────────────────
+        _InspectorGroup(
+          title: 'Economy',
+          children: [
+            _StepperRow(
+              label: 'Shipyards',
+              value: hex.shipyardCount,
+              onChanged: (value) =>
+                  onHexChanged(hex.copyWith(shipyardCount: value)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 2, 0, 6),
+              child: Text(
+                'Each Shipyard provides HP of ship-build capacity per '
+                'Economic Phase (scales with Shipyard tech). Ships can only '
+                'be built at hexes with at least one Shipyard. Normally this '
+                'counter increments automatically when a queued SY purchase '
+                'is materialized at End Turn.',
+                style: helpStyle,
+              ),
+            ),
+            _StepperRow(
+              label: 'Wrecks',
+              value: hex.wrecks,
+              onChanged: (value) =>
+                  onHexChanged(hex.copyWith(wrecks: value)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
+              child: Text(
+                'Wrecks feed the Replicator — salvage them for earlier RP '
+                'gains.',
+                style: helpStyle,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── GROUP: FLEETS ───────────────────────────────────────────────────
+        // Note: "Add Friendly Fleet" / "Add Enemy Fleet" buttons are on the
+        // map selection card, which remains visible when the inspector is
+        // open. No need to duplicate them here.
+        _InspectorGroup(
+          title: 'Fleets',
+          children: [
+            if (fleets.isEmpty)
+              const Text('No fleets on this hex.')
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final counter in availableShips)
-                    FilterChip(
-                      label: Text(counter.id),
-                      selected: selectedFleet.shipCounterIds.contains(counter.id),
-                      onSelected: (checked) {
-                        final ids = [...selectedFleet!.shipCounterIds];
-                        if (checked) {
-                          if (!ids.contains(counter.id)) ids.add(counter.id);
-                        } else {
-                          ids.remove(counter.id);
-                        }
-                        onFleetShipsChanged(selectedFleet.id, ids);
-                      },
+                  for (final fleet in fleets)
+                    ChoiceChip(
+                      label: Text(
+                        fleet.label.isEmpty ? fleet.id : fleet.label,
+                      ),
+                      selected: fleet.id == selectedFleetId,
+                      onSelected: (_) => onFleetSelected(fleet.id),
                     ),
                 ],
               ),
-          ],
-          const SizedBox(height: 8),
-          _SyncedTextField(
-            text: selectedFleet.notes,
-            decoration: const InputDecoration(labelText: 'Fleet Notes'),
-            maxLines: 2,
-            onChanged: (value) =>
-                onFleetChanged(selectedFleet!.copyWith(notes: value)),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => onFleetDeleted(selectedFleet!.id),
-              child: const Text('Delete Fleet'),
-            ),
-          ),
-        ],
-        // ── HEX DETAILS ──────────────────────────────────────────────────────
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 8),
-        Text('Hex Details', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 12),
-        _SyncedTextField(
-          text: hex.label,
-          decoration: const InputDecoration(labelText: 'Label'),
-          onChanged: (value) => onHexChanged(hex.copyWith(label: value)),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<HexTerrain>(
-          initialValue: hex.terrain,
-          decoration: const InputDecoration(labelText: 'Terrain'),
-          items: [
-            for (final terrain in HexTerrain.values)
-              DropdownMenuItem(
-                value: terrain,
-                child: Text(_terrainLabel(terrain)),
+            if (selectedFleet != null) ...[
+              const SizedBox(height: 12),
+              _SyncedTextField(
+                text: selectedFleet.owner,
+                decoration: const InputDecoration(labelText: 'Owner'),
+                onChanged: (value) =>
+                    onFleetChanged(selectedFleet!.copyWith(owner: value)),
               ),
-          ],
-          onChanged: (value) {
-            if (value != null) onHexChanged(hex.copyWith(terrain: value));
-          },
-        ),
-        SwitchListTile(
-          value: hex.explored,
-          title: const Text('Explored'),
-          contentPadding: EdgeInsets.zero,
-          onChanged: (value) => onHexChanged(hex.copyWith(explored: value)),
-        ),
-        Card(
-          child: ListTile(
-            title: Text(world?.name ?? hex.worldId ?? 'No world placed'),
-            subtitle: Text(
-              hasWorldPlacement ? 'Ledger-backed world placement' : 'Static world placement from ledger',
-            ),
-            trailing: Wrap(
-              spacing: 8,
-              children: [
-                TextButton(onPressed: onPlaceWorld, child: const Text('Place')),
-                if (hasWorldPlacement)
-                  TextButton(onPressed: onClearWorld, child: const Text('Unplace')),
+              const SizedBox(height: 12),
+              _SyncedTextField(
+                text: selectedFleet.label,
+                decoration: const InputDecoration(labelText: 'Fleet Name'),
+                onChanged: (value) =>
+                    onFleetChanged(selectedFleet!.copyWith(label: value)),
+              ),
+              SwitchListTile(
+                value: selectedFleet.facedown,
+                title: const Text('Facedown'),
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) => onFleetChanged(
+                  selectedFleet!.copyWith(facedown: value),
+                ),
+              ),
+              SwitchListTile(
+                value: selectedFleet.inSupply,
+                title: const Text('In Supply'),
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) => onFleetChanged(
+                  selectedFleet!.copyWith(inSupply: value),
+                ),
+              ),
+              if (selectedFleet.isEnemy)
+                _SyncedTextField(
+                  text: _formatComposition(selectedFleet.composition),
+                  decoration:
+                      const InputDecoration(labelText: 'Composition'),
+                  onChanged: (value) => onFleetChanged(
+                    selectedFleet!
+                        .copyWith(composition: _parseComposition(value)),
+                  ),
+                )
+              else ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Assign Built Ships',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                if (availableShips.isEmpty)
+                  const Text('No built ships are currently available.')
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final counter in availableShips)
+                        FilterChip(
+                          label: Text(counter.id),
+                          selected: selectedFleet.shipCounterIds
+                              .contains(counter.id),
+                          onSelected: (checked) {
+                            final ids = [
+                              ...selectedFleet!.shipCounterIds,
+                            ];
+                            if (checked) {
+                              if (!ids.contains(counter.id)) {
+                                ids.add(counter.id);
+                              }
+                            } else {
+                              ids.remove(counter.id);
+                            }
+                            onFleetShipsChanged(selectedFleet.id, ids);
+                          },
+                        ),
+                    ],
+                  ),
               ],
-            ),
-          ),
+              const SizedBox(height: 8),
+              _SyncedTextField(
+                text: selectedFleet.notes,
+                decoration:
+                    const InputDecoration(labelText: 'Fleet Notes'),
+                maxLines: 2,
+                onChanged: (value) =>
+                    onFleetChanged(selectedFleet!.copyWith(notes: value)),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => onFleetDeleted(selectedFleet!.id),
+                  child: const Text('Delete Fleet'),
+                ),
+              ),
+            ],
+          ],
         ),
-        const SizedBox(height: 8),
-        _StepperRow(
-          label: 'Minerals',
-          value: hex.minerals,
-          onChanged: (value) => onHexChanged(hex.copyWith(minerals: value)),
-        ),
-        _StepperRow(
-          label: 'Wrecks',
-          value: hex.wrecks,
-          onChanged: (value) => onHexChanged(hex.copyWith(wrecks: value)),
-        ),
-        _StepperRow(
-          label: 'Mines',
-          value: hex.mines,
-          onChanged: (value) => onHexChanged(hex.copyWith(mines: value)),
-        ),
-        _StepperRow(
-          label: 'Industry',
-          value: hex.industryMarkers,
-          onChanged: (value) =>
-              onHexChanged(hex.copyWith(industryMarkers: value)),
-        ),
-        _StepperRow(
-          label: 'Research',
-          value: hex.researchMarkers,
-          onChanged: (value) =>
-              onHexChanged(hex.copyWith(researchMarkers: value)),
-        ),
-        if (hex.pipelineIds.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text('Pipelines: ${hex.pipelineIds.join(', ')}'),
-          ),
         const SizedBox(height: 12),
-        _SyncedTextField(
-          text: hex.notes,
-          decoration: const InputDecoration(labelText: 'Notes'),
-          maxLines: 2,
-          onChanged: (value) => onHexChanged(hex.copyWith(notes: value)),
+
+        // ── GROUP: COSMETIC MARKERS (collapsed by default) ─────────────────
+        Card(
+          margin: EdgeInsets.zero,
+          color: theme.colorScheme.surfaceContainerHighest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            childrenPadding:
+                const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            title: Text(
+              'Cosmetic Markers',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: Text(
+              'Does not affect economy',
+              style: subtleStyle,
+            ),
+            children: [
+              Tooltip(
+                message:
+                    'Mineral CP income comes from colony staging on the '
+                    'Production tab.',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _CompactCosmeticStepper(
+                          label: 'Minerals',
+                          value: hex.minerals,
+                          onChanged: (value) => onHexChanged(
+                            hex.copyWith(minerals: value),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _CompactCosmeticStepper(
+                          label: 'Mines',
+                          value: hex.mines,
+                          onChanged: (value) => onHexChanged(
+                            hex.copyWith(mines: value),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── GROUP: NOTES ───────────────────────────────────────────────────
+        _InspectorGroup(
+          title: 'Notes',
+          children: [
+            _SyncedTextField(
+              text: hex.notes,
+              decoration: const InputDecoration(labelText: 'Notes'),
+              maxLines: 3,
+              onChanged: (value) =>
+                  onHexChanged(hex.copyWith(notes: value)),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+/// Always-expanded inspector section: rounded card at
+/// `surfaceContainerHighest` with a compact primary-colored title header and
+/// 12px padding. Used by `_HexInspector` to group related fields visually
+/// without the overhead of an `ExpansionTile`.
+class _InspectorGroup extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _InspectorGroup({
+    required this.title,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...children,
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1585,14 +2067,23 @@ class _FleetMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = fleet.isEnemy ? Colors.redAccent : Colors.cyanAccent;
     final outOfSupply = !fleet.inSupply;
+    // Fleets that have already moved this turn render at reduced opacity
+    // and pick up a small green check badge so the player can tell at a
+    // glance which stacks still have a move left.
+    final movedThisTurn = fleet.hasMovedThisTurn;
     final borderColor = selected
         ? Colors.amber
         : (outOfSupply ? Colors.orangeAccent : color);
-    final textColor = outOfSupply ? color.withValues(alpha: 0.55) : color;
+    final baseTextColor = outOfSupply ? color.withValues(alpha: 0.55) : color;
+    final textColor = movedThisTurn
+        ? baseTextColor.withValues(alpha: 0.55)
+        : baseTextColor;
     final marker = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.82),
+        color: Colors.black.withValues(
+          alpha: movedThisTurn ? 0.6 : 0.82,
+        ),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: borderColor,
@@ -1681,67 +2172,32 @@ class _FleetMarker extends StatelessWidget {
                     child: _ColonizePulseIndicator(),
                   ),
                 ),
+              if (movedThisTurn)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Tooltip(
+                    message: 'Already moved this turn',
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.shade700,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 1),
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
-      ),
-    );
-  }
-}
-
-class _AssetPill extends StatelessWidget {
-  final String label;
-  final int value;
-  final VoidCallback? onTap;
-
-  const _AssetPill({
-    required this.label,
-    required this.value,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final pillVisual = Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: $value', style: const TextStyle(fontSize: 11)),
-          if (onTap != null) ...[
-            const SizedBox(width: 2),
-            Icon(Icons.chevron_right, size: 12, color: theme.colorScheme.primary),
-          ],
-        ],
-      ),
-    );
-    final semanticLabel = '$value ${label.toLowerCase()} available';
-    if (onTap == null) {
-      return Semantics(
-        label: semanticLabel,
-        child: ExcludeSemantics(child: pillVisual),
-      );
-    }
-    // Enforce the 48dp minimum accessible tap region by wrapping the
-    // compact visual pill in a transparent GestureDetector sized to 48dp.
-    return Semantics(
-      label: semanticLabel,
-      button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 48),
-          color: Colors.transparent,
-          alignment: Alignment.center,
-          child: ExcludeSemantics(child: pillVisual),
-        ),
       ),
     );
   }
@@ -1812,17 +2268,18 @@ class _ColonizePulseIndicatorState extends State<_ColonizePulseIndicator>
   }
 }
 
-/// Toolbar chip that signals how many Colony Ships are ready to colonize.
-/// Tapping opens the colonize-now dialog (same flow as End Turn prompt).
+/// Inline chip rendered inside the selection card when the selected hex
+/// has a Colony Ship ready to colonize. Non-interactive (the FAB version
+/// below handles taps).
 class _ColonizeReadyChip extends StatelessWidget {
   final int count;
-  final VoidCallback? onTap;
+  final bool inline;
 
-  const _ColonizeReadyChip({required this.count, this.onTap});
+  const _ColonizeReadyChip({required this.count, this.inline = false});
 
   @override
   Widget build(BuildContext context) {
-    final label = 'Ready to colonize: $count';
+    final label = inline ? 'Ready to colonize' : 'Ready to colonize: $count';
     final visual = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1833,7 +2290,7 @@ class _ColonizeReadyChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('\u{1F331}', style: TextStyle(fontSize: 12)),
+          const Icon(Icons.eco, size: 12, color: Colors.greenAccent),
           const SizedBox(width: 4),
           Text(
             label,
@@ -1846,56 +2303,444 @@ class _ColonizeReadyChip extends StatelessWidget {
         ],
       ),
     );
+    return Semantics(label: label, child: visual);
+  }
+}
+
+/// Floating action button exposing the global inventory sheet (ships and
+/// worlds). Rendered bottom-right on the map canvas.
+class _InventoryFab extends StatelessWidget {
+  final int shipCount;
+  final VoidCallback onTap;
+
+  const _InventoryFab({required this.shipCount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return Semantics(
-      button: onTap != null,
-      label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 48),
-          color: Colors.transparent,
-          alignment: Alignment.center,
-          child: ExcludeSemantics(child: visual),
-        ),
+      button: true,
+      label: 'Open inventory',
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'map-inventory-fab',
+            tooltip: 'Inventory',
+            onPressed: onTap,
+            child: const Icon(Icons.inventory_2_outlined),
+          ),
+          if (shipCount > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.surface,
+                    width: 1,
+                  ),
+                ),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 16),
+                child: Text(
+                  '$shipCount',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _ToolbarActionButton extends StatelessWidget {
+/// Floating action button that signals how many Colony Ships are ready to
+/// colonize. Tapping forwards to the colonize-now dialog.
+class _ColonizeReadyFab extends StatefulWidget {
+  final int count;
+  final VoidCallback? onTap;
+
+  const _ColonizeReadyFab({required this.count, this.onTap});
+
+  @override
+  State<_ColonizeReadyFab> createState() => _ColonizeReadyFabState();
+}
+
+class _ColonizeReadyFabState extends State<_ColonizeReadyFab>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        final alpha = 0.55 + 0.45 * (1 - _pulse.value);
+        final bg = Color.lerp(
+          Colors.green.shade700,
+          Colors.greenAccent,
+          _pulse.value,
+        )!;
+        return Semantics(
+          button: true,
+          label: 'Ready to colonize: ${widget.count}',
+          child: FloatingActionButton.extended(
+            heroTag: 'map-colonize-fab',
+            onPressed: widget.onTap,
+            backgroundColor: bg.withValues(alpha: alpha),
+            foregroundColor: Colors.black,
+            icon: const Icon(Icons.eco),
+            label: Text('Ready to colonize: ${widget.count}'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Section header for the inventory sheet.
+class _InventorySectionHeader extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback? onPressed;
+  final int count;
 
-  const _ToolbarActionButton({
+  const _InventorySectionHeader({
     required this.icon,
     required this.label,
-    required this.onPressed,
+    required this.count,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Keep the compact 28dp-high visual but restore an accessible tap
-    // region. `MaterialTapTargetSize.padded` inflates the hit test area to
-    // 48dp without affecting the painted chip. `visualDensity: standard`
-    // keeps the button from shrinking its visual padding further.
-    return Semantics(
-      button: true,
-      enabled: onPressed != null,
-      label: label,
-      child: FilledButton.tonalIcon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 14),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-          minimumSize: const Size(48, 28),
-          visualDensity: VisualDensity.standard,
-          tapTargetSize: MaterialTapTargetSize.padded,
-        ),
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '($count)',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ),
     );
+  }
+}
+
+/// Overflow menu (3-dot) button rendered as a small floating button on the
+/// map canvas. Replaces the old header-bar popup.
+class _OverflowMenuButton extends StatelessWidget {
+  final bool hasSelection;
+  final ValueChanged<String> onSelected;
+
+  const _OverflowMenuButton({
+    required this.hasSelection,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      child: PopupMenuButton<String>(
+        tooltip: 'More actions',
+        onSelected: onSelected,
+        position: PopupMenuPosition.under,
+        icon: const Icon(Icons.more_vert),
+        itemBuilder: (_) => [
+          const PopupMenuItem(
+            value: 'layout',
+            child: Row(
+              children: [
+                Icon(Icons.map, size: 18),
+                SizedBox(width: 8),
+                Text('Map layout\u2026'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'inventory',
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 18),
+                SizedBox(width: 8),
+                Text('Inventory\u2026'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'reset_view',
+            child: Row(
+              children: [
+                Icon(Icons.center_focus_strong, size: 18),
+                SizedBox(width: 8),
+                Text('Reset view'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'add_enemy',
+            enabled: hasSelection,
+            child: Row(
+              children: [
+                const Icon(Icons.visibility_off, size: 18),
+                const SizedBox(width: 8),
+                Text(hasSelection ? 'Add Enemy' : 'Add Enemy (select a hex first)'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'map_stats',
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 18),
+                SizedBox(width: 8),
+                Text('Map stats'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rich info card for the currently selected hex. Replaces the old
+/// horizontal-scrolling toolbar strip. Lays out terrain/world info and
+/// per-hex tokens as Wrap'd chips, and keeps the contextual action
+/// buttons (Place World / Add Fleet / Edit) adjacent to them.
+class _SelectionCard extends StatelessWidget {
+  final MapHexState hex;
+  final WorldState? world;
+  final int fleetCount;
+  final bool colonizeReadyHere;
+  final VoidCallback onPlaceWorld;
+  final VoidCallback onAddFleet;
+  final VoidCallback onOpenInspector;
+  final VoidCallback onAddEnemy;
+  final VoidCallback? onResolveCombat;
+  final VoidCallback onDismissSelection;
+
+  const _SelectionCard({
+    required this.hex,
+    required this.world,
+    required this.fleetCount,
+    required this.colonizeReadyHere,
+    required this.onPlaceWorld,
+    required this.onAddFleet,
+    required this.onOpenInspector,
+    required this.onAddEnemy,
+    required this.onDismissSelection,
+    this.onResolveCombat,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final terrainLabel = _terrainLabel(hex.terrain);
+    final subtitle = world != null
+        ? (world!.name.isNotEmpty ? world!.name : terrainLabel)
+        : terrainLabel;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.primary, width: 1),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.my_location,
+                  size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Hex ${hex.coord.id}',
+                style: theme.textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Place World',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed: onPlaceWorld,
+                icon: const Icon(Icons.public),
+              ),
+              IconButton(
+                tooltip: 'Add Enemy Fleet',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed: onAddEnemy,
+                icon: const Icon(Icons.visibility_off),
+              ),
+              IconButton(
+                tooltip: fleetCount > 0
+                    ? 'Resolve Combat'
+                    : 'Resolve Combat (no fleets here)',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed:
+                    (fleetCount > 0 && onResolveCombat != null) ? onResolveCombat : null,
+                icon: const Icon(Icons.military_tech),
+              ),
+              IconButton(
+                tooltip: 'Clear selection',
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed: onDismissSelection,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (colonizeReadyHere)
+                const _ColonizeReadyChip(
+                  count: 1,
+                  inline: true,
+                ),
+              if (fleetCount > 0)
+                _InfoChip(
+                  icon: Icons.directions_boat,
+                  label: '$fleetCount',
+                  tooltip: '$fleetCount fleet(s) in this hex',
+                ),
+              if (hex.explored)
+                const _InfoChip(icon: Icons.visibility, label: 'Explored'),
+              if (hex.minerals > 0)
+                _InfoChip(icon: Icons.diamond, label: 'M${hex.minerals}'),
+              if (hex.wrecks > 0)
+                _InfoChip(icon: Icons.broken_image, label: 'W${hex.wrecks}'),
+              if (hex.mines > 0)
+                _InfoChip(icon: Icons.report, label: 'Mi${hex.mines}'),
+              if (hex.shipyardCount > 0)
+                _InfoChip(
+                  icon: Icons.construction,
+                  label: 'SY${hex.shipyardCount}',
+                  tooltip:
+                      '${hex.shipyardCount} Shipyard${hex.shipyardCount == 1 ? '' : 's'} '
+                      '(SY) \u2014 enables ship production at this hex.',
+                ),
+              const SizedBox(width: 4),
+              FilledButton.tonalIcon(
+                onPressed: onAddFleet,
+                icon: const Icon(Icons.directions_boat, size: 16),
+                label: const Text('Add Fleet'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenInspector,
+                icon: const Icon(Icons.tune, size: 16),
+                label: const Text('Edit Hex\u2026'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? tooltip;
+  const _InfoChip({required this.icon, required this.label, this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final visual = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant,
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: theme.colorScheme.onSurface),
+          const SizedBox(width: 3),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+    return tooltip == null ? visual : Tooltip(message: tooltip!, child: visual);
   }
 }
 
@@ -1929,72 +2774,77 @@ class _StepperRow extends StatelessWidget {
   }
 }
 
-class _PipelinePainter extends CustomPainter {
-  final List<MapHexState> hexes;
-  final Map<String, Offset> positions;
-  final double minX;
-  final double minY;
-  final double padding;
-  final double hexWidth;
-  final double hexHeight;
-  final Color color;
+/// Compact, visually-demoted stepper used exclusively for cosmetic markers
+/// (minerals, mines) in the collapsed "Cosmetic Markers" section of the hex
+/// inspector. Smaller buttons, smaller font, italic gray label, tighter
+/// padding — distinct from rules-relevant `_StepperRow` instances.
+class _CompactCosmeticStepper extends StatelessWidget {
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
 
-  const _PipelinePainter({
-    required this.hexes,
-    required this.positions,
-    required this.minX,
-    required this.minY,
-    required this.padding,
-    required this.hexWidth,
-    required this.hexHeight,
-    required this.color,
+  const _CompactCosmeticStepper({
+    required this.label,
+    required this.value,
+    required this.onChanged,
   });
 
-  Offset? _centerFor(MapHexState hex) {
-    final pos = positions[hex.coord.id];
-    if (pos == null) return null;
-    return Offset(
-      pos.dx - minX + padding + hexWidth / 2,
-      pos.dy - minY + padding + hexHeight / 2,
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final labelStyle = (theme.textTheme.bodySmall ?? const TextStyle())
+        .copyWith(
+      color: mutedColor,
+      fontStyle: FontStyle.italic,
     );
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Group hexes by pipeline ID.
-    final groups = <String, List<MapHexState>>{};
-    for (final hex in hexes) {
-      for (final id in hex.pipelineIds) {
-        groups.putIfAbsent(id, () => <MapHexState>[]).add(hex);
-      }
-    }
-    if (groups.isEmpty) return;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    for (final entry in groups.entries) {
-      final members = entry.value;
-      if (members.length < 2) continue;
-      // Draw all pairwise connections between members of the same network.
-      for (var i = 0; i < members.length; i++) {
-        final a = _centerFor(members[i]);
-        if (a == null) continue;
-        for (var j = i + 1; j < members.length; j++) {
-          final b = _centerFor(members[j]);
-          if (b == null) continue;
-          canvas.drawLine(a, b, paint);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PipelinePainter oldDelegate) {
-    return oldDelegate.hexes != hexes ||
-        oldDelegate.positions != positions ||
-        oldDelegate.color != color;
+    final valueStyle = (theme.textTheme.bodySmall ?? const TextStyle())
+        .copyWith(
+      color: mutedColor,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            '$label:',
+            style: labelStyle,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            onPressed: value > 0 ? () => onChanged(value - 1) : null,
+            icon: Icon(Icons.remove, color: mutedColor),
+          ),
+        ),
+        SizedBox(
+          width: 16,
+          child: Text(
+            '$value',
+            style: valueStyle,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => onChanged(value + 1),
+            icon: Icon(Icons.add, color: mutedColor),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -2002,11 +2852,13 @@ class _HexPainter extends CustomPainter {
   final Color fillColor;
   final Color borderColor;
   final bool selected;
+  final bool reachable;
 
   const _HexPainter({
     required this.fillColor,
     required this.borderColor,
     required this.selected,
+    this.reachable = false,
   });
 
   @override
@@ -2023,6 +2875,25 @@ class _HexPainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, Paint()..color = fillColor);
+
+    // Reachability highlight: translucent teal wash + solid teal border.
+    // Painted under the terrain border so a selected hex still reads as
+    // the primary selection. Teal reads well against the dark deep-space
+    // blues and is visually distinct from selection amber + enemy red.
+    if (reachable) {
+      canvas.drawPath(
+        path,
+        Paint()..color = const Color(0x3326A69A),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFF26A69A)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0,
+      );
+    }
+
     canvas.drawPath(
       path,
       Paint()
@@ -2036,7 +2907,8 @@ class _HexPainter extends CustomPainter {
   bool shouldRepaint(covariant _HexPainter oldDelegate) {
     return oldDelegate.fillColor != fillColor ||
         oldDelegate.borderColor != borderColor ||
-        oldDelegate.selected != selected;
+        oldDelegate.selected != selected ||
+        oldDelegate.reachable != reachable;
   }
 }
 
@@ -2062,9 +2934,7 @@ String _tokenSummary(MapHexState hex) {
   if (hex.minerals > 0) parts.add('M${hex.minerals}');
   if (hex.wrecks > 0) parts.add('W${hex.wrecks}');
   if (hex.mines > 0) parts.add('Mi${hex.mines}');
-  if (hex.pipelineIds.isNotEmpty) parts.add('P${hex.pipelineIds.length}');
-  if (hex.industryMarkers > 0) parts.add('I${hex.industryMarkers}');
-  if (hex.researchMarkers > 0) parts.add('R${hex.researchMarkers}');
+  if (hex.shipyardCount > 0) parts.add('SY${hex.shipyardCount}');
   return parts.join(' ');
 }
 

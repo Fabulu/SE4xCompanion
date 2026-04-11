@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import '../data/ship_definitions.dart';
 
 /// Shows an informational dialog for a given ship type.
+///
+/// The displayed build cost honors both the AGT/Facilities cost table and
+/// the base-game alternate-empire cost table. Callers MUST pass the live
+/// [isAlternateEmpire] flag from the active [GameConfig] so that the shown
+/// price matches what the production pipeline will actually charge.
 Future<void> showShipInfoDialog(
   BuildContext context,
   ShipType type, {
   bool facilitiesMode = false,
+  bool isAlternateEmpire = false,
   void Function(String sectionId)? onRuleTap,
 }) {
   final def = kShipDefinitions[type]!;
@@ -36,7 +42,7 @@ Future<void> showShipInfoDialog(
               ],
 
               // Stats grid
-              _buildStatsGrid(theme, def, facilitiesMode),
+              _buildStatsGrid(theme, def, facilitiesMode, isAlternateEmpire),
 
               () {
                 // Show AGT-correct prerequisite when in facilities mode
@@ -109,7 +115,12 @@ Future<void> showShipInfoDialog(
   );
 }
 
-Widget _buildStatsGrid(ThemeData theme, ShipDefinition def, bool facilitiesMode) {
+Widget _buildStatsGrid(
+  ThemeData theme,
+  ShipDefinition def,
+  bool facilitiesMode,
+  bool isAlternateEmpire,
+) {
   final labelStyle = TextStyle(
     fontSize: 13,
     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -122,7 +133,8 @@ Widget _buildStatsGrid(ThemeData theme, ShipDefinition def, bool facilitiesMode)
   );
 
   final hull = def.effectiveHullSize(facilitiesMode);
-  final cost = def.effectiveBuildCost(false, facilitiesMode: facilitiesMode);
+  final cost =
+      def.effectiveBuildCost(isAlternateEmpire, facilitiesMode: facilitiesMode);
   final weapon = def.effectiveWeaponClass(facilitiesMode);
 
   final rows = <TableRow>[

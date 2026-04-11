@@ -1,6 +1,7 @@
 // Tests for the scenario setup system.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:se4x/data/card_manifest.dart';
 import 'package:se4x/data/scenarios.dart';
 import 'package:se4x/data/ship_definitions.dart';
 import 'package:se4x/data/tech_costs.dart';
@@ -15,9 +16,6 @@ const baseConfig = GameConfig();
 
 WorldState hw({int value = 30}) =>
     WorldState(name: 'HW', isHomeworld: true, homeworldValue: value);
-
-WorldState colony(int growth, {int pipeline = 0}) =>
-    WorldState(name: 'C$growth', growthMarkerLevel: growth, pipelineIncome: pipeline);
 
 void main() {
   // ═══════════════════════════════════════════════════════════════════════════
@@ -66,6 +64,36 @@ void main() {
       expect(s.blockedTechs, contains(TechId.mineSweep));
       expect(s.blockedShipTypes, contains(ShipType.mine));
       expect(s.blockedShipTypes, contains(ShipType.sw));
+    });
+
+    test('Quick Conquest auto-draws Technology Head Start (card 148)', () {
+      final s = kScenarios.firstWhere((s) => s.id == 'quick_conquest');
+      expect(s.scenarioModifierCards, [148]);
+    });
+
+    test('all other scenarios have empty scenarioModifierCards', () {
+      for (final s in kScenarios) {
+        if (s.id == 'quick_conquest') continue;
+        expect(
+          s.scenarioModifierCards,
+          isEmpty,
+          reason: 'scenario ${s.id} should not auto-draw any cards',
+        );
+      }
+    });
+
+    test('every scenarioModifierCards id resolves in kAllCards', () {
+      final validIds = kAllCards.map((c) => c.number).toSet();
+      for (final s in kScenarios) {
+        for (final id in s.scenarioModifierCards) {
+          expect(
+            validIds.contains(id),
+            true,
+            reason:
+                'scenario ${s.id} references unknown card id $id',
+          );
+        }
+      }
     });
 
     test('Handicap has colony growth bonus of 2', () {

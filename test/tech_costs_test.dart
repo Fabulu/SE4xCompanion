@@ -139,7 +139,7 @@ void main() {
     test('Move costs differ between base and AGT', () {
       final base = kBaseTechCosts[TechId.move]!;
       final agt = kFacilitiesTechCosts[TechId.move]!;
-      // Base: 20/30/40/50/60 vs AGT: 20/25/25/25/20/20
+      // Base: 20/30/40/50/60 vs AGT: 25/25/25/25/20/20
       expect(base.levelCosts[3], 30);
       expect(agt.levelCosts[3], 25);
       expect(base.levelCosts.length, 5);

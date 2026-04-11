@@ -3,8 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/card_lookup.dart';
+import '../data/card_manifest.dart';
+import '../data/card_modifiers.dart';
 import '../data/empire_advantages.dart';
 import '../data/scenarios.dart';
+import '../data/sci_fi_names.dart';
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
 import '../models/alien_economy.dart';
@@ -26,7 +30,16 @@ import '../widgets/new_game_wizard.dart';
 import '../widgets/space_hockey_game.dart';
 import '../widgets/starting_fleet_dialog.dart';
 import '../widgets/vp_tracker.dart';
+import '../tutorial/tutorial_controller.dart';
+import '../tutorial/tutorial_overlay.dart';
+import '../tutorial/tutorial_steps.dart';
+import '../tutorial/tutorial_targets.dart';
+import '../util/combat_resolution.dart';
+import '../util/planet_attribute_picker.dart';
+import '../util/scenario_auto_draw.dart';
+import '../widgets/planet_attribute_prompt.dart';
 import 'alien_economy_page.dart';
+import 'home_tabs.dart';
 import 'map_page.dart';
 import 'production_page.dart';
 import 'replicator_page.dart';
@@ -35,17 +48,21 @@ import 'rules_reference_page.dart';
 import 'settings_page.dart';
 import 'ship_tech_page.dart';
 
-enum _TabId { production, map, shipTech, aliens, replicator, rules, settings }
-
 class _TabDef {
-  final _TabId id;
+  final HomeTabId id;
   final IconData icon;
   final String label;
   const _TabDef({required this.id, required this.icon, required this.label});
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  /// PP18: shared text-scale notifier owned by the root Se4XApp state.
+  /// HomePage pushes AppState.textScale into this notifier whenever it
+  /// loads or mutates, and the MaterialApp.builder callback listens to
+  /// it to apply a MediaQuery.textScaler override at the tree root.
+  final ValueNotifier<double>? textScaleNotifier;
+
+  const HomePage({super.key, this.textScaleNotifier});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -67,23 +84,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final tabs = <_TabDef>[
       _gameState.config.playerControlsReplicators
           ? const _TabDef(
-              id: _TabId.production,
+              id: HomeTabId.production,
               icon: Icons.bug_report,
               label: 'Replicator',
             )
           : const _TabDef(
-              id: _TabId.production,
+              id: HomeTabId.production,
               icon: Icons.grid_on,
               label: 'Production',
             ),
-      const _TabDef(id: _TabId.map, icon: Icons.map_outlined, label: 'Map'),
+      const _TabDef(id: HomeTabId.map, icon: Icons.map_outlined, label: 'Map'),
       if (!_gameState.config.playerControlsReplicators)
-        const _TabDef(id: _TabId.shipTech, icon: Icons.shield, label: 'Ships'),
+        const _TabDef(id: HomeTabId.shipTech, icon: Icons.shield, label: 'Ships'),
     ];
     if (_gameState.alienPlayers.isNotEmpty) {
       tabs.add(
         const _TabDef(
-          id: _TabId.aliens,
+          id: HomeTabId.aliens,
           icon: Icons.smart_toy,
           label: 'Aliens',
         ),
@@ -93,18 +110,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         !_gameState.config.playerControlsReplicators) {
       tabs.add(
         const _TabDef(
-          id: _TabId.replicator,
+          id: HomeTabId.replicator,
           icon: Icons.bug_report,
           label: 'Replicator',
         ),
       );
     }
     tabs.add(
-      const _TabDef(id: _TabId.rules, icon: Icons.menu_book, label: 'Rules'),
+      const _TabDef(id: HomeTabId.rules, icon: Icons.menu_book, label: 'Rules'),
     );
     tabs.add(
       const _TabDef(
-        id: _TabId.settings,
+        id: HomeTabId.settings,
         icon: Icons.settings,
         label: 'Settings',
       ),
@@ -112,22 +129,53 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return tabs;
   }
 
-  _TabId get _currentTabId {
+  HomeTabId get _currentTabId {
     final tabs = _visibleTabs;
     final idx = _currentTabIndex.clamp(0, tabs.length - 1);
     return tabs[idx].id;
   }
 
-  void _selectTab(_TabId id) {
+  void _selectTab(HomeTabId id) {
     final tabs = _visibleTabs;
     final idx = tabs.indexWhere((t) => t.id == id);
-    if (idx >= 0) setState(() => _currentTabIndex = idx);
+    if (idx >= 0) {
+      setState(() => _currentTabIndex = idx);
+      _tutorialController.onTabTapped(id);
+    }
   }
 
   // QW-1: Material spec caps a fixed BottomNavigationBar at 5 items. When we
   // exceed that, show the first 4 as primary items and fold the rest into a
   // "More" overflow sheet.
   static const int _kMaxPrimaryTabs = 5;
+
+  /// Map a tab id to the matching tutorial-target GlobalKey, or null when
+  /// the tab does not need a tutorial anchor.
+  GlobalKey? _tutorialKeyForTab(HomeTabId id) {
+    switch (id) {
+      case HomeTabId.production:
+        return TutorialTargets.productionTab;
+      case HomeTabId.map:
+        return TutorialTargets.mapTab;
+      case HomeTabId.shipTech:
+        return TutorialTargets.shipTechTab;
+      case HomeTabId.aliens:
+        return TutorialTargets.aliensTab;
+      case HomeTabId.rules:
+        return TutorialTargets.rulesTab;
+      case HomeTabId.settings:
+        return TutorialTargets.settingsTab;
+      case HomeTabId.replicator:
+        return null;
+    }
+  }
+
+  Widget _wrapTabIcon(HomeTabId id, IconData icon) {
+    final key = _tutorialKeyForTab(id);
+    final iconWidget = Icon(icon, size: 24);
+    if (key == null) return iconWidget;
+    return KeyedSubtree(key: key, child: iconWidget);
+  }
 
   Widget _buildBottomNav() {
     final tabs = _visibleTabs;
@@ -136,13 +184,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentTabIndex.clamp(0, tabs.length - 1),
         onTap: (index) {
+          final tappedTab = tabs[index];
           setState(() => _currentTabIndex = index);
           _turnWiggleController.forward(from: 0);
+          _tutorialController.onTabTapped(tappedTab.id);
         },
         items: [
           for (final tab in tabs)
             BottomNavigationBarItem(
-              icon: Icon(tab.icon, size: 24),
+              icon: _wrapTabIcon(tab.id, tab.icon),
               label: tab.label,
             ),
         ],
@@ -166,14 +216,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         if (index == primaryCount) {
           _showMoreTabsSheet(overflow);
         } else {
+          final tappedTab = primary[index];
           setState(() => _currentTabIndex = index);
           _turnWiggleController.forward(from: 0);
+          _tutorialController.onTabTapped(tappedTab.id);
         }
       },
       items: [
         for (final tab in primary)
           BottomNavigationBarItem(
-            icon: Icon(tab.icon, size: 24),
+            icon: _wrapTabIcon(tab.id, tab.icon),
             label: tab.label,
           ),
         BottomNavigationBarItem(
@@ -208,6 +260,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     if (idx >= 0) {
                       setState(() => _currentTabIndex = idx);
                       _turnWiggleController.forward(from: 0);
+                      _tutorialController.onTabTapped(tab.id);
                     }
                   },
                 ),
@@ -227,7 +280,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return;
     }
     final tabs = _visibleTabs;
-    final idx = tabs.indexWhere((t) => t.id == _TabId.map);
+    final idx = tabs.indexWhere((t) => t.id == HomeTabId.map);
     setState(() {
       if (idx >= 0) _currentTabIndex = idx;
       _mapFocusShipId = shipId;
@@ -249,9 +302,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late AnimationController _turnWiggleController;
   late Animation<double> _turnWiggle;
 
+  // Tutorial
+  late final TutorialController _tutorialController;
+  OverlayEntry? _tutorialEntry;
+
   @override
   void initState() {
     super.initState();
+
+    _tutorialController = TutorialController(
+      steps: kTutorialSteps,
+      onRequestTab: _selectTab,
+      getHomeworldPlaced: () {
+        for (final hex in _gameState.mapState.hexes) {
+          final wid = hex.worldId;
+          if (wid == null || wid.isEmpty) continue;
+          for (final w in _gameState.production.worlds) {
+            final id = w.id.isNotEmpty ? w.id : w.name;
+            if (w.isHomeworld && id == wid) return true;
+          }
+        }
+        return false;
+      },
+      isStepVisible: _isTutorialStepVisible,
+      onFinished: _persistTutorialSeen,
+    );
+    _tutorialController.addListener(_onTutorialControllerChanged);
+
     _loadState();
 
     _turnWiggleController = AnimationController(
@@ -275,7 +352,69 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void dispose() {
     _saveDebounce?.cancel();
     _turnWiggleController.dispose();
+    _removeTutorialOverlay();
+    _tutorialController.removeListener(_onTutorialControllerChanged);
+    _tutorialController.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tutorial wiring
+  // ---------------------------------------------------------------------------
+
+  bool _isTutorialStepVisible(TutorialStep step) {
+    if (step.id == 'aliens' && _gameState.alienPlayers.isEmpty) return false;
+    // If a step requires a specific tab, that tab must be in the live
+    // visible tab list (e.g. shipTech is hidden in player-replicator games).
+    if (step.requiredTab != null) {
+      final visible = _visibleTabs.any((t) => t.id == step.requiredTab);
+      if (!visible) return false;
+    }
+    return true;
+  }
+
+  void _onTutorialControllerChanged() {
+    if (!mounted) return;
+    if (_tutorialController.isActive) {
+      _installTutorialOverlay();
+    } else {
+      _removeTutorialOverlay();
+    }
+  }
+
+  void _installTutorialOverlay() {
+    if (_tutorialEntry != null) return;
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    _tutorialEntry = OverlayEntry(
+      builder: (_) => TutorialOverlay(
+        controller: _tutorialController,
+        config: _gameState.config,
+      ),
+    );
+    overlay.insert(_tutorialEntry!);
+  }
+
+  void _removeTutorialOverlay() {
+    _tutorialEntry?.remove();
+    _tutorialEntry = null;
+  }
+
+  void _persistTutorialSeen() {
+    if (_appState.tutorial.seen) return;
+    final newAppState = _appState.copyWith(
+      tutorial: _appState.tutorial.copyWith(seen: true),
+    );
+    setState(() {
+      _appState = newAppState;
+    });
+    // Best-effort save; the tutorial flag is stored at the AppState level
+    // so we bypass the regular game-save debounce.
+    _persistence.save(_appState);
+  }
+
+  void _replayTutorial() {
+    _tutorialController.start(fromIndex: 0);
   }
 
   Future<void> _loadState() async {
@@ -286,6 +425,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         (g) => g.id == activeId,
         orElse: () => appState.games.first,
       );
+      final hadTutorialSeen = appState.tutorial.seen;
       setState(() {
         _appState = appState;
         _gameState = _syncedMapState(activeSave.state);
@@ -295,6 +435,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _undoHistory.clear();
         _lastActionWasEndTurn = false;
       });
+      _syncTextScaleNotifier();
+      // Existing user with prior saves but no tutorial seen flag: show a
+      // one-time snack pointing them at Settings -> Help, and persist
+      // tutorial.seen = true so the snack only fires once.
+      if (!hadTutorialSeen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'New: replay tutorial available in Settings -> Help',
+              ),
+              duration: Duration(seconds: 5),
+            ),
+          );
+          _persistTutorialSeen();
+        });
+      }
     } else {
       setState(() {
         _appState = const AppState();
@@ -353,13 +511,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               empireAdvantageCardNumber: config.selectedEmpireAdvantage,
             )
           : null,
-      alienPlayers: [
-        for (int i = 0; i < result.alienPlayerCount; i++)
-          AlienPlayer(
-            name: 'Alien ${i + 1}',
-            color: ['Red', 'Blue', 'Yellow'][i % 3],
-          ),
-      ],
+      alienPlayers: () {
+        // Pick distinct sci-fi alien faction names from the curated pool.
+        final taken = <String>{};
+        return [
+          for (int i = 0; i < result.alienPlayerCount; i++)
+            () {
+              final name = pickUnusedName(kAlienNames, taken,
+                  fallbackPrefix: 'Alien');
+              taken.add(name);
+              return AlienPlayer(
+                name: name,
+                color: ['Red', 'Blue', 'Yellow'][i % 3],
+              );
+            }(),
+        ];
+      }(),
     );
 
     // Apply starting fleet by stamping counters
@@ -394,15 +561,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       syncReplicatorSetup: true,
     );
 
+    // PP01: auto-draw any scenario modifier cards (e.g. Technology Head
+    // Start for Quick Conquest) so the player starts with them face-up
+    // in hand. No-op for scenarios whose scenarioModifierCards is empty.
+    finalState = applyScenarioAutoDrawnCards(finalState, scenario);
+
     final saved = SavedGame(
       id: id,
       name: result.gameName,
       updatedAt: DateTime.now(),
       state: finalState,
     );
+    final priorGameCount = replaceGameId == null
+        ? _appState.games.length
+        : _appState.games.where((g) => g.id != replaceGameId).length;
     final games = replaceGameId == null
         ? [..._appState.games, saved]
         : [..._appState.games.where((game) => game.id != replaceGameId), saved];
+    // If the player has starting shipyards but no homeworld placed, jump
+    // straight to the Map tab so the onboarding banner is the first thing
+    // they see in a fresh game.
+    final needsOnboarding = finalState.shipCounters
+        .any((c) => c.type == ShipType.shipyard && c.isBuilt);
+    final mapTabIndex = _visibleTabs.indexWhere((t) => t.id == HomeTabId.map);
     setState(() {
       _appState = _appState.copyWith(games: games, activeGameId: id);
       _gameState = finalState;
@@ -412,8 +593,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _undoHistory.clear();
       _undoDescriptions.clear();
       _lastActionWasEndTurn = false;
+      if (needsOnboarding && mapTabIndex >= 0) {
+        _currentTabIndex = mapTabIndex;
+      }
     });
     _save();
+    // Auto-start the tutorial only when this is the user's brand-new
+    // first game AND they have not seen the tutorial yet.
+    if (priorGameCount == 0 && !_appState.tutorial.seen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _tutorialController.start(fromIndex: 0);
+      });
+    }
   }
 
   Future<void> _openNewGameWizard({String? replaceGameId}) async {
@@ -500,6 +692,44 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _onProductionChanged(
       _gameState.production.copyWith(upgradesCp: newUpgrades),
     );
+  }
+
+  /// Consume one queued ship purchase of [type] from Production. Returns true
+  /// if a purchase was found and decremented (or removed when its quantity hit
+  /// zero); false if no matching purchase was queued.
+  ///
+  /// Used by the Ship Tech tab "Build" button so the player can stamp counters
+  /// for ships they already paid for in the Production queue, without
+  /// double-charging or going through a manual override.
+  bool _consumeQueuedShipPurchase(ShipType type) {
+    final purchases =
+        List<ShipPurchase>.from(_gameState.production.shipPurchases);
+    // Prefer "ready to materialize" purchases (totalHpNeeded == null OR
+    // buildProgressHp >= totalHpNeeded), then fall back to first match.
+    int idx = purchases.indexWhere((p) =>
+        p.type == type &&
+        (p.totalHpNeeded == null ||
+            p.buildProgressHp >= (p.totalHpNeeded ?? 0)));
+    if (idx < 0) {
+      idx = purchases.indexWhere((p) => p.type == type);
+    }
+    if (idx < 0) return false;
+    final p = purchases[idx];
+    if (p.quantity > 1) {
+      final newQty = p.quantity - 1;
+      final hull = kShipDefinitions[p.type]
+              ?.effectiveHullSize(_gameState.config.useFacilitiesCosts) ??
+          0;
+      final newTotalHp =
+          p.totalHpNeeded == null ? null : hull * newQty;
+      purchases[idx] = p.copyWith(quantity: newQty, totalHpNeeded: newTotalHp);
+    } else {
+      purchases.removeAt(idx);
+    }
+    _onProductionChanged(
+      _gameState.production.copyWith(shipPurchases: purchases),
+    );
+    return true;
   }
 
   void _onGameStateOverride(GameState newState) {
@@ -611,6 +841,197 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// PP01: composite card-play handlers. Each collapses the three
+  /// previously-separate mutations (hand, active ledger / income, played
+  /// history) into a single `_updateGameState` call so that undo pops one
+  /// step per card play.
+
+  void _onCardPlayedAsEvent(int index, List<GameModifier> modifiers) {
+    if (index < 0 || index >= _gameState.drawnHand.length) return;
+    final card = _gameState.drawnHand[index];
+    final entry = _lookupCardEntryById(card.cardNumber);
+    final name = entry?.name ?? 'Card #${card.cardNumber}';
+    final deduped = _dedupCardModifiers(modifiers);
+    if (modifiers.isNotEmpty && deduped.isEmpty) {
+      _showAlreadyAppliedSnack(name);
+      return;
+    }
+    final stamped = card.copyWith(disposition: 'event');
+    final newHand = List<DrawnCard>.from(_gameState.drawnHand)..removeAt(index);
+    final newPlayed = [..._gameState.playedCards, stamped];
+    _updateGameState(
+      _gameState.copyWith(
+        drawnHand: newHand,
+        playedCards: newPlayed,
+        activeModifiers: [..._gameState.activeModifiers, ...deduped],
+      ),
+      'Play card: $name',
+    );
+  }
+
+  void _onCardPlayedForCredits(
+    int index,
+    int cpGained,
+    String sourceCardId,
+  ) {
+    if (index < 0 || index >= _gameState.drawnHand.length) return;
+    if (cpGained <= 0) return;
+    final card = _gameState.drawnHand[index];
+    final entry = _lookupCardEntryById(card.cardNumber);
+    final name = entry?.name ?? 'Card #${card.cardNumber}';
+    final alreadyApplied = _gameState.activeModifiers
+        .any((m) => m.sourceCardId == sourceCardId);
+    if (alreadyApplied) {
+      _showAlreadyAppliedSnack('$name (credits)');
+      return;
+    }
+    final mod = GameModifier(
+      name: '$name (credits)',
+      type: 'incomeMod',
+      value: cpGained,
+      sourceCardId: sourceCardId,
+    );
+    final stamped =
+        card.copyWith(disposition: 'credits', cpGained: cpGained);
+    final newHand = List<DrawnCard>.from(_gameState.drawnHand)..removeAt(index);
+    final newPlayed = [..._gameState.playedCards, stamped];
+    _updateGameState(
+      _gameState.copyWith(
+        drawnHand: newHand,
+        playedCards: newPlayed,
+        activeModifiers: [..._gameState.activeModifiers, mod],
+      ),
+      'Play card for credits: $name',
+    );
+  }
+
+  void _onCardDiscarded(int index) {
+    if (index < 0 || index >= _gameState.drawnHand.length) return;
+    final card = _gameState.drawnHand[index];
+    final entry = _lookupCardEntryById(card.cardNumber);
+    final name = entry?.name ?? 'Card #${card.cardNumber}';
+    final stamped = card.copyWith(disposition: 'discarded');
+    final newHand = List<DrawnCard>.from(_gameState.drawnHand)..removeAt(index);
+    final newPlayed = [..._gameState.playedCards, stamped];
+    _updateGameState(
+      _gameState.copyWith(
+        drawnHand: newHand,
+        playedCards: newPlayed,
+      ),
+      'Discard card: $name',
+    );
+  }
+
+  CardEntry? _lookupCardEntryById(int cardNumber) =>
+      lookupCardByNumber(cardNumber);
+
+  /// PP01: after colonizing one or more new worlds, walk each colony and
+  /// ask the player whether to attach a Planet Attribute card. Picks are
+  /// appended to `drawnHand` with `attachedWorldId` set.
+  Future<void> _promptPlanetAttributesForNewColonies(
+    List<({String worldId, String worldName, HexCoord coord})> newColonies,
+  ) async {
+    for (final colony in newColonies) {
+      if (!mounted) return;
+      final result = await showPlanetAttributePrompt(
+        context,
+        worldName: colony.worldName,
+      );
+      if (!mounted) return;
+      if (result == null || result == PlanetAttributePromptResult.skip) {
+        continue;
+      }
+      int? cardNumber;
+      if (result == PlanetAttributePromptResult.random) {
+        final excluded = <int>{
+          for (final c in _gameState.drawnHand) c.cardNumber,
+          for (final c in _gameState.playedCards) c.cardNumber,
+        };
+        cardNumber = pickRandomPlanetAttribute(excluded);
+      } else {
+        // pick
+        cardNumber = await _pickPlanetAttributeDialog();
+      }
+      if (!mounted) return;
+      if (cardNumber == null) continue;
+      final entry = _lookupCardEntryById(cardNumber);
+      if (entry == null) continue;
+      final binding = cardModifiersFor(cardNumber);
+      final sourceId = '${entry.type}:$cardNumber:${colony.worldId}';
+      final mods = <GameModifier>[
+        for (final m in (binding?.modifiers ?? const <GameModifier>[]))
+          m.withSourceCardId(sourceId),
+      ];
+      final drawn = DrawnCard(
+        cardNumber: cardNumber,
+        drawnOnTurn: _gameState.turnNumber,
+        isFaceUp: true,
+        assignedModifiers: mods,
+        attachedWorldId: colony.worldId,
+      );
+      _updateGameState(
+        _gameState.copyWith(
+          drawnHand: [..._gameState.drawnHand, drawn],
+        ),
+        'Attach attribute: ${colony.worldName}',
+      );
+    }
+  }
+
+  Future<int?> _pickPlanetAttributeDialog() async {
+    final alreadyDrawn = <int>{
+      for (final c in _gameState.drawnHand) c.cardNumber,
+      for (final c in _gameState.playedCards) c.cardNumber,
+    };
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick Planet Attribute'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 420,
+          child: ListView.builder(
+            itemCount: kPlanetAttributes.length,
+            itemBuilder: (_, i) {
+              final card = kPlanetAttributes[i];
+              final taken = alreadyDrawn.contains(card.number);
+              return ListTile(
+                dense: true,
+                title: Text(
+                  '#${card.number} ${card.name}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: taken
+                        ? Theme.of(ctx).colorScheme.onSurface.withValues(
+                              alpha: 0.4,
+                            )
+                        : null,
+                  ),
+                ),
+                subtitle: Text(
+                  card.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: taken
+                    ? const Icon(Icons.check, size: 14)
+                    : null,
+                onTap: () => Navigator.pop(ctx, card.number),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onAlienPlayersChanged(List<AlienPlayer> aliens) {
     _updateGameState(
       _gameState.copyWith(alienPlayers: aliens),
@@ -642,12 +1063,31 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final nextState = _syncedMapState(_gameState.copyWith(mapState: mapState));
     if (recordUndo) {
       _updateGameState(nextState, description ?? 'Map');
+      _tutorialController.onGameStateChanged(_gameState);
       return;
     }
     setState(() {
       _gameState = nextState;
     });
     _save();
+    _tutorialController.onGameStateChanged(_gameState);
+  }
+
+  void _resolveCombat(CombatResolution resolution) {
+    if (resolution.isEmpty) {
+      return;
+    }
+    final nextState = applyCombatResolution(_gameState, resolution);
+    _updateGameState(
+      nextState,
+      'Resolve Combat (${resolution.destroyedShipCounterIds.length} destroyed, '
+          '${resolution.retreats.length} retreats)',
+    );
+    final note = resolution.combatLogNote;
+    if (note != null && note.isNotEmpty) {
+      debugPrint('Combat log: $note');
+      // TODO: persist to a per-game combat log in a follow-up.
+    }
   }
 
   GameState _syncedMapState(GameState state) {
@@ -659,14 +1099,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         .where((counter) => counter.isBuilt)
         .map((counter) => counter.id)
         .toSet();
-    final validPipelineIds = normalizedProduction.pipelineAssetIds.toSet();
 
     return state.copyWith(
       production: normalizedProduction,
       mapState: state.mapState.sanitizeAgainstLedger(
         validWorldIds: validWorldIds,
         validShipIds: validShipIds,
-        validPipelineIds: validPipelineIds,
       ),
     );
   }
@@ -686,13 +1124,49 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       );
       return;
     }
-    _promptColonyShipColonization(candidates).then((decisions) {
+    _promptColonyShipColonization(candidates).then((decisions) async {
       if (!mounted || decisions == null) return;
-      _applyColonyShipColonization(decisions);
+      final newColonies = _applyColonyShipColonization(decisions);
+      if (newColonies.isNotEmpty) {
+        await _promptPlanetAttributesForNewColonies(newColonies);
+      }
     });
   }
 
   void _onEndTurn() {
+    // PP13: optional "Are you sure?" gate before any End Turn flow runs.
+    if (!_appState.confirmEndTurn) {
+      _runEndTurnFlow();
+      return;
+    }
+    () async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('End the turn?'),
+          content: const Text(
+            'This will materialize all queued purchases, complete tech research, '
+            'and advance to the next turn. You can undo afterwards if needed.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('End Turn'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (ok != true) return;
+      _runEndTurnFlow();
+    }();
+  }
+
+  void _runEndTurnFlow() {
     if (_gameState.config.playerControlsReplicators) {
       _finishEndTurn();
       return;
@@ -702,16 +1176,57 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _finishEndTurn();
       return;
     }
-    _promptColonyShipColonization(candidates).then((decisions) {
+    _promptColonyShipColonization(candidates).then((decisions) async {
       if (!mounted) return;
       if (decisions == null) {
         // User cancelled dialog — treat as skip all, still end the turn.
         _finishEndTurn();
         return;
       }
-      _applyColonyShipColonization(decisions);
+      final newColonies = _applyColonyShipColonization(decisions);
+      if (newColonies.isNotEmpty) {
+        await _promptPlanetAttributesForNewColonies(newColonies);
+      }
+      if (!mounted) return;
       _finishEndTurn();
     });
+  }
+
+  void _onConfirmEndTurnChanged(bool value) {
+    if (_appState.confirmEndTurn == value) return;
+    final newAppState = _appState.copyWith(confirmEndTurn: value);
+    setState(() {
+      _appState = newAppState;
+    });
+    // Persist immediately; this is an app-level preference, not part
+    // of the per-game save debounce.
+    _persistence.save(newAppState);
+  }
+
+  /// PP18: update the global text-scale preference. Pushes the new
+  /// value into the shared [ValueNotifier] so the MaterialApp builder
+  /// rewraps the tree with a MediaQuery.textScaler override, and
+  /// persists it immediately as an app-level preference.
+  void _onTextScaleChanged(double value) {
+    if ((_appState.textScale - value).abs() < 0.0001) return;
+    final newAppState = _appState.copyWith(textScale: value);
+    setState(() {
+      _appState = newAppState;
+    });
+    widget.textScaleNotifier?.value = value;
+    _persistence.save(newAppState);
+  }
+
+  /// PP18: push the persisted AppState.textScale into the shared
+  /// notifier. Called whenever [_appState] is restored from disk so
+  /// the root MaterialApp builder picks up the user's saved scale on
+  /// app launch.
+  void _syncTextScaleNotifier() {
+    final notifier = widget.textScaleNotifier;
+    if (notifier == null) return;
+    if ((notifier.value - _appState.textScale).abs() > 0.0001) {
+      notifier.value = _appState.textScale;
+    }
   }
 
   /// A Colony Ship built + parked on a friendly fleet at a colonizable hex
@@ -821,10 +1336,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _applyColonyShipColonization(Map<String, bool> decisions) {
+  List<({String worldId, String worldName, HexCoord coord})>
+      _applyColonyShipColonization(Map<String, bool> decisions) {
     final candidates = _findColonyShipColonizeCandidates();
-    if (candidates.isEmpty) return;
+    if (candidates.isEmpty) return const [];
     final candidateByShipId = {for (final c in candidates) c.counter.id: c};
+    final newColonies =
+        <({String worldId, String worldName, HexCoord coord})>[];
 
     var nextMap = _gameState.mapState;
     var nextProduction = _gameState.production;
@@ -864,6 +1382,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
       usedCoordIds.add(candidate.coord.id);
+      newColonies.add((
+        worldId: newWorldId,
+        worldName: worldName,
+        coord: candidate.coord,
+      ));
 
       // Stamp worldId onto the hex.
       final hex = nextMap.hexAt(candidate.coord);
@@ -908,6 +1431,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
       'Colonize Colony Ships',
     );
+    return newColonies;
   }
 
   void _finishEndTurn() {
@@ -937,6 +1461,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           turnNumber: nextTurn,
           replicatorPlayerState: playerState.endTurn(nextTurnNumber: nextTurn),
           production: _gameState.production.copyWith(worlds: nextWorlds),
+          mapState: _gameState.mapState.clearAllFleetMoveFlags(),
         ),
         'Replicator End Turn',
       );
@@ -1021,6 +1546,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       'production': prod.toJson(),
       'drawnHand':
           _gameState.drawnHand.map((c) => c.toJson()).toList(),
+      'playedCards':
+          _gameState.playedCards.map((c) => c.toJson()).toList(),
       'activeModifiers':
           _gameState.activeModifiers.map((m) => m.toJson()).toList(),
       'shipCounters':
@@ -1056,6 +1583,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final prodAfterBuild = materialized.state;
     final countersAfterBuild = materialized.counters;
 
+    // Apply shipyard increments to the map (WP-2: BUG-1 fix).
+    var mapAfterBuild = _gameState.mapState;
+    for (final entry in materialized.shipyardIncrements.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length != 2) continue;
+      final q = int.tryParse(parts[0]);
+      final r = int.tryParse(parts[1]);
+      if (q == null || r == null) continue;
+      final coord = HexCoord(q, r);
+      final hex = mapAfterBuild.hexAt(coord);
+      if (hex != null) {
+        mapAfterBuild = mapAfterBuild.replaceHex(
+          hex.copyWith(shipyardCount: hex.shipyardCount + entry.value),
+        );
+      }
+    }
+
+    // PP09: fleet movement resets between turns. Every fleet gets a fresh
+    // move allowance, so clear the hasMovedThisTurn flag on every stack
+    // before committing the new game state.
+    mapAfterBuild = mapAfterBuild.clearAllFleetMoveFlags();
+
     final nextProduction = prodAfterBuild.prepareForNextTurn(
       config,
       countersAfterBuild,
@@ -1067,6 +1616,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         turnNumber: _gameState.turnNumber + 1,
         production: nextProduction,
         shipCounters: countersAfterBuild,
+        mapState: mapAfterBuild,
         turnSummaries: [..._gameState.turnSummaries, summary],
       ),
       'End Turn ${_gameState.turnNumber}',
@@ -1196,7 +1746,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _navigateToRule(String sectionId) {
-    _selectTab(_TabId.rules);
+    _selectTab(HomeTabId.rules);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _rulesKey.currentState?.jumpToSection(sectionId);
     });
@@ -1354,6 +1904,109 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   void _onNewGame() async {
     await _openNewGameWizard();
+  }
+
+  /// PP11: open a bottom-sheet "game library" launched from the app-bar
+  /// title. Lets the user switch the active game or start a new one
+  /// without leaving the current tab.
+  Future<void> _openGameLibrarySheet() async {
+    if (!mounted) return;
+    final games = _appState.games;
+    final activeId = _activeGameId;
+    final selected = await showModalBottomSheet<_GameLibrarySheetResult>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        final theme = Theme.of(sheetCtx);
+        final sorted = [...games]
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: Text(
+                  'Game Library',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              if (sorted.isEmpty)
+                const ListTile(
+                  dense: true,
+                  title: Text('No saved games yet.'),
+                ),
+              for (final g in sorted)
+                ListTile(
+                  leading: Icon(
+                    g.id == activeId
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: g.id == activeId
+                        ? theme.colorScheme.primary
+                        : null,
+                  ),
+                  title: Text(
+                    g.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    'Turn ${g.state.turnNumber} '
+                    '\u2022 ${_formatUpdatedAt(g.updatedAt)}',
+                  ),
+                  selected: g.id == activeId,
+                  onTap: () => Navigator.of(sheetCtx).pop(
+                    _GameLibrarySheetResult.load(g.id),
+                  ),
+                ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('New Game'),
+                onTap: () => Navigator.of(sheetCtx).pop(
+                  const _GameLibrarySheetResult.newGame(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || selected == null) return;
+    switch (selected.action) {
+      case _GameLibrarySheetAction.load:
+        final id = selected.gameId;
+        if (id != null && id != _activeGameId) {
+          _onLoadGame(id);
+        }
+        break;
+      case _GameLibrarySheetAction.newGame:
+        await _openNewGameWizard();
+        break;
+    }
+  }
+
+  String _formatUpdatedAt(DateTime updatedAt) {
+    final now = DateTime.now();
+    final diff = now.difference(updatedAt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) {
+      final m = diff.inMinutes;
+      return '${m}m ago';
+    }
+    if (diff.inHours < 24) {
+      final h = diff.inHours;
+      return '${h}h ago';
+    }
+    if (diff.inDays < 7) {
+      final d = diff.inDays;
+      return '${d}d ago';
+    }
+    final y = updatedAt.year.toString().padLeft(4, '0');
+    final mo = updatedAt.month.toString().padLeft(2, '0');
+    final d = updatedAt.day.toString().padLeft(2, '0');
+    return '$y-$mo-$d';
   }
 
   void _onLoadGame(String gameId) {
@@ -1553,7 +2206,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     '\u2014 tap to open Cards',
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => _selectTab(_TabId.production),
+                  onTap: () => _selectTab(HomeTabId.production),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
@@ -1586,6 +2239,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
         ],
         title: GestureDetector(
+          onTap: _openGameLibrarySheet,
           onLongPress: () {
             Navigator.of(
               context,
@@ -1596,10 +2250,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             builder: (context, child) {
               return Transform.rotate(angle: _turnWiggle.value, child: child);
             },
-            child: Text(
-              '$_gameName  \u2022  Turn ${_gameState.turnNumber}',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 17),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    '$_gameName  \u2022  Turn ${_gameState.turnNumber}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 17),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down, size: 20),
+              ],
             ),
           ),
         ),
@@ -1647,7 +2310,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final scenario = scenarioById(_gameState.config.scenarioId);
     final vpConfig = scenario?.victoryPoints;
     final content = switch (_currentTabId) {
-      _TabId.production =>
+      HomeTabId.production =>
         _gameState.config.playerControlsReplicators
             ? ReplicatorPlayerPage(
                 turnNumber: _gameState.turnNumber,
@@ -1677,49 +2340,91 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 onActiveModifiersChanged: _onActiveModifiersChanged,
                 onLocateShip: _locateShipOnMap,
                 drawnHand: _gameState.drawnHand,
+                playedCards: _gameState.playedCards,
                 onDrawnHandChanged: _onDrawnHandChanged,
                 onPlayCardAsEvent: _onPlayCardAsEvent,
                 onPlayCardForCredits: _onPlayCardForCredits,
+                onCardPlayedAsEvent: _onCardPlayedAsEvent,
+                onCardPlayedForCredits: _onCardPlayedForCredits,
+                onCardDiscarded: _onCardDiscarded,
                 turnSummaries: _gameState.turnSummaries,
               ),
-      _TabId.map => MapPage(
-        state: _gameState.mapState.hexes.isEmpty
-            ? GameMapState.initial(
-                layoutPreset: _gameState.mapState.layoutPreset,
-              )
-            : _gameState.mapState,
-        productionWorlds: _gameState.production.worlds,
-        shipCounters: _gameState.shipCounters,
-        pipelineAssetIds: _gameState.production.pipelineAssetIds,
-        focusShipId: _mapFocusShipId,
-        focusRequestId: _mapFocusRequestId,
-        terraformingLevel: _gameState.production.techState.getLevel(
-          TechId.terraforming,
-          facilitiesMode: _gameState.config.useFacilitiesCosts,
-        ),
-        onColonizeCandidatesTapped: _openColonizeNowDialog,
-        onChanged: _onMapChanged,
-      ),
-      _TabId.shipTech => ShipTechPage(
-        config: _gameState.config,
-        turnNumber: _gameState.turnNumber,
-        techState: _gameState.production.techState.withPending(
-          _gameState.production.pendingTechPurchases,
-        ),
-        shipCounters: _gameState.shipCounters,
-        showExperience: _gameState.config.enableShipExperience,
-        shipSpecialAbilities: _gameState.shipSpecialAbilities,
-        onCountersChanged: _onCountersChanged,
-        onUpgradeCostIncurred: _onUpgradeCost,
-        onRuleTap: _navigateToRule,
-        onLocateShip: _locateShipOnMap,
-        onGoToProduction: () => _selectTab(_TabId.production),
-      ),
-      _TabId.aliens => AlienEconomyPage(
+      HomeTabId.map => () {
+        // Pre-compute shipyard capacity data for the hex map overlay.
+        final syCapacity = <String, ({int used, int total})>{};
+        final fm = _gameState.config.useFacilitiesCosts;
+        final tech = _gameState.production.techState;
+        final mods = _gameState.activeModifiers;
+        for (final hex in _gameState.mapState.hexes) {
+          if (hex.shipyardCount <= 0) continue;
+          final total = _gameState.production.shipyardCapacityForHex(
+            hex.coord, _gameState.mapState, tech,
+            facilitiesMode: fm, modifiers: mods,
+          );
+          final used = _gameState.production.hullPointsSpentInHex(
+            hex.coord, facilitiesMode: fm,
+          );
+          syCapacity[hex.coord.id] = (used: used, total: total);
+        }
+        return MapPage(
+          state: _gameState.mapState.hexes.isEmpty
+              ? GameMapState.initial(
+                  layoutPreset: _gameState.mapState.layoutPreset,
+                )
+              : _gameState.mapState,
+          productionWorlds: _gameState.production.worlds,
+          shipCounters: _gameState.shipCounters,
+          focusShipId: _mapFocusShipId,
+          focusRequestId: _mapFocusRequestId,
+          terraformingLevel: _gameState.production.techState.getLevel(
+            TechId.terraforming,
+            facilitiesMode: _gameState.config.useFacilitiesCosts,
+          ),
+          explorationLevel: _gameState.production.techState.getLevel(
+            TechId.exploration,
+            facilitiesMode: _gameState.config.useFacilitiesCosts,
+          ),
+          playerMoveLevel: _gameState.production.techState.getLevel(
+            TechId.move,
+            facilitiesMode: _gameState.config.useFacilitiesCosts,
+          ),
+          shipyardCapacity: syCapacity,
+          onColonizeCandidatesTapped: _openColonizeNowDialog,
+          onChanged: _onMapChanged,
+          onResolveCombat: _resolveCombat,
+        );
+      }(),
+      HomeTabId.shipTech => () {
+        // Aggregate queued ship purchases by type so the Ship Tech "Build"
+        // button can show a "queued" badge and consume the purchase instead
+        // of forcing a manual-override stamp.
+        final queuedByType = <ShipType, int>{};
+        for (final p in _gameState.production.shipPurchases) {
+          queuedByType[p.type] = (queuedByType[p.type] ?? 0) + p.quantity;
+        }
+        return ShipTechPage(
+          config: _gameState.config,
+          turnNumber: _gameState.turnNumber,
+          techState: _gameState.production.techState.withPending(
+            _gameState.production.pendingTechPurchases,
+          ),
+          shipCounters: _gameState.shipCounters,
+          showExperience: _gameState.config.enableShipExperience,
+          shipSpecialAbilities: _gameState.shipSpecialAbilities,
+          onCountersChanged: _onCountersChanged,
+          onUpgradeCostIncurred: _onUpgradeCost,
+          onRuleTap: _navigateToRule,
+          onLocateShip: _locateShipOnMap,
+          onGoToProduction: () => _selectTab(HomeTabId.production),
+          queuedShipPurchases: queuedByType,
+          onConsumeQueuedPurchase: _consumeQueuedShipPurchase,
+        );
+      }(),
+      HomeTabId.aliens => AlienEconomyPage(
         alienPlayers: _gameState.alienPlayers,
         onAlienPlayersChanged: _onAlienPlayersChanged,
       ),
-      _TabId.replicator => ReplicatorPage(
+      HomeTabId.replicator => ReplicatorPage(
         state: _gameState.replicatorState ?? const ReplicatorState(),
         onChanged: (newState) {
           _updateGameState(
@@ -1737,7 +2442,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           );
         },
       ),
-      _TabId.settings => SettingsPage(
+      HomeTabId.settings => SettingsPage(
         config: _gameState.config,
         gameName: _gameName,
         turnNumber: _gameState.turnNumber,
@@ -1763,8 +2468,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           );
         },
         onReopenLastTurn: _reopenLastTurn,
+        onReplayTutorial: _replayTutorial,
+        confirmEndTurn: _appState.confirmEndTurn,
+        onConfirmEndTurnChanged: _onConfirmEndTurnChanged,
+        textScale: _appState.textScale,
+        onTextScaleChanged: _onTextScaleChanged,
       ),
-      _TabId.rules => RulesReferencePage(
+      HomeTabId.rules => RulesReferencePage(
           key: _rulesKey,
           onApplyCardModifiers: _onApplyCardModifiers,
           activeModifiers: _gameState.activeModifiers,
@@ -1795,6 +2505,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ],
     );
   }
+}
+
+// =============================================================================
+// PP11: Game library bottom-sheet result envelope
+// =============================================================================
+
+enum _GameLibrarySheetAction { load, newGame }
+
+class _GameLibrarySheetResult {
+  final _GameLibrarySheetAction action;
+  final String? gameId;
+
+  const _GameLibrarySheetResult.load(String id)
+      : action = _GameLibrarySheetAction.load,
+        gameId = id;
+
+  const _GameLibrarySheetResult.newGame()
+      : action = _GameLibrarySheetAction.newGame,
+        gameId = null;
 }
 
 // =============================================================================
@@ -1888,8 +2617,16 @@ class _ResourceBarState extends State<_ResourceBar>
           Text('CP ', style: dimMono),
           Text('${widget.totalCp}', style: mono),
           const SizedBox(width: 12),
-          Text('Mnt ', style: dimMono),
-          Text('${widget.maintenance}', style: mono),
+          KeyedSubtree(
+            key: TutorialTargets.prodMaintenanceChip,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Mnt ', style: dimMono),
+                Text('${widget.maintenance}', style: mono),
+              ],
+            ),
+          ),
           const SizedBox(width: 12),
           Text('Left ', style: dimMono),
           // Task 3C + 3E: animated remaining CP

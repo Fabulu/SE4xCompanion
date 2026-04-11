@@ -2,6 +2,8 @@
 
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
+import '../data/temporal_effects.dart';
+import '../data/unique_ship_designer.dart';
 import 'game_config.dart';
 import 'game_modifier.dart';
 import 'map_state.dart';
@@ -28,21 +30,29 @@ class ShipPurchase {
   /// per-unit hull size (legacy compat).
   final int? totalHpNeeded;
 
+  /// PP02 §41.1.6: Unique Ship design payload. Only populated when
+  /// [type] == [ShipType.un]; null for every other ship type. The CP cost
+  /// of a UN purchase is computed from this design via
+  /// [uniqueShipDesignCost], routed through [effectiveUnitShipCost]. Legacy
+  /// saves decode this as null.
+  final UniqueShipDesign? uniqueDesign;
+
   const ShipPurchase({
     required this.type,
     this.quantity = 1,
     this.shipyardHexId,
     this.buildProgressHp = 0,
     this.totalHpNeeded,
+    this.uniqueDesign,
   });
 
-  int get cost {
-    final def = kShipDefinitions[type];
-    if (def == null) return 0;
-    return def.buildCost * quantity;
-  }
-
   /// Cost accounting for alternate empire and AGT pricing.
+  ///
+  /// Note: this only applies the AGT/alternate-empire base table. It does NOT
+  /// include Empire Advantage modifiers, alien-tech cards, scenario
+  /// multipliers, or ability-12 discounts. For the authoritative per-unit
+  /// cost used by the display and purchase pipelines, see
+  /// [ProductionState.effectiveUnitShipCost].
   int effectiveCost(bool isAlternateEmpire, {bool facilitiesMode = false}) {
     final def = kShipDefinitions[type];
     if (def == null) return 0;
@@ -57,6 +67,8 @@ class ShipPurchase {
     int? buildProgressHp,
     int? totalHpNeeded,
     bool clearTotalHpNeeded = false,
+    UniqueShipDesign? uniqueDesign,
+    bool clearUniqueDesign = false,
   }) =>
       ShipPurchase(
         type: type ?? this.type,
@@ -66,6 +78,8 @@ class ShipPurchase {
         buildProgressHp: buildProgressHp ?? this.buildProgressHp,
         totalHpNeeded:
             clearTotalHpNeeded ? null : (totalHpNeeded ?? this.totalHpNeeded),
+        uniqueDesign:
+            clearUniqueDesign ? null : (uniqueDesign ?? this.uniqueDesign),
       );
 
   Map<String, dynamic> toJson() => {
@@ -74,6 +88,7 @@ class ShipPurchase {
         if (shipyardHexId != null) 'shipyardHexId': shipyardHexId,
         'buildProgressHp': buildProgressHp,
         if (totalHpNeeded != null) 'totalHpNeeded': totalHpNeeded,
+        if (uniqueDesign != null) 'uniqueDesign': uniqueDesign!.toJson(),
       };
 
   factory ShipPurchase.fromJson(Map<String, dynamic> json) => ShipPurchase(
@@ -82,6 +97,10 @@ class ShipPurchase {
         shipyardHexId: json['shipyardHexId'] as String?,
         buildProgressHp: json['buildProgressHp'] as int? ?? 0,
         totalHpNeeded: json['totalHpNeeded'] as int?,
+        uniqueDesign: json['uniqueDesign'] is Map<String, dynamic>
+            ? UniqueShipDesign.fromJson(
+                json['uniqueDesign'] as Map<String, dynamic>)
+            : null,
       );
 
   static ShipType _shipTypeFromName(String name) {
@@ -92,6 +111,46 @@ class ShipPurchase {
   }
 }
 
+/// A single Temporal Effect expenditure in the TP shopping cart.
+class TpExpenditure {
+  final int effectIndex;
+  final int quantity;
+  final int hullPoints;
+
+  const TpExpenditure({
+    required this.effectIndex,
+    this.quantity = 1,
+    this.hullPoints = 0,
+  });
+
+  int cost() {
+    if (effectIndex < 0 || effectIndex >= kTemporalEffects.length) return 0;
+    final effect = kTemporalEffects[effectIndex];
+    if (effect.perHullPoint) return effect.baseCost * (hullPoints > 0 ? hullPoints : 1);
+    if (effect.perUnit) return effect.baseCost * quantity;
+    return effect.baseCost;
+  }
+
+  TpExpenditure copyWith({int? effectIndex, int? quantity, int? hullPoints}) =>
+      TpExpenditure(
+        effectIndex: effectIndex ?? this.effectIndex,
+        quantity: quantity ?? this.quantity,
+        hullPoints: hullPoints ?? this.hullPoints,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'effectIndex': effectIndex,
+    'quantity': quantity,
+    'hullPoints': hullPoints,
+  };
+
+  factory TpExpenditure.fromJson(Map<String, dynamic> json) => TpExpenditure(
+    effectIndex: json['effectIndex'] as int? ?? 0,
+    quantity: json['quantity'] as int? ?? 1,
+    hullPoints: json['hullPoints'] as int? ?? 0,
+  );
+}
+
 /// Result of [ProductionState.materializeCompletedPurchases]: the updated
 /// state (with completed purchases removed), the mutated counter list, the
 /// ids of the counters that were just stamped as built, and any warnings.
@@ -100,12 +159,14 @@ class MaterializeResult {
   final List<ShipCounter> counters;
   final List<String> newCounterIds;
   final List<String> warnings;
+  final Map<String, int> shipyardIncrements;
 
   const MaterializeResult({
     required this.state,
     required this.counters,
     this.newCounterIds = const [],
     this.warnings = const [],
+    this.shipyardIncrements = const {},
   });
 }
 
@@ -113,7 +174,6 @@ class ProductionState {
   // --- CP ledger (user-editable) ---
   final int cpCarryOver;
   final int turnOrderBid;
-  final int shipSpendingCp;
   final int upgradesCp;
   final int maintenanceIncrease;
   final int maintenanceDecrease;
@@ -137,11 +197,10 @@ class ProductionState {
 
   // --- RP (facilities mode only) ---
   final int rpCarryOver;
-  final int techSpendingRp;
 
   // --- TP (facilities + temporal mode only) ---
   final int tpCarryOver;
-  final int tpSpending;
+  final List<TpExpenditure> tpExpenditures;
 
   // --- Ship purchases ---
   final List<ShipPurchase> shipPurchases;
@@ -172,7 +231,6 @@ class ProductionState {
   const ProductionState({
     this.cpCarryOver = 0,
     this.turnOrderBid = 0,
-    this.shipSpendingCp = 0,
     this.upgradesCp = 0,
     this.maintenanceIncrease = 0,
     this.maintenanceDecrease = 0,
@@ -181,9 +239,8 @@ class ProductionState {
     this.lpCarryOver = 0,
     this.lpPlacedOnLc = 0,
     this.rpCarryOver = 0,
-    this.techSpendingRp = 0,
     this.tpCarryOver = 0,
-    this.tpSpending = 0,
+    this.tpExpenditures = const [],
     this.shipPurchases = const [],
     this.pipelineConnectedColonies = 0,
     this.worlds = const [],
@@ -280,19 +337,12 @@ class ProductionState {
   int mineralCp() =>
       worlds.where((w) => !w.isBlocked).fold(0, (sum, w) => sum + w.stagedMineralCp);
 
-  /// Total pipeline income across worlds (non-blocked).
+  /// Total pipeline income across worlds.
   /// Traders (#49): current ledger model treats the bonus as a multiplier on
-  /// tracked pipeline income.
+  /// the tracked colony count.
   int pipelineCp([GameConfig? config]) {
     final mult = (config?.empireAdvantage?.cardNumber == 49) ? 2 : 1;
-    if (pipelineConnectedColonies > 0) {
-      return pipelineConnectedColonies * mult;
-    }
-    // Legacy per-world pipelineIncome fallback (kept for compatibility with
-    // existing manual-override UI and saved games that used per-world entry).
-    return worlds
-        .where((w) => !w.isBlocked)
-        .fold(0, (sum, w) => sum + w.pipelineIncome * mult);
+    return pipelineConnectedColonies * mult;
   }
 
   // ---------------------------------------------------------------------------
@@ -419,13 +469,6 @@ class ProductionState {
     return granted < slots ? granted : slots;
   }
 
-  /// Stable synthetic IDs for placing pipeline tokens on map hexes.
-  /// The map UI uses these IDs as a pool to drag-drop onto hexes; each ID
-  /// corresponds to one connected-colony slot in the pipeline network.
-  List<String> get pipelineAssetIds => [
-        for (int i = 1; i <= pipelineConnectedColonies; i++) 'pipeline-$i',
-      ];
-
   ProductionState ensureWorldIds() {
     var changed = false;
     final seenIds = <String>{};
@@ -456,24 +499,22 @@ class ProductionState {
   // ---------------------------------------------------------------------------
 
   /// HP produced per shipyard at a given ShipYard tech level (rule 9.6).
-  /// Lvl 1 → 1, Lvl 2 → 1.5 (stored doubled), Lvl 3 → 2. Returned as a double
-  /// so callers can floor/round at their aggregation boundary.
+  /// Lvl 1 → 1, Lvl 2 → 2, Lvl 3 → 3.
   static double hullPointsPerShipyard(int shipYardTechLevel) {
     switch (shipYardTechLevel) {
       case 1:
         return 1.0;
       case 2:
-        return 1.5;
+        return 2.0;
       default:
-        if (shipYardTechLevel >= 3) return 2.0;
+        if (shipYardTechLevel >= 3) return 3.0;
         return 1.0;
     }
   }
 
   /// Returns the HP build budget for a specific hex this turn, taking the
   /// ShipYard tech level, shipyard count and blockade status into account.
-  /// Blocked hexes contribute 0 (rule 7.1.2). Floors the fractional lvl-2
-  /// contribution at the aggregation boundary (e.g. 2 yards × 1.5 = 3).
+  /// Blocked hexes contribute 0 (rule 7.1.2).
   int shipyardCapacityForHex(
     HexCoord hex,
     GameMapState map,
@@ -510,6 +551,7 @@ class ProductionState {
       if (p.shipyardHexId != hexId) continue;
       final def = kShipDefinitions[p.type];
       if (def == null) continue;
+      if (def.isShipyardExempt) continue;
       final hull = def.effectiveHullSize(facilitiesMode);
       // totalHpNeeded when present overrides hull * quantity.
       final need = p.totalHpNeeded ?? (hull * p.quantity);
@@ -535,6 +577,14 @@ class ProductionState {
     return used + hpNeeded <= cap;
   }
 
+  /// Returns true if a [ShipType.shipyard] purchase is already queued for
+  /// [hexId] this turn (rule 8.2: one SY per hex per Economic Phase).
+  bool hasShipyardPurchaseInHex(String hexId) {
+    return shipPurchases.any(
+      (p) => p.type == ShipType.shipyard && p.shipyardHexId == hexId,
+    );
+  }
+
   /// Purchases that have been partially built (buildProgress > 0 and not
   /// complete). Useful for the "In Progress" UI section under multi-turn mode.
   List<ShipPurchase> get inProgressBuilds => [
@@ -544,6 +594,81 @@ class ProductionState {
               p.buildProgressHp < p.totalHpNeeded!)
             p,
       ];
+
+  /// PP08: Average HP/turn across all shipyard hexes on the map, used as a
+  /// fallback forecast when a purchase has no [ShipPurchase.shipyardHexId]
+  /// assignment yet. Returns 0 when the player controls no shipyard hexes.
+  int averageShipyardCapacity(
+    GameMapState map,
+    TechState tech, {
+    bool facilitiesMode = false,
+    List<GameModifier> modifiers = const [],
+  }) {
+    int totalCap = 0;
+    int yards = 0;
+    for (final hex in map.hexes) {
+      if (hex.shipyardCount <= 0) continue;
+      final cap = shipyardCapacityForHex(
+        hex.coord,
+        map,
+        tech,
+        facilitiesMode: facilitiesMode,
+        modifiers: modifiers,
+      );
+      if (cap <= 0) continue;
+      totalCap += cap;
+      yards += 1;
+    }
+    if (yards == 0) return 0;
+    return (totalCap / yards).round();
+  }
+
+  /// PP08: Forecast the whole-number turns still needed to finish a
+  /// multi-turn [purchase]. Returns 0 when the purchase is already complete
+  /// or when the purchase is not tracking multi-turn progress
+  /// ([ShipPurchase.totalHpNeeded] is null).
+  ///
+  /// When the purchase has a [ShipPurchase.shipyardHexId], the hex's own
+  /// capacity is used. Otherwise the player-wide average rate is applied as
+  /// a soft estimate.
+  int turnsRemainingFor(
+    ShipPurchase purchase,
+    GameMapState map,
+    TechState tech, {
+    bool facilitiesMode = false,
+    List<GameModifier> modifiers = const [],
+  }) {
+    final need = purchase.totalHpNeeded;
+    if (need == null) return 0;
+    final remaining = need - purchase.buildProgressHp;
+    if (remaining <= 0) return 0;
+
+    int rate = 0;
+    final hexId = purchase.shipyardHexId;
+    if (hexId != null) {
+      for (final hex in map.hexes) {
+        if (hex.coord.id != hexId) continue;
+        rate = shipyardCapacityForHex(
+          hex.coord,
+          map,
+          tech,
+          facilitiesMode: facilitiesMode,
+          modifiers: modifiers,
+        );
+        break;
+      }
+    }
+    if (rate <= 0) {
+      rate = averageShipyardCapacity(
+        map,
+        tech,
+        facilitiesMode: facilitiesMode,
+        modifiers: modifiers,
+      );
+    }
+    if (rate <= 0) return 0;
+    return (remaining / rate).ceil();
+  }
 
   // ---------------------------------------------------------------------------
   // Maintenance
@@ -601,6 +726,48 @@ class ProductionState {
     }
 
     return result;
+  }
+
+  /// Per-ship-type maintenance subtotal. Returns a map keyed by [ShipType]
+  /// whose values are the CP paid by that type's built counters, after all
+  /// per-type percent modifiers and the EA hull-size modifier have been
+  /// applied, but BEFORE global (across-all-types) modifiers. Used to keep
+  /// the fleet-roster row display and the maintenance-breakdown dialog in
+  /// lockstep with [maintenanceTotal].
+  ///
+  /// Note: This intentionally excludes the maintenanceIncrease/decrease
+  /// manual adjustments and the global EA/modifier percentages — those are
+  /// "adjustments beyond the raw per-ship sum" and are handled by
+  /// [maintenanceTotal] directly.
+  Map<ShipType, int> maintenanceSubtotalsByType(
+    List<ShipCounter> shipCounters,
+    GameConfig config, [
+    List<GameModifier> modifiers = const [],
+  ]) {
+    final ea = config.empireAdvantage;
+    final hullMod = ea?.hullSizeModifier ?? 0;
+
+    final typePercentMods = <ShipType, int>{};
+    for (final mod in modifiers) {
+      if (mod.type != 'maintenanceMod') continue;
+      if (mod.isPercent && mod.shipType != null) {
+        typePercentMods[mod.shipType!] = mod.value;
+      }
+    }
+
+    final subtotals = <ShipType, int>{};
+    for (final c in shipCounters) {
+      if (!c.isBuilt) continue;
+      final def = kShipDefinitions[c.type];
+      if (def == null || def.maintenanceExempt) continue;
+      int m = (def.effectiveHullSize(config.useFacilitiesCosts) + hullMod)
+          .clamp(0, 99);
+      if (typePercentMods.containsKey(c.type)) {
+        m = (m * typePercentMods[c.type]! / 100).ceil();
+      }
+      subtotals[c.type] = (subtotals[c.type] ?? 0) + m;
+    }
+    return subtotals;
   }
 
   // ---------------------------------------------------------------------------
@@ -664,11 +831,13 @@ class ProductionState {
     }
     if (mapState != null) {
       total += asteroidMiningCp(mapState, shipCounters);
-      total += nebulaMiningCp(
-        mapState,
-        shipCounters,
-        facilitiesMode: config.useFacilitiesCosts,
-      );
+      if (config.enableNebulaMining) {
+        total += nebulaMiningCp(
+          mapState,
+          shipCounters,
+          facilitiesMode: config.useFacilitiesCosts,
+        );
+      }
     }
     total += modifierIncome(modifiers);
     total += perColonyIncome(modifiers);
@@ -761,50 +930,89 @@ class ProductionState {
     return total;
   }
 
-  /// Total cost of ship purchases this turn.
-  int shipPurchaseCost(GameConfig config,
-      [List<GameModifier> modifiers = const [],
-      Map<ShipType, int> shipSpecialAbilities = const {}]) {
-    final mods = config.shipCostModifiers;
+  /// Computes the per-unit cost of a single ship after all active modifiers
+  /// are applied. This is the single source of truth for ship pricing —
+  /// every purchase pipeline, display row, and affordability check MUST
+  /// route through this helper so the charged total and the displayed total
+  /// always agree.
+  ///
+  /// Pipeline order (matches [shipPurchaseCost]):
+  ///   1. AGT/facilities base cost > alternate-empire cost > standard base.
+  ///   2. Empire Advantage per-ship cost modifiers ([shipCostModifiers]).
+  ///   3. Alien-tech / scenario `costMod` [GameModifier]s for this type.
+  ///   4. Empire Advantage `globalBuildCostModifier` (applies to every ship).
+  ///   5. Ability 12 (Reduced Cost) Unique-Ship ability: -2 CP.
+  ///   6. Scenario [GameConfig.shipCostMultiplier] (e.g. 2v1 allied = 1.5x,
+  ///      rounded up).
+  ///   7. Clamp to a minimum of 1 CP per unit.
+  int effectiveUnitShipCost(
+    ShipType type,
+    GameConfig config, {
+    List<GameModifier> modifiers = const [],
+    Map<ShipType, int> shipSpecialAbilities = const {},
+    UniqueShipDesign? uniqueDesign,
+  }) {
+    final def = kShipDefinitions[type];
+    if (def == null) return 0;
+
+    // PP02 §41.1.6: Unique Ships are priced from their hull-table base +
+    // ability surcharges (clamped to the §41.1.5 minimum of 5 CP). When a
+    // design payload is provided we short-circuit the standard pipeline —
+    // EA modifiers, costMods, ability-12, and the global build-cost
+    // modifier do NOT apply to a Unique Ship's CP cost. The scenario
+    // ship-cost multiplier still applies on top so allied 2v1 / similar
+    // scenarios continue to scale every ship.
+    if (type == ShipType.un && uniqueDesign != null) {
+      int unCost = uniqueShipDesignCost(uniqueDesign);
+      if (config.shipCostMultiplier != 1.0) {
+        unCost = (unCost * config.shipCostMultiplier).ceil();
+      }
+      return unCost.clamp(1, 999);
+    }
+
+    final eaMods = config.shipCostModifiers;
     final isAlt = config.enableAlternateEmpire;
     final ea = config.empireAdvantage;
     final globalBuildCostModifier = ea?.globalBuildCostModifier ?? 0;
 
-    // Collect costMod modifiers by ship type.
-    final costMods = <ShipType, int>{};
+    // Collect costMod modifiers targeting this specific ship type.
+    int cardCostMod = 0;
     for (final mod in modifiers) {
-      if (mod.type == 'costMod' && mod.shipType != null) {
-        costMods[mod.shipType!] = (costMods[mod.shipType!] ?? 0) + mod.value;
+      if (mod.type == 'costMod' && mod.shipType == type) {
+        cardCostMod += mod.value;
       }
     }
 
-    return shipPurchases.fold(0, (sum, p) {
-      final def = kShipDefinitions[p.type];
-      if (def == null) return sum;
-      int unitCost = def.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts);
-      // Accumulate all cost modifiers before clamping.
-      if (mods.containsKey(p.type)) unitCost += mods[p.type]!;
-      if (costMods.containsKey(p.type)) unitCost += costMods[p.type]!;
-      unitCost += globalBuildCostModifier;
-      if (shipSpecialAbilities[p.type] == 12) unitCost -= 2;
-      // Scenario ship cost multiplier (e.g., 2v1 allied: 1.5x)
-      if (config.shipCostMultiplier != 1.0) {
-        unitCost = (unitCost * config.shipCostMultiplier).ceil();
-      }
-      // Clamp once: minimum 1 CP per unit.
-      unitCost = unitCost.clamp(1, 999);
-      return sum + unitCost * p.quantity;
-    });
+    int unitCost =
+        def.effectiveBuildCost(isAlt, facilitiesMode: config.useFacilitiesCosts);
+    if (eaMods.containsKey(type)) unitCost += eaMods[type]!;
+    unitCost += cardCostMod;
+    unitCost += globalBuildCostModifier;
+    if (shipSpecialAbilities[type] == 12) unitCost -= 2;
+    // Scenario ship cost multiplier (e.g., 2v1 allied: 1.5x).
+    if (config.shipCostMultiplier != 1.0) {
+      unitCost = (unitCost * config.shipCostMultiplier).ceil();
+    }
+    // Clamp once: minimum 1 CP per unit.
+    return unitCost.clamp(1, 999);
   }
 
-  /// Effective ship spending: derived from purchases if any, otherwise manual.
-  int effectiveShipSpending(GameConfig config,
+  /// Total cost of ship purchases this turn. Delegates to
+  /// [effectiveUnitShipCost] for each queued purchase so the aggregator and
+  /// the per-unit display helper can never disagree.
+  int shipPurchaseCost(GameConfig config,
       [List<GameModifier> modifiers = const [],
       Map<ShipType, int> shipSpecialAbilities = const {}]) {
-    if (shipPurchases.isNotEmpty) {
-      return shipPurchaseCost(config, modifiers, shipSpecialAbilities);
-    }
-    return shipSpendingCp;
+    return shipPurchases.fold(0, (sum, p) {
+      final unit = effectiveUnitShipCost(
+        p.type,
+        config,
+        modifiers: modifiers,
+        shipSpecialAbilities: shipSpecialAbilities,
+        uniqueDesign: p.uniqueDesign,
+      );
+      return sum + unit * p.quantity;
+    });
   }
 
   /// True when the player has queued ship purchases while still holding
@@ -821,11 +1029,21 @@ class ProductionState {
       Map<ShipType, int> shipSpecialAbilities = const {},
       GameMapState? mapState]) {
     // techSpendingCpDerived returns 0 when unpredictable research is on,
-    // so researchGrantsCp replaces it seamlessly.
+    // so researchGrantsCp replaces it seamlessly in that mode.
+    //
+    // Invariant (enforced here): researchGrantsCp is the CP-funded research
+    // mechanism that REPLACES techSpendingCpDerived when unpredictable
+    // research is enabled. The two must never both subtract in the same
+    // config. UI paths normally keep researchGrantsCp at 0 when
+    // unpredictable is OFF, but a legacy save or manual override could
+    // leave a stale value — short-circuit it here so remainingCp never
+    // double-counts, regardless of how the state got that way.
+    final grants =
+        config.enableUnpredictableResearch ? researchGrantsCp : 0;
     return subtotalCp(config, shipCounters, modifiers, mapState) -
         techSpendingCpDerived(config, modifiers) -
-        researchGrantsCp -
-        effectiveShipSpending(config, modifiers, shipSpecialAbilities) -
+        grants -
+        shipPurchaseCost(config, modifiers, shipSpecialAbilities) -
         upgradesCp -
         reservedCpForNextTurn;
   }
@@ -907,8 +1125,11 @@ class ProductionState {
     return tpCarryOver + colonyTp(config);
   }
 
+  int tpSpendingDerived() =>
+      tpExpenditures.fold(0, (sum, e) => sum + e.cost());
+
   int remainingTp(GameConfig config) {
-    return totalTp(config) - tpSpending;
+    return totalTp(config) - tpSpendingDerived();
   }
 
   // ---------------------------------------------------------------------------
@@ -991,6 +1212,7 @@ class ProductionState {
     final remainingPurchases = <ShipPurchase>[];
     final newIds = <String>[];
     final warnings = <String>[];
+    final shipyardIncrements = <String, int>{};
 
     for (final p in shipPurchases) {
       final def = kShipDefinitions[p.type];
@@ -1017,6 +1239,12 @@ class ProductionState {
       // but still consume the purchase (pipelines, mines, bases, etc. are
       // tracked on the map, not on the ship sheet).
       if (def.maxCounters == 0) {
+        // Track shipyard completions so the caller can increment
+        // MapHexState.shipyardCount on the target hex.
+        if (p.type == ShipType.shipyard && p.shipyardHexId != null) {
+          shipyardIncrements[p.shipyardHexId!] =
+              (shipyardIncrements[p.shipyardHexId!] ?? 0) + p.quantity;
+        }
         continue;
       }
 
@@ -1045,6 +1273,7 @@ class ProductionState {
           tech,
           facilitiesMode: facilitiesMode,
           advancedMunitions: advMuni,
+          uniqueDesign: p.uniqueDesign,
         );
         updatedCounters[blankIdx] = stamped;
         newIds.add(stamped.id);
@@ -1065,6 +1294,7 @@ class ProductionState {
       counters: updatedCounters,
       newCounterIds: newIds,
       warnings: warnings,
+      shipyardIncrements: shipyardIncrements,
     );
   }
 
@@ -1090,11 +1320,11 @@ class ProductionState {
         config.enableFacilities ? remainingRp(config, modifiers).clamp(0, 30) : 0;
     final lpRemain =
         (config.enableFacilities && config.enableLogistics)
-            ? remainingLp(config, shipCounters, modifiers)
+            ? remainingLp(config, shipCounters, modifiers).clamp(0, 99999)
             : 0;
     final tpRemain =
         (config.enableFacilities && config.enableTemporal)
-            ? remainingTp(config)
+            ? remainingTp(config).clamp(0, 99999)
             : 0;
 
     // 2. Apply pending tech purchases and clean up accumulated research.
@@ -1132,7 +1362,6 @@ class ProductionState {
         growthMarkerLevel: newGrowth,
         homeworldValue: newHwValue,
         stagedMineralCp: w.isBlocked ? w.stagedMineralCp : 0,
-        pipelineIncome: 0,
       );
     }).toList();
 
@@ -1148,15 +1377,13 @@ class ProductionState {
       lpCarryOver: lpRemain,
       tpCarryOver: tpRemain,
       turnOrderBid: 0,
-      shipSpendingCp: 0,
       upgradesCp: 0,
       maintenanceIncrease: 0,
       maintenanceDecrease: 0,
       reservedCpForNextTurn: 0,
       reservedCpFromPrevTurn: nextReservedFromPrev,
       lpPlacedOnLc: 0,
-      techSpendingRp: 0,
-      tpSpending: 0,
+      tpExpenditures: const [],
       shipPurchases: const [],
       pipelineConnectedColonies: newPipelineConnectedColonies,
       worlds: newWorlds,
@@ -1262,7 +1489,6 @@ class ProductionState {
   ProductionState copyWith({
     int? cpCarryOver,
     int? turnOrderBid,
-    int? shipSpendingCp,
     int? upgradesCp,
     int? maintenanceIncrease,
     int? maintenanceDecrease,
@@ -1271,9 +1497,8 @@ class ProductionState {
     int? lpCarryOver,
     int? lpPlacedOnLc,
     int? rpCarryOver,
-    int? techSpendingRp,
     int? tpCarryOver,
-    int? tpSpending,
+    List<TpExpenditure>? tpExpenditures,
     List<ShipPurchase>? shipPurchases,
     int? pipelineConnectedColonies,
     List<WorldState>? worlds,
@@ -1287,7 +1512,6 @@ class ProductionState {
       ProductionState(
         cpCarryOver: cpCarryOver ?? this.cpCarryOver,
         turnOrderBid: turnOrderBid ?? this.turnOrderBid,
-        shipSpendingCp: shipSpendingCp ?? this.shipSpendingCp,
         upgradesCp: upgradesCp ?? this.upgradesCp,
         maintenanceIncrease:
             maintenanceIncrease ?? this.maintenanceIncrease,
@@ -1300,9 +1524,8 @@ class ProductionState {
         lpCarryOver: lpCarryOver ?? this.lpCarryOver,
         lpPlacedOnLc: lpPlacedOnLc ?? this.lpPlacedOnLc,
         rpCarryOver: rpCarryOver ?? this.rpCarryOver,
-        techSpendingRp: techSpendingRp ?? this.techSpendingRp,
         tpCarryOver: tpCarryOver ?? this.tpCarryOver,
-        tpSpending: tpSpending ?? this.tpSpending,
+        tpExpenditures: tpExpenditures ?? this.tpExpenditures,
         shipPurchases: shipPurchases ?? this.shipPurchases,
         pipelineConnectedColonies:
             pipelineConnectedColonies ?? this.pipelineConnectedColonies,
@@ -1320,7 +1543,6 @@ class ProductionState {
   Map<String, dynamic> toJson() => {
         'cpCarryOver': cpCarryOver,
         'turnOrderBid': turnOrderBid,
-        'shipSpendingCp': shipSpendingCp,
         'upgradesCp': upgradesCp,
         'maintenanceIncrease': maintenanceIncrease,
         'maintenanceDecrease': maintenanceDecrease,
@@ -1329,9 +1551,8 @@ class ProductionState {
         'lpCarryOver': lpCarryOver,
         'lpPlacedOnLc': lpPlacedOnLc,
         'rpCarryOver': rpCarryOver,
-        'techSpendingRp': techSpendingRp,
         'tpCarryOver': tpCarryOver,
-        'tpSpending': tpSpending,
+        'tpExpenditures': tpExpenditures.map((e) => e.toJson()).toList(),
         'shipPurchases': shipPurchases.map((p) => p.toJson()).toList(),
         'pipelineConnectedColonies': pipelineConnectedColonies,
         'worlds': worlds.map((w) => w.toJson()).toList(),
@@ -1360,10 +1581,28 @@ class ProductionState {
       accumulated[e.key] = e.value as int;
     }
 
+    // Legacy pipelineIncome migration: prior save versions tracked per-world
+    // pipeline income on WorldState. That field is removed; if a legacy save
+    // has non-zero values, surface them as a one-time bump on the modern
+    // pipelineConnectedColonies counter so the player keeps that income.
+    final rawWorlds = (json['worlds'] as List?) ?? const [];
+    int legacyPipelineIncomeSum = 0;
+    for (final raw in rawWorlds) {
+      if (raw is Map) {
+        final pi = raw['pipelineIncome'];
+        if (pi is int && pi > 0) {
+          legacyPipelineIncomeSum += pi;
+        }
+      }
+    }
+    final pipelineConnectedFromJson =
+        json['pipelineConnectedColonies'] as int? ??
+            (json['pipelineAssets'] as List?)?.length ??
+            0;
+
     return ProductionState(
       cpCarryOver: json['cpCarryOver'] as int? ?? 0,
       turnOrderBid: json['turnOrderBid'] as int? ?? 0,
-      shipSpendingCp: json['shipSpendingCp'] as int? ?? 0,
       upgradesCp: json['upgradesCp'] as int? ?? 0,
       maintenanceIncrease: json['maintenanceIncrease'] as int? ?? 0,
       maintenanceDecrease: json['maintenanceDecrease'] as int? ?? 0,
@@ -1372,22 +1611,24 @@ class ProductionState {
       lpCarryOver: json['lpCarryOver'] as int? ?? 0,
       lpPlacedOnLc: json['lpPlacedOnLc'] as int? ?? 0,
       rpCarryOver: json['rpCarryOver'] as int? ?? 0,
-      techSpendingRp: json['techSpendingRp'] as int? ?? 0,
       tpCarryOver: json['tpCarryOver'] as int? ?? 0,
-      tpSpending: json['tpSpending'] as int? ?? 0,
+      // Legacy 'tpSpending' key is ignored on read; the value is now
+      // derived from tpExpenditures exclusively.
+      tpExpenditures: (json['tpExpenditures'] as List?)
+              ?.map(
+                  (e) => TpExpenditure.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
       shipPurchases: (json['shipPurchases'] as List?)
               ?.map(
                   (p) => ShipPurchase.fromJson(p as Map<String, dynamic>))
               .toList() ??
           const [],
-      pipelineConnectedColonies: json['pipelineConnectedColonies'] as int? ??
-          (json['pipelineAssets'] as List?)?.length ??
-          0,
-      worlds: (json['worlds'] as List?)
-              ?.map(
-                  (w) => WorldState.fromJson(w as Map<String, dynamic>))
-              .toList() ??
-          const [],
+      pipelineConnectedColonies:
+          pipelineConnectedFromJson + legacyPipelineIncomeSum,
+      worlds: rawWorlds
+          .map((w) => WorldState.fromJson(w as Map<String, dynamic>))
+          .toList(),
       techState: json['techState'] != null
           ? TechState.fromJson(json['techState'] as Map<String, dynamic>)
           : const TechState(),

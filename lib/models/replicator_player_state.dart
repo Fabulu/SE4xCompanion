@@ -27,6 +27,12 @@ class ReplicatorPlayerState {
   final List<String> thingsEncountered;
   final int spaceWrecksEncountered;
   final int firstCombatBonuses;
+  /// Running total of hulls the Replicator has produced over the entire game.
+  /// Displayed on the player page as a lifetime counter; not used by any
+  /// derived rule — purely a bookkeeping field the user maintains manually
+  /// (with +/- buttons on the Replicator tab and automatic increments from
+  /// end-of-turn hull production).
+  final int totalHullsProducedLifetime;
 
   const ReplicatorPlayerState({
     this.cpPool = 0,
@@ -46,6 +52,7 @@ class ReplicatorPlayerState {
     this.thingsEncountered = const [],
     this.spaceWrecksEncountered = 0,
     this.firstCombatBonuses = 0,
+    this.totalHullsProducedLifetime = 0,
   });
 
   factory ReplicatorPlayerState.initial({int? empireAdvantageCardNumber}) {
@@ -169,6 +176,7 @@ class ReplicatorPlayerState {
     List<String>? thingsEncountered,
     int? spaceWrecksEncountered,
     int? firstCombatBonuses,
+    int? totalHullsProducedLifetime,
   }) => ReplicatorPlayerState(
     cpPool: cpPool ?? this.cpPool,
     rpTotal: rpTotal ?? this.rpTotal,
@@ -191,6 +199,8 @@ class ReplicatorPlayerState {
     spaceWrecksEncountered:
         spaceWrecksEncountered ?? this.spaceWrecksEncountered,
     firstCombatBonuses: firstCombatBonuses ?? this.firstCombatBonuses,
+    totalHullsProducedLifetime:
+        totalHullsProducedLifetime ?? this.totalHullsProducedLifetime,
   );
 
   Map<String, dynamic> toJson() => {
@@ -211,6 +221,7 @@ class ReplicatorPlayerState {
     'thingsEncountered': thingsEncountered,
     'spaceWrecksEncountered': spaceWrecksEncountered,
     'firstCombatBonuses': firstCombatBonuses,
+    'totalHullsProducedLifetime': totalHullsProducedLifetime,
   };
 
   factory ReplicatorPlayerState.fromJson(Map<String, dynamic> json) =>
@@ -234,5 +245,7 @@ class ReplicatorPlayerState {
             (json['thingsEncountered'] as List?)?.cast<String>() ?? const [],
         spaceWrecksEncountered: json['spaceWrecksEncountered'] as int? ?? 0,
         firstCombatBonuses: json['firstCombatBonuses'] as int? ?? 0,
+        totalHullsProducedLifetime:
+            json['totalHullsProducedLifetime'] as int? ?? 0,
       );
 }

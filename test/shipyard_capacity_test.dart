@@ -11,13 +11,13 @@ void main() {
   group('T2-A: per-hex shipyard capacity', () {
     test('hullPointsPerShipyard follows rule 9.6', () {
       expect(ProductionState.hullPointsPerShipyard(1), 1.0);
-      expect(ProductionState.hullPointsPerShipyard(2), 1.5);
-      expect(ProductionState.hullPointsPerShipyard(3), 2.0);
-      expect(ProductionState.hullPointsPerShipyard(4), 2.0);
+      expect(ProductionState.hullPointsPerShipyard(2), 2.0);
+      expect(ProductionState.hullPointsPerShipyard(3), 3.0);
+      expect(ProductionState.hullPointsPerShipyard(4), 3.0);
       expect(ProductionState.hullPointsPerShipyard(0), 1.0);
     });
 
-    test('shipyardCapacityForHex: count * hp per yard, floor on 1.5', () {
+    test('shipyardCapacityForHex: count * hp per yard', () {
       final hex = const HexCoord(0, 0);
       final map = GameMapState(hexes: [
         MapHexState(
@@ -30,8 +30,8 @@ void main() {
       final ps = ProductionState(
         worlds: [WorldState(name: 'HW', id: 'w1', isHomeworld: true)],
       );
-      // 2 yards * 1.5 = 3 HP (floor)
-      expect(ps.shipyardCapacityForHex(hex, map, tech), 3);
+      // 2 yards * 2.0 = 4 HP
+      expect(ps.shipyardCapacityForHex(hex, map, tech), 4);
     });
 
     test('shipyardCapacityForHex returns 0 when hex blocked', () {
@@ -76,16 +76,17 @@ void main() {
       final map = GameMapState(hexes: [
         MapHexState(coord: hex, worldId: 'w1', shipyardCount: 1),
       ]);
-      final tech = const TechState(levels: {TechId.shipYard: 3}); // 1*2 = 2 HP
+      final tech = const TechState(levels: {TechId.shipYard: 3}); // 1*3 = 3 HP
       final ps = ProductionState(
         worlds: [WorldState(name: 'HW', id: 'w1', isHomeworld: true)],
         shipPurchases: [
           ShipPurchase(type: ShipType.dd, shipyardHexId: '0,0'), // 1 HP used
         ],
       );
-      // 1 HP free; DD (1 HP) fits, CA (3 HP) does not.
+      // 2 HP free; DD (1 HP) fits, CA (2 HP) fits, BB (3 HP) does not.
       expect(ps.canAssignPurchaseTo(hex, 1, map, tech), true);
-      expect(ps.canAssignPurchaseTo(hex, 2, map, tech), false);
+      expect(ps.canAssignPurchaseTo(hex, 2, map, tech), true);
+      expect(ps.canAssignPurchaseTo(hex, 3, map, tech), false);
     });
 
     test('inProgressBuilds returns only partially-built purchases', () {

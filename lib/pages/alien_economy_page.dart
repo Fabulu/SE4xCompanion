@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../data/alien_tables.dart';
+import '../data/ship_definitions.dart';
 import '../models/alien_economy.dart';
+import '../models/game_config.dart';
 import '../services/dice_service.dart';
+import '../tutorial/tutorial_targets.dart';
 import '../widgets/alien_turn_row.dart';
 import '../widgets/animated_dice.dart';
-import '../widgets/number_input.dart';
 import '../widgets/section_header.dart';
 
 // ── Standard solitaire alien tech list ──
@@ -38,29 +40,113 @@ const Map<String, Color> _kColorOptions = {
   'Orange': Color(0xFFFF9800),
 };
 
-// ── Ship types for fleet composition picker ──
-class _ShipType {
+// ── Ship types for the alien fleet composition picker ──
+//
+// PP03 (Findings A.1 + A.2):
+// Previously this file hardcoded alien ship CP costs (DD=9, SW=5, etc.)
+// that drifted from the canonical `kShipDefinitions` table. Per the SSB
+// rules (§4.6, §4.6.1 "AP Fleet Building") the Alien Player purchases
+// ships the same way a human player does — so their CP costs should
+// follow the *same* `effectiveBuildCost(...)` pipeline the player uses,
+// driven by the active [GameConfig] (Alternate Empire + Facilities/AGT).
+//
+// The picker still tracks ship classes by a short abbreviation string
+// (for backward-compat with existing saved `composition` strings like
+// "2xDD, 1xCA") — but costs are now looked up through [alienShipCost]
+// so there is a single source of truth.
+
+/// Ship rows shown in the fleet composition picker.
+///
+/// The `abbreviation` is the picker/display code used in the saved
+/// composition string; `type` is the canonical [ShipType] used to look
+/// up the build cost from [kShipDefinitions].
+class _ShipTypeRow {
   final String abbreviation;
   final String name;
-  final int cpCost;
+  final ShipType type;
 
-  const _ShipType(this.abbreviation, this.name, this.cpCost);
+  const _ShipTypeRow(this.abbreviation, this.name, this.type);
 }
 
-const List<_ShipType> _kShipTypes = [
-  _ShipType('SC', 'Scout', 6),
-  _ShipType('DD', 'Destroyer', 9),
-  _ShipType('CA', 'Cruiser', 12),
-  _ShipType('BC', 'Battlecruiser', 15),
-  _ShipType('BB', 'Battleship', 20),
-  _ShipType('DN', 'Dreadnought', 24),
-  _ShipType('Raider', 'Raider', 12),
-  _ShipType('Fighter', 'Fighter', 5),
-  _ShipType('CV', 'Carrier', 12),
-  _ShipType('Transport', 'Transport', 12),
-  _ShipType('Mine', 'Mine', 5),
-  _ShipType('SW', 'Minesweeper', 5),
+const List<_ShipTypeRow> _kShipTypes = [
+  _ShipTypeRow('SC', 'Scout', ShipType.scout),
+  _ShipTypeRow('DD', 'Destroyer', ShipType.dd),
+  _ShipTypeRow('CA', 'Cruiser', ShipType.ca),
+  _ShipTypeRow('BC', 'Battlecruiser', ShipType.bc),
+  _ShipTypeRow('BB', 'Battleship', ShipType.bb),
+  _ShipTypeRow('DN', 'Dreadnought', ShipType.dn),
+  _ShipTypeRow('Raider', 'Raider', ShipType.raider),
+  _ShipTypeRow('Fighter', 'Fighter', ShipType.fighter),
+  _ShipTypeRow('CV', 'Carrier', ShipType.cv),
+  _ShipTypeRow('Transport', 'Transport', ShipType.transport),
+  _ShipTypeRow('Mine', 'Mine', ShipType.mine),
+  _ShipTypeRow('SW', 'Minesweeper', ShipType.sw),
 ];
+
+/// Returns the CP cost the Alien Player pays to build one ship of [type]
+/// under the given [config]. When [config] is null, base-game (non-AGT,
+/// non-alternate-empire) costs are used — this matches the default
+/// [GameConfig] and gives a stable answer for unit tests and legacy call
+/// sites that do not yet pipe in the active game config.
+///
+/// Per SSB §4.6 "AP Fleet Building" the Alien Player buys ships the same
+/// way the human player does, so its costs follow the canonical
+/// [ShipDefinition.effectiveBuildCost] pipeline.
+int alienShipCost(ShipType type, [GameConfig? config]) {
+  final def = kShipDefinitions[type];
+  if (def == null) return 0;
+  final cfg = config ?? const GameConfig();
+  return def.effectiveBuildCost(
+    cfg.enableAlternateEmpire,
+    facilitiesMode: cfg.useFacilitiesCosts,
+  );
+}
+
+/// Sum the CP cost of a composition map like {"DD": 2, "CA": 1}.
+///
+/// Ship-class keys that don't match a known picker row are ignored
+/// (returning 0 CP for that entry).
+int alienCompositionCp(Map<String, int> quantities, [GameConfig? config]) {
+  int total = 0;
+  for (final row in _kShipTypes) {
+    final qty = quantities[row.abbreviation] ?? 0;
+    if (qty > 0) total += qty * alienShipCost(row.type, config);
+  }
+  return total;
+}
+
+/// Parse a saved composition string (e.g. "2xDD, 1xCA") into a quantities
+/// map. Tolerant of loose whitespace and mixed separators; unknown tokens
+/// are ignored so malformed saves degrade gracefully to 0.
+Map<String, int> parseAlienComposition(String composition) {
+  final result = <String, int>{};
+  if (composition.isEmpty) return result;
+  final parts = composition.split(RegExp(r'[,;]\s*'));
+  for (final part in parts) {
+    final trimmed = part.trim();
+    if (trimmed.isEmpty) continue;
+    // Match patterns like "2xDD", "1 x CA", "3 DD", "DD".
+    final match = RegExp(r'^(\d+)\s*[xX]?\s*(.+)$').firstMatch(trimmed);
+    if (match != null) {
+      final qty = int.tryParse(match.group(1)!) ?? 1;
+      final type = match.group(2)!.trim();
+      for (final row in _kShipTypes) {
+        if (row.abbreviation.toLowerCase() == type.toLowerCase()) {
+          result[row.abbreviation] = (result[row.abbreviation] ?? 0) + qty;
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+/// Parse a saved composition string and return its total CP under [config].
+/// Used by the fleet row to render a live, always-in-sync CP column.
+int alienCompositionCpFromString(String composition, [GameConfig? config]) {
+  if (composition.isEmpty) return 0;
+  return alienCompositionCp(parseAlienComposition(composition), config);
+}
 
 /// Full-page alien economy tracker for 1-3 solitaire alien opponents.
 ///
@@ -100,6 +186,7 @@ class AlienEconomyPage extends StatelessWidget {
     }
 
     return _AlienEconomyBody(
+      key: TutorialTargets.aliensPageRoot,
       alienPlayers: alienPlayers,
       onAlienPlayersChanged: onAlienPlayersChanged,
     );
@@ -119,6 +206,7 @@ class _AlienEconomyBody extends StatefulWidget {
   final ValueChanged<List<AlienPlayer>> onAlienPlayersChanged;
 
   const _AlienEconomyBody({
+    super.key,
     required this.alienPlayers,
     required this.onAlienPlayersChanged,
   });
@@ -762,13 +850,16 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
             ),
           ),
           const SizedBox(width: 8),
-          // CP
+          // CP — derived from composition (PP03 Finding A.2: single source
+          // of truth). The saved `fleet.cp` is kept in sync by the picker
+          // on Apply; we display the live computed value here so the field
+          // cannot drift even if a stale cp was loaded from disk.
           SizedBox(
-            width: 116,
-            child: NumberInput(
-              value: fleet.cp,
-              min: 0,
-              onChanged: (v) => _updateFleet(index, fleet.copyWith(cp: v)),
+            width: 52,
+            child: Text(
+              alienCompositionCpFromString(fleet.composition).toString(),
+              textAlign: TextAlign.center,
+              style: monoStyle.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(width: 8),
@@ -870,7 +961,7 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
   void _showFleetCompositionPicker(BuildContext context, int fleetIndex) {
     final fleet = player.fleets[fleetIndex];
     // Parse existing composition into quantities
-    final quantities = _parseComposition(fleet.composition);
+    final quantities = parseAlienComposition(fleet.composition);
 
     showDialog(
       context: context,
@@ -878,37 +969,17 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
         initialQuantities: quantities,
         onApply: (newQuantities) {
           final compositionStr = _formatComposition(newQuantities);
-          _updateFleet(fleetIndex, fleet.copyWith(composition: compositionStr));
+          // PP03 Finding A.2: write the computed CP back in lock-step with
+          // the composition so the two can never drift out of sync even
+          // when older callers read `fleet.cp` directly.
+          final derivedCp = alienCompositionCp(newQuantities);
+          _updateFleet(
+            fleetIndex,
+            fleet.copyWith(composition: compositionStr, cp: derivedCp),
+          );
         },
       ),
     );
-  }
-
-  /// Parse a composition string like "2xDD, 1xCA, 3xSC" into a map.
-  static Map<String, int> _parseComposition(String composition) {
-    final result = <String, int>{};
-    if (composition.isEmpty) return result;
-
-    final parts = composition.split(RegExp(r'[,;]\s*'));
-    for (final part in parts) {
-      final trimmed = part.trim();
-      if (trimmed.isEmpty) continue;
-
-      // Try to match patterns like "2xDD", "1 x CA", "3 DD", "DD"
-      final match = RegExp(r'^(\d+)\s*[xX]?\s*(.+)$').firstMatch(trimmed);
-      if (match != null) {
-        final qty = int.tryParse(match.group(1)!) ?? 1;
-        final type = match.group(2)!.trim();
-        // Find matching ship type abbreviation (case-insensitive)
-        for (final st in _kShipTypes) {
-          if (st.abbreviation.toLowerCase() == type.toLowerCase()) {
-            result[st.abbreviation] = (result[st.abbreviation] ?? 0) + qty;
-            break;
-          }
-        }
-      }
-    }
-    return result;
   }
 
   /// Format a quantities map into a composition string.
@@ -1144,13 +1215,12 @@ class _FleetCompositionDialogState extends State<_FleetCompositionDialog> {
     _quantities = Map<String, int>.from(widget.initialQuantities);
   }
 
-  int get _totalCp {
-    int total = 0;
-    for (final st in _kShipTypes) {
-      total += ((_quantities[st.abbreviation] ?? 0) * st.cpCost);
-    }
-    return total;
-  }
+  // Per-ship CP cost via canonical [kShipDefinitions]. Picker still uses
+  // base-game (default GameConfig) costs — wiring the active GameConfig in
+  // from the caller is a follow-up (PP03 scope is limited to this file).
+  int _costFor(_ShipTypeRow row) => alienShipCost(row.type);
+
+  int get _totalCp => alienCompositionCp(_quantities);
 
   @override
   Widget build(BuildContext context) {
@@ -1211,7 +1281,7 @@ class _FleetCompositionDialogState extends State<_FleetCompositionDialog> {
                         SizedBox(
                           width: 48,
                           child: Text(
-                            '${st.cpCost}CP',
+                            '${_costFor(st)}CP',
                             style: TextStyle(
                               fontSize: 13,
                               fontFamily: 'monospace',

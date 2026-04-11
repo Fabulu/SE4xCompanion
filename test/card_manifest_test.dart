@@ -41,7 +41,7 @@ void main() {
 
       expect(card56.type, 'alienTech');
       expect(card57.type, 'alienTech');
-      expect(card56.supportStatus, CardSupportStatus.referenceOnly);
+      expect(card56.supportStatus, CardSupportStatus.partial); // has complexBehaviorNote
       expect(card57.supportStatus, CardSupportStatus.referenceOnly);
     });
 
@@ -60,6 +60,25 @@ void main() {
         expect(seen[card.type]!.add(card.number), true,
             reason:
                 'Duplicate card number ${card.number} in type ${card.type} ("${card.name}")');
+      }
+    });
+
+    // PP04: the old _buildReferenceCards helper stamped every
+    // placeholder with "Reference only. See the physical card for the
+    // full effect." After PP04 every crew/mission/resource/scenario
+    // modifier card has been transcribed from the rulebook PNGs so
+    // this literal should no longer appear anywhere in kAllCards.
+    test('no card description uses the legacy placeholder string', () {
+      const placeholder =
+          'Reference only. See the physical card for the full effect.';
+      for (final card in kAllCards) {
+        expect(
+          card.description,
+          isNot(contains(placeholder)),
+          reason:
+              'Card #${card.number} "${card.name}" (${card.type}) still '
+              'uses the legacy placeholder description',
+        );
       }
     });
   });

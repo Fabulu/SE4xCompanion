@@ -1,3 +1,5 @@
+import 'ship_counter.dart';
+
 enum MapLayoutPreset { standard4p, special5p }
 
 enum HexTerrain {
@@ -93,9 +95,6 @@ class MapHexState {
   final int minerals;
   final int wrecks;
   final int mines;
-  final List<String> pipelineIds;
-  final int industryMarkers;
-  final int researchMarkers;
   final int shipyardCount;
   final String notes;
   final String? legacyWorldName;
@@ -109,9 +108,6 @@ class MapHexState {
     this.minerals = 0,
     this.wrecks = 0,
     this.mines = 0,
-    this.pipelineIds = const [],
-    this.industryMarkers = 0,
-    this.researchMarkers = 0,
     this.shipyardCount = 0,
     this.notes = '',
     this.legacyWorldName,
@@ -127,9 +123,6 @@ class MapHexState {
     int? minerals,
     int? wrecks,
     int? mines,
-    List<String>? pipelineIds,
-    int? industryMarkers,
-    int? researchMarkers,
     int? shipyardCount,
     String? notes,
   }) =>
@@ -142,9 +135,6 @@ class MapHexState {
         minerals: minerals ?? this.minerals,
         wrecks: wrecks ?? this.wrecks,
         mines: mines ?? this.mines,
-        pipelineIds: pipelineIds ?? this.pipelineIds,
-        industryMarkers: industryMarkers ?? this.industryMarkers,
-        researchMarkers: researchMarkers ?? this.researchMarkers,
         shipyardCount: shipyardCount ?? this.shipyardCount,
         notes: notes ?? this.notes,
         legacyWorldName: null,
@@ -159,9 +149,6 @@ class MapHexState {
         'minerals': minerals,
         'wrecks': wrecks,
         'mines': mines,
-        'pipelineIds': pipelineIds,
-        'industryMarkers': industryMarkers,
-        'researchMarkers': researchMarkers,
         'shipyardCount': shipyardCount,
         'notes': notes,
       };
@@ -170,15 +157,9 @@ class MapHexState {
     final coord = HexCoord.fromJson(
       json['coord'] as Map<String, dynamic>? ?? const <String, dynamic>{},
     );
-    final storedPipelineIds = (json['pipelineIds'] as List?)
-        ?.map((id) => id as String)
-        .toList();
-    final legacyPipelineCount = json['pipelines'] as int? ?? 0;
-    final pipelineIds = storedPipelineIds ??
-        [
-          for (int i = 0; i < legacyPipelineCount; i++)
-            'legacy-pipeline-${coord.id}-${i + 1}',
-        ];
+    // pipelineIds removed: legacy 'pipelineIds' / 'pipelines' keys are
+    // silently ignored on load. Pipeline income is tracked exclusively by
+    // ProductionState.pipelineConnectedColonies (Layer 2).
 
     return MapHexState(
       coord: coord,
@@ -189,9 +170,8 @@ class MapHexState {
       minerals: json['minerals'] as int? ?? 0,
       wrecks: json['wrecks'] as int? ?? 0,
       mines: json['mines'] as int? ?? 0,
-      pipelineIds: pipelineIds,
-      industryMarkers: json['industryMarkers'] as int? ?? 0,
-      researchMarkers: json['researchMarkers'] as int? ?? 0,
+      // Legacy 'industryMarkers' / 'researchMarkers' keys are silently
+      // dropped — they never affected economy.
       shipyardCount: json['shipyardCount'] as int? ?? 0,
       notes: json['notes'] as String? ?? '',
       legacyWorldName: json['worldId'] == null
@@ -220,6 +200,7 @@ class FleetStackState {
   final bool facedown;
   final bool inSupply;
   final String notes;
+  final bool hasMovedThisTurn;
 
   const FleetStackState({
     required this.id,
@@ -232,6 +213,7 @@ class FleetStackState {
     this.facedown = false,
     this.inSupply = true,
     this.notes = '',
+    this.hasMovedThisTurn = false,
   });
 
   bool get isFriendly => !isEnemy;
@@ -249,6 +231,7 @@ class FleetStackState {
     bool? facedown,
     bool? inSupply,
     String? notes,
+    bool? hasMovedThisTurn,
   }) =>
       FleetStackState(
         id: id ?? this.id,
@@ -261,9 +244,16 @@ class FleetStackState {
         facedown: facedown ?? this.facedown,
         inSupply: inSupply ?? this.inSupply,
         notes: notes ?? this.notes,
+        hasMovedThisTurn: hasMovedThisTurn ?? this.hasMovedThisTurn,
       );
 
   FleetStackState movedTo(HexCoord coord) => copyWith(coord: coord);
+
+  /// Returns a copy of this fleet with the moved-this-turn flag set.
+  FleetStackState markMoved() => copyWith(hasMovedThisTurn: true);
+
+  /// Returns a copy of this fleet with the moved-this-turn flag cleared.
+  FleetStackState clearMoveFlag() => copyWith(hasMovedThisTurn: false);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -276,6 +266,7 @@ class FleetStackState {
         'facedown': facedown,
         'inSupply': inSupply,
         'notes': notes,
+        'hasMovedThisTurn': hasMovedThisTurn,
       };
 
   factory FleetStackState.fromJson(Map<String, dynamic> json) => FleetStackState(
@@ -295,6 +286,7 @@ class FleetStackState {
         facedown: json['facedown'] as bool? ?? false,
         inSupply: json['inSupply'] as bool? ?? true,
         notes: json['notes'] as String? ?? '',
+        hasMovedThisTurn: json['hasMovedThisTurn'] as bool? ?? false,
       );
 }
 
@@ -365,9 +357,6 @@ class GameMapState {
           hex.minerals > 0 ||
           hex.wrecks > 0 ||
           hex.mines > 0 ||
-          hex.pipelineIds.isNotEmpty ||
-          hex.industryMarkers > 0 ||
-          hex.researchMarkers > 0 ||
           hex.notes.isNotEmpty);
 
   List<FleetStackState> fleetsAt(HexCoord coord) => fleets
@@ -397,10 +386,152 @@ class GameMapState {
         clearSelectedFleetId: selectedFleetId == fleetId,
       );
 
-  GameMapState moveFleet(String fleetId, HexCoord coord) {
+  /// Moves [fleetId] to [coord] and auto-reveals the destination hex per
+  /// rule 6.1 (Exploration Procedure): when a unit enters/shares a hex with
+  /// an unexplored System marker, it is explored and flipped face-up.
+  ///
+  /// If the owning player's [explorationLevel] is >= 1, Exploration 1 tech
+  /// (rule 9.8) additionally reveals adjacent unexplored hexes. Higher
+  /// levels extend the reveal ring out to [explorationLevel] hexes from
+  /// the destination. Enemy fleet moves (isEnemy == true) never reveal —
+  /// only the moving player owns the exploration knowledge.
+  ///
+  /// This is the low-level "force move" entry point — it does NOT enforce
+  /// movement allowance or the "already moved this turn" flag. For the
+  /// validated drag-drop path used by the map UI, see
+  /// [moveFleetWithAllowance].
+  GameMapState moveFleet(
+    String fleetId,
+    HexCoord coord, {
+    int explorationLevel = 0,
+  }) {
     final fleet = fleetById(fleetId);
     if (fleet == null) return this;
-    return replaceFleet(fleet.movedTo(coord));
+    final moved = replaceFleet(fleet.movedTo(coord));
+    if (fleet.isEnemy) {
+      return moved;
+    }
+    return moved._revealAround(coord, explorationLevel);
+  }
+
+  /// Returns the lowest [ShipCounter.move] value across the ships that are
+  /// actually present in [fleet]. Returns null if the fleet has no ships
+  /// (in which case callers typically fall back to the player's Move tech
+  /// level — see [fleetMoveAllowance]). Ships with a non-positive move
+  /// value are skipped so an unbuilt/zeroed counter can't collapse the
+  /// whole fleet to zero.
+  int? slowestShipMoveInFleet(
+    FleetStackState fleet,
+    List<ShipCounter> shipCounters,
+  ) {
+    if (fleet.shipCounterIds.isEmpty) return null;
+    int? minMove;
+    for (final id in fleet.shipCounterIds) {
+      ShipCounter? match;
+      for (final c in shipCounters) {
+        if (c.id == id) {
+          match = c;
+          break;
+        }
+      }
+      if (match == null) continue;
+      final m = match.move;
+      if (m <= 0) continue;
+      if (minMove == null || m < minMove) minMove = m;
+    }
+    return minMove;
+  }
+
+  /// Returns the effective move allowance for [fleet]: the slowest ship in
+  /// the fleet, or [playerMoveLevel] when the fleet has no ships to sample
+  /// (an empty fleet is a hypothetical — use the player's tech level as a
+  /// sensible fallback).
+  int fleetMoveAllowance(
+    FleetStackState fleet,
+    List<ShipCounter> shipCounters,
+    int playerMoveLevel,
+  ) {
+    return slowestShipMoveInFleet(fleet, shipCounters) ?? playerMoveLevel;
+  }
+
+  /// Returns the set of hex coordinates reachable by [fleet] given the
+  /// [allowance]. Walks every hex on the map and includes those within
+  /// Chebyshev distance <= allowance. Excludes the fleet's current hex.
+  ///
+  /// This is deliberately a flat distance check — no terrain blocking,
+  /// no enemy interception, no pathfinding. Per SE4X simplification: deep
+  /// space and most terrains allow passage, and the rules enforcement for
+  /// the rest happens at a higher layer.
+  Set<HexCoord> reachableHexes(FleetStackState fleet, int allowance) {
+    final result = <HexCoord>{};
+    if (allowance <= 0) return result;
+    for (final hex in hexes) {
+      if (hex.coord == fleet.coord) continue;
+      if (fleet.coord.distanceTo(hex.coord) <= allowance) {
+        result.add(hex.coord);
+      }
+    }
+    return result;
+  }
+
+  /// Validated drag-drop entry point for fleet moves.
+  ///
+  /// Enforces:
+  ///   - Fleet cannot have already moved this turn.
+  ///   - Destination must be within [allowance] hexes of the fleet's
+  ///     current position (Chebyshev distance).
+  ///
+  /// On a successful move, the fleet is marked as moved-this-turn and
+  /// delegated to [moveFleet] for auto-reveal. On a rejected move, the
+  /// state is returned unchanged.
+  GameMapState moveFleetWithAllowance(
+    String fleetId,
+    HexCoord target, {
+    required int allowance,
+    required List<ShipCounter> shipCounters,
+    int explorationLevel = 0,
+  }) {
+    final fleet = fleetById(fleetId);
+    if (fleet == null) return this;
+    if (fleet.hasMovedThisTurn) return this;
+    if (fleet.coord == target) return this;
+    if (fleet.coord.distanceTo(target) > allowance) return this;
+    // Mark as moved before delegating to base moveFleet so the flipped
+    // flag survives the subsequent replaceFleet(fleet.movedTo(...)) call.
+    final markedFleet = fleet.copyWith(hasMovedThisTurn: true);
+    final intermediate = replaceFleet(markedFleet);
+    return intermediate.moveFleet(
+      fleetId,
+      target,
+      explorationLevel: explorationLevel,
+    );
+  }
+
+  /// Clears the moved-this-turn flag on every fleet. Called at end-turn
+  /// so the next turn starts with all fleets free to move again.
+  GameMapState clearAllFleetMoveFlags() {
+    if (fleets.every((f) => !f.hasMovedThisTurn)) return this;
+    return copyWith(
+      fleets: [for (final f in fleets) f.copyWith(hasMovedThisTurn: false)],
+    );
+  }
+
+  /// Flips [center] to explored, plus any hex within [explorationRange]
+  /// hexes of it. A range of 0 only reveals the center hex (rule 6.1).
+  GameMapState _revealAround(HexCoord center, int explorationRange) {
+    final range = explorationRange < 0 ? 0 : explorationRange;
+    var changed = false;
+    final nextHexes = <MapHexState>[];
+    for (final hex in hexes) {
+      if (!hex.explored && hex.coord.distanceTo(center) <= range) {
+        nextHexes.add(hex.copyWith(explored: true));
+        changed = true;
+      } else {
+        nextHexes.add(hex);
+      }
+    }
+    if (!changed) return this;
+    return copyWith(hexes: nextHexes);
   }
 
   String? fleetIdForShip(String shipId) {
@@ -428,15 +559,6 @@ class GameMapState {
       if (worldId != null && worldId.isNotEmpty) {
         ids.add(worldId);
       }
-    }
-    return ids;
-  }
-
-  Set<String> placedPipelineIds({String? excludeHexId}) {
-    final ids = <String>{};
-    for (final hex in hexes) {
-      if (hex.coord.id == excludeHexId) continue;
-      ids.addAll(hex.pipelineIds);
     }
     return ids;
   }
@@ -511,10 +633,8 @@ class GameMapState {
   GameMapState sanitizeAgainstLedger({
     required Set<String> validWorldIds,
     required Set<String> validShipIds,
-    required Set<String> validPipelineIds,
   }) {
     final seenWorldIds = <String>{};
-    final seenPipelineIds = <String>{};
     final nextHexes = <MapHexState>[];
     for (final hex in hexes) {
       final worldId = hex.worldId;
@@ -528,22 +648,10 @@ class GameMapState {
         seenWorldIds.add(normalizedWorldId);
       }
 
-      final pipelineIds = <String>[];
-      for (final id in hex.pipelineIds) {
-        if (!validPipelineIds.contains(id) ||
-            seenPipelineIds.contains(id) ||
-            pipelineIds.contains(id)) {
-          continue;
-        }
-        seenPipelineIds.add(id);
-        pipelineIds.add(id);
-      }
-
       nextHexes.add(
         hex.copyWith(
           worldId: normalizedWorldId,
           clearWorldId: normalizedWorldId == null,
-          pipelineIds: pipelineIds,
         ),
       );
     }

@@ -93,7 +93,6 @@ void main() {
       const snapshot = ProductionState(
         cpCarryOver: 12,
         turnOrderBid: 3,
-        shipSpendingCp: 7,
         upgradesCp: 2,
         maintenanceIncrease: 1,
         rpCarryOver: 4,
@@ -135,7 +134,6 @@ void main() {
       final snap = restored.productionSnapshot!;
       expect(snap.cpCarryOver, 12);
       expect(snap.turnOrderBid, 3);
-      expect(snap.shipSpendingCp, 7);
       expect(snap.upgradesCp, 2);
       expect(snap.maintenanceIncrease, 1);
       expect(snap.rpCarryOver, 4);

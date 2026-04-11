@@ -67,12 +67,10 @@ void main() {
     WorldState hw() =>
         const WorldState(name: 'HW', isHomeworld: true, homeworldValue: 30);
 
-    test('Omega Crystals adds 5 to income', () {
+    test('Omega Crystals is combat-only (no income modifier)', () {
       final b = cardModifiersFor(22)!;
-      expect(b.modifiers.length, 1);
-      final ps = ProductionState(worlds: [hw()]);
-      final base = ps.totalCp(baseConfig);
-      expect(ps.totalCp(baseConfig, b.modifiers), base + 5);
+      expect(b.modifiers, isEmpty);
+      expect(b.isComplex, isTrue);
     });
 
     test('Wealthy planet +1 per non-HW colony', () {
@@ -93,10 +91,10 @@ void main() {
           psWithColonies.totalCp(baseConfig) + 2);
     });
 
-    test('Quantum Computing reduces tech cost', () {
+    test('Quantum Computing is Unique Ship ability (no tech cost modifier)', () {
       final b = cardModifiersFor(184)!;
-      expect(b.modifiers.single.type, 'techCostMod');
-      expect(b.modifiers.single.value, -10);
+      expect(b.modifiers, isEmpty);
+      expect(b.isComplex, isTrue);
     });
 
     test('Desolate planet -4', () {

@@ -62,173 +62,194 @@ const Map<int, CardModifierBinding> kCardModifiers = {
     notes: 'Card says "round down the total"; ledger uses ceil per-ship — '
         'close enough for tracking purposes.',
   ),
-  21: CardModifierBinding(
-    // Efficient Factories — all ships cost 1 CP less (clamped to 1 by pipeline).
+  6: CardModifierBinding(
+    // Central Computer — CA and BC pay 1/2 maintenance.
     modifiers: [
       GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.flag,
-        value: -1,
+        name: 'Central Computer',
+        type: 'maintenanceMod',
+        shipType: ShipType.ca,
+        value: 50,
+        isPercent: true,
       ),
       GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.dd,
-        value: -1,
+        name: 'Central Computer',
+        type: 'maintenanceMod',
+        shipType: ShipType.bc,
+        value: 50,
+        isPercent: true,
+      ),
+    ],
+  ),
+  7: CardModifierBinding(
+    // Resupply Depot — BB and DN pay 1/2 maintenance.
+    modifiers: [
+      GameModifier(
+        name: 'Resupply Depot',
+        type: 'maintenanceMod',
+        shipType: ShipType.bb,
+        value: 50,
+        isPercent: true,
       ),
       GameModifier(
-        name: 'Efficient Factories',
+        name: 'Resupply Depot',
+        type: 'maintenanceMod',
+        shipType: ShipType.dn,
+        value: 50,
+        isPercent: true,
+      ),
+    ],
+  ),
+  8: CardModifierBinding(
+    // Holodeck — CV and Fighter pay 1/2 maintenance.
+    modifiers: [
+      GameModifier(
+        name: 'Holodeck',
+        type: 'maintenanceMod',
+        shipType: ShipType.cv,
+        value: 50,
+        isPercent: true,
+      ),
+      GameModifier(
+        name: 'Holodeck',
+        type: 'maintenanceMod',
+        shipType: ShipType.fighter,
+        value: 50,
+        isPercent: true,
+      ),
+    ],
+  ),
+  9: CardModifierBinding(
+    // Cold Fusion Drive — Raider and Minesweeper pay 1/2 maintenance.
+    modifiers: [
+      GameModifier(
+        name: 'Cold Fusion Drive',
+        type: 'maintenanceMod',
+        shipType: ShipType.raider,
+        value: 50,
+        isPercent: true,
+      ),
+      GameModifier(
+        name: 'Cold Fusion Drive',
+        type: 'maintenanceMod',
+        shipType: ShipType.sw,
+        value: 50,
+        isPercent: true,
+      ),
+    ],
+  ),
+  17: CardModifierBinding(
+    // Improved Crew's Quarters — CAs cost 3 less CP.
+    modifiers: [
+      GameModifier(
+        name: "Improved Crew's Quarters",
         type: 'costMod',
         shipType: ShipType.ca,
-        value: -1,
+        value: -3,
       ),
+    ],
+  ),
+  18: CardModifierBinding(
+    // Phased Warp Coil — BCs cost 3 less CP.
+    modifiers: [
       GameModifier(
-        name: 'Efficient Factories',
+        name: 'Phased Warp Coil',
         type: 'costMod',
         shipType: ShipType.bc,
-        value: -1,
+        value: -3,
       ),
+    ],
+  ),
+  19: CardModifierBinding(
+    // Advanced Ordnance Storage System — BBs cost 4 less CP.
+    modifiers: [
       GameModifier(
-        name: 'Efficient Factories',
+        name: 'Advanced Ordnance Storage',
         type: 'costMod',
         shipType: ShipType.bb,
-        value: -1,
+        value: -4,
       ),
+    ],
+  ),
+  20: CardModifierBinding(
+    // The Captain's Chair — DNs cost 4 less CP.
+    modifiers: [
       GameModifier(
-        name: 'Efficient Factories',
+        name: "The Captain's Chair",
         type: 'costMod',
         shipType: ShipType.dn,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.scout,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.raider,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.cv,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.bv,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.transport,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.miner,
-        value: -1,
-      ),
-      GameModifier(
-        name: 'Efficient Factories',
-        type: 'costMod',
-        shipType: ShipType.colonyShip,
-        value: -1,
-      ),
-    ],
-    notes: 'Applied per ship type; global build-cost clamp of 1 CP is '
-        'enforced by shipPurchaseCost.',
-  ),
-  22: CardModifierBinding(
-    // Omega Crystals — +5 CP income.
-    modifiers: [
-      GameModifier(
-        name: 'Omega Crystals',
-        type: 'incomeMod',
-        value: 5,
+        value: -4,
       ),
     ],
   ),
-  23: CardModifierBinding(
-    // Cryogenic Stasis Pods — Colony Ships -2 CP.
+  21: CardModifierBinding(
     modifiers: [
       GameModifier(
-        name: 'Cryogenic Stasis Pods',
-        type: 'costMod',
-        shipType: ShipType.colonyShip,
-        value: -2,
-      ),
-    ],
-    notes: 'The "+1 colony marker carried" effect is not modelled by the '
-        'production ledger; track manually.',
-  ),
-  180: CardModifierBinding(
-    // Self-Sustaining Power Source — Bases/Starbases no maintenance.
-    modifiers: [
-      GameModifier(
-        name: 'Self-Sustaining Power Source',
-        type: 'maintenanceMod',
-        shipType: ShipType.base,
-        value: 0,
-        isPercent: true,
-      ),
-      GameModifier(
-        name: 'Self-Sustaining Power Source',
-        type: 'maintenanceMod',
-        shipType: ShipType.starbase,
-        value: 0,
-        isPercent: true,
-      ),
-    ],
-  ),
-  181: CardModifierBinding(
-    complexBehaviorNote: 'Advanced Shipyards: shipyards can build ships '
-        '+1 Hull size. Not a ledger modifier — use the Ship Tech page or '
-        'Manual Override to adjust hull size manually.',
-  ),
-  183: CardModifierBinding(
-    complexBehaviorNote: 'Ancient Weapons Cache: one-time +1 Attack tech '
-        'level. Apply directly via Manual Override -> Technology Levels.',
-  ),
-  184: CardModifierBinding(
-    // Quantum Computing — Tech -10 CP.
-    modifiers: [
-      GameModifier(
-        name: 'Quantum Computing',
-        type: 'techCostMod',
-        value: -10,
-      ),
-    ],
-    notes: 'Minimum 5 CP per tech level enforced separately; techCostMod '
-        'only subtracts, so cheap techs may undershoot the card minimum.',
-  ),
-
-  // ── Scenario Modifiers ────────────────────────────────────────────────────
-  112: CardModifierBinding(
-    // Fruitful — home colony +1 CP.
-    modifiers: [
-      GameModifier(name: 'Fruitful', type: 'incomeMod', value: 1),
-    ],
-  ),
-  113: CardModifierBinding(
-    // Worth the Effort — +1 CP per non-HW colony (scales with colony count).
-    modifiers: [
-      GameModifier(
-        name: 'Worth the Effort',
+        name: 'Efficient Factories',
         type: 'perColonyIncomeMod',
         value: 1,
       ),
     ],
-    notes: 'Card scales per non-homeworld colony. Uses perColonyIncomeMod '
-        'so the bonus grows automatically with the player\'s colony count.',
+    notes: 'Non-Barren, Non-HW colonies at 5 CP produce 6 CP instead. '
+        'Modelled as +1 per-colony income. Barren colony exclusion '
+        'is not enforced — manual adjustment needed for barren colonies.',
+  ),
+  22: CardModifierBinding(
+    complexBehaviorNote: 'Omega Crystals: once per battle, force a Group to '
+        're-roll ALL dice. Combat-only — no economic effect.',
+  ),
+  23: CardModifierBinding(
+    modifiers: [
+      GameModifier(name: 'Cryogenic Stasis Pods', type: 'maintenanceMod', shipType: ShipType.bdMb, value: 50, isPercent: true),
+      GameModifier(name: 'Cryogenic Stasis Pods', type: 'maintenanceMod', shipType: ShipType.transport, value: 50, isPercent: true),
+    ],
+  ),
+  180: CardModifierBinding(
+    modifiers: [
+      GameModifier(name: 'Self-Sustaining Power Source', type: 'maintenanceMod', shipType: ShipType.tn, value: 50, isPercent: true),
+    ],
+  ),
+  181: CardModifierBinding(
+    modifiers: [
+      GameModifier(
+        name: 'Advanced Shipyards',
+        type: 'shipyardCapacityMod',
+        value: 1,
+      ),
+    ],
+    notes: 'Shipyards produce an extra half Hull Point each '
+        '(1.5/2/2.5 at levels 1/2/3). Modelled as +1 HP flat '
+        '(slight overstatement at level 1, exact at level 2).',
+  ),
+  183: CardModifierBinding(
+    complexBehaviorNote: 'Ancient Weapons Cache: in the following Economic '
+        'Phase, gain 2 Cyber Armor (38.7) at one of your Colonies, '
+        'even without the appropriate technology.',
+  ),
+  184: CardModifierBinding(
+    complexBehaviorNote: 'Quantum Computing: Unique Ships may mount a 3rd '
+        'Unique Technology and no longer pay 5 CP to redesign. '
+        'Immediately add a 3rd tech to current UN design.',
+  ),
+
+  // ── Scenario Modifiers ────────────────────────────────────────────────────
+  112: CardModifierBinding(
+    complexBehaviorNote: 'Fruitful: Barren Planets in a Home System do not '
+        'need Terraforming to colonize, but are still considered '
+        'Barren for the purpose of other cards.',
+  ),
+  113: CardModifierBinding(
+    // Worth the Effort — Barren colonies producing any CP get +2 extra.
+    modifiers: [
+      GameModifier(
+        name: 'Worth the Effort',
+        type: 'perColonyIncomeMod',
+        value: 2,
+      ),
+    ],
+    notes: 'Barren planet colonies producing any CP produce +2 extra. '
+        'Modelled as +2 per-colony; only Barren colonies should qualify '
+        '— manual adjustment needed for non-Barren colonies.',
   ),
   119: CardModifierBinding(
     complexBehaviorNote: 'Expensive Ships: all ship costs x1.5. Use the '
@@ -257,11 +278,9 @@ const Map<int, CardModifierBinding> kCardModifiers = {
         'Edit value in Manual Override if your scenario uses a different offset.',
   ),
   146: CardModifierBinding(
-    // Life is Complicated — tech +5 CP (rough interpretation).
-    modifiers: [
-      GameModifier(name: 'Life is Complicated', type: 'techCostMod', value: 5),
-    ],
-    notes: 'Inverse of Smart Scientists; +5 CP is conservative.',
+    complexBehaviorNote: 'Life is Complicated: discard this card and draw 2 '
+        'Scenario Modifier Cards in its place. A total of 3 '
+        'Scenario Modifier Cards will be in effect.',
   ),
   147: CardModifierBinding(
     // Rich Minerals — +2 CP income.
@@ -295,26 +314,20 @@ const Map<int, CardModifierBinding> kCardModifiers = {
         'by the flat ledger pipeline; adjust Move tech via Manual Override.',
   ),
   122: CardModifierBinding(
-    // Better Homes — home colony produces extra CP.
-    modifiers: [
-      GameModifier(name: 'Better Homes', type: 'incomeMod', value: 1),
-    ],
-    notes: 'Card text reads as "home colonies yield additional income". +1 CP '
-        'is the conservative per-homeworld interpretation; stack the '
-        'modifier manually if multiple home colonies qualify.',
-  ),
-  123: CardModifierBinding(
-    // Improved Colony Ships — colony ships cost less.
     modifiers: [
       GameModifier(
-        name: 'Improved Colony Ships',
-        type: 'costMod',
-        shipType: ShipType.colonyShip,
-        value: -2,
+        name: 'Better Homes',
+        type: 'incomeMod',
+        value: 10,
       ),
     ],
-    notes: 'Card makes Colony Ships cheaper / faster. -2 CP is the canonical '
-        'build-cost reduction; the "faster" movement aspect is not modelled.',
+    notes: 'Home Planets produce +10 CP at full strength. '
+        'Replicator Homeworld produces +2 Hull Points instead.',
+  ),
+  123: CardModifierBinding(
+    complexBehaviorNote: 'Improved Colony Ships: when colonizing a planet, '
+        'the colony starts at 1 CP instead of 0. Bombardment and '
+        'other effects can still reduce colonies to 0.',
   ),
   127: CardModifierBinding(
     complexBehaviorNote: 'Advanced Destroyers: DDs get +1 to a combat stat '
@@ -322,31 +335,14 @@ const Map<int, CardModifierBinding> kCardModifiers = {
         'the ledger pipeline — apply via Ship Tech page / Manual Override.',
   ),
   139: CardModifierBinding(
-    // Safer Space — ships cost less to maintain while in supply.
-    modifiers: [
-      GameModifier(
-        name: 'Safer Space',
-        type: 'maintenanceMod',
-        value: 50,
-        isPercent: true,
-      ),
-    ],
-    notes: 'Card halves fleet maintenance costs. Applied globally as 50%; if '
-        'your scenario only discounts ships in friendly territory, edit the '
-        'modifier via Manual Override before each Econ Phase.',
+    complexBehaviorNote: 'Safer Space: whenever a Danger! marker is flipped, '
+        'ships are only eliminated on a roll of 7-10 (instead of '
+        'the normal chance).',
   ),
   280: CardModifierBinding(
-    // Recon Ships — Scouts cost less.
-    modifiers: [
-      GameModifier(
-        name: 'Recon Ships',
-        type: 'costMod',
-        shipType: ShipType.scout,
-        value: -2,
-      ),
-    ],
-    notes: 'Card makes Scouts cheaper / longer-ranged. -2 CP captures the '
-        'build-cost reduction; the scan-range benefit is reference-only.',
+    complexBehaviorNote: 'Recon Ships: each player receives 6 Recon Ships '
+        '(use Unique Ship counters). They are E1-0 x1, cost no '
+        'maintenance. They may be upgraded but not built.',
   ),
 
   // ── Planet Attributes (1001-1028) ─────────────────────────────────────────
@@ -491,9 +487,14 @@ const Map<int, CardModifierBinding> kCardModifiers = {
 
   // ── Wave B additional bindings (Class-A and per-colony/yard effects) ──────
   4: CardModifierBinding(
-    complexBehaviorNote: 'Polytitanium Alloy: +1 Hull Point per ship. Hull '
-        'is a ship-definition attribute; not modelled by the CP ledger. '
-        'Apply via Ship Tech / Manual Override.',
+    modifiers: [
+      GameModifier(name: 'Polytitanium Alloy', type: 'costMod', shipType: ShipType.dd, value: -2),
+    ],
+  ),
+  56: CardModifierBinding(
+    complexBehaviorNote: 'On Board Workshop: CVs, BVs, and Titans may build '
+        'Fighters during the Economic Phase at normal cost, '
+        'as if they were Shipyards for Fighter construction only.',
   ),
   130: CardModifierBinding(
     // Advanced Bases — extra shipyard build capacity where Bases field a yard.
@@ -551,6 +552,16 @@ const Map<int, CardModifierBinding> kCardModifiers = {
   128: CardModifierBinding(
     complexBehaviorNote: 'Battlecarrier Universica: unique BV variant. '
         'Reference-only — track manually if deployed.',
+  ),
+  // Crew Cards with economic effects
+  222: CardModifierBinding(
+    complexBehaviorNote: 'Supply Officer: each ship in the Group pays 1 less '
+        'maintenance. Assign to a Group to reduce its maintenance.',
+  ),
+  272: CardModifierBinding(
+    complexBehaviorNote: 'Patrol Leader: if the Group spends its entire time '
+        'between Economic Phases on MS Pipelines connecting Colonies, '
+        'the player gets +3 CP next Economic Phase (+5 CP if on a DD).',
   ),
 };
 

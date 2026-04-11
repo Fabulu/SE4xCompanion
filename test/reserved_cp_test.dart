@@ -70,6 +70,7 @@ void main() {
     });
 
     test('JSON back-compat: old saves default to 0', () {
+      // Legacy shape includes shipSpendingCp; new fromJson ignores it.
       final ps = ProductionState.fromJson(const {
         'cpCarryOver': 10,
         'turnOrderBid': 0,
@@ -80,7 +81,6 @@ void main() {
         'lpCarryOver': 0,
         'lpPlacedOnLc': 0,
         'rpCarryOver': 0,
-        'techSpendingRp': 0,
         'tpCarryOver': 0,
         'tpSpending': 0,
       });

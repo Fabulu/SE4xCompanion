@@ -168,7 +168,6 @@ void main() {
         growthMarkerLevel: 2,
         facility: FacilityType.research,
         stagedMineralCp: 3,
-        pipelineIncome: 2,
         isBlocked: true,
       );
       final json = w.toJson();
@@ -177,7 +176,6 @@ void main() {
       expect(restored.growthMarkerLevel, 2);
       expect(restored.facility, FacilityType.research);
       expect(restored.stagedMineralCp, 3);
-      expect(restored.pipelineIncome, 2);
       expect(restored.isBlocked, true);
     });
 
@@ -225,6 +223,97 @@ void main() {
       expect(updated.name, 'C');
       expect(updated.growthMarkerLevel, 3);
       expect(updated.stagedMineralCp, 5);
+    });
+  });
+
+  group('garrisonGu (PP15 ground troop tracking)', () {
+    test('defaults to 0', () {
+      const w = WorldState(name: 'C');
+      expect(w.garrisonGu, 0);
+    });
+
+    test('copyWith sets and preserves garrisonGu', () {
+      const w = WorldState(name: 'C', growthMarkerLevel: 2);
+      final updated = w.copyWith(garrisonGu: 4);
+      expect(updated.garrisonGu, 4);
+      expect(updated.growthMarkerLevel, 2);
+
+      // Re-applying copyWith without garrisonGu preserves value.
+      final again = updated.copyWith(growthMarkerLevel: 3);
+      expect(again.garrisonGu, 4);
+      expect(again.growthMarkerLevel, 3);
+    });
+
+    test('JSON round-trip preserves garrisonGu', () {
+      const w = WorldState(
+        name: 'Alpha',
+        isHomeworld: true,
+        homeworldValue: 30,
+        garrisonGu: 7,
+      );
+      final json = w.toJson();
+      expect(json['garrisonGu'], 7);
+      final restored = WorldState.fromJson(json);
+      expect(restored.garrisonGu, 7);
+      expect(restored.name, 'Alpha');
+      expect(restored.isHomeworld, true);
+    });
+
+    test('legacy JSON (no garrisonGu key) decodes as 0', () {
+      final legacy = <String, dynamic>{
+        'name': 'LegacyWorld',
+        'isHomeworld': false,
+        'homeworldValue': 30,
+        'growthMarkerLevel': 2,
+        'isBlocked': false,
+        'facility': null,
+        'stagedMineralCp': 3,
+        // Note: no 'garrisonGu' key present.
+      };
+      final restored = WorldState.fromJson(legacy);
+      expect(restored.garrisonGu, 0);
+      expect(restored.stagedMineralCp, 3);
+      expect(restored.growthMarkerLevel, 2);
+    });
+
+    test('stepper-style increment / decrement behaves like the UI control',
+        () {
+      // PP15 follow-up: the production-page colony rows expose +/- buttons
+      // wired through copyWith. Mirror that pattern here so a regression
+      // in copyWith propagation gets caught at the model layer.
+      WorldState w = const WorldState(name: 'Garrisoned');
+      expect(w.garrisonGu, 0);
+
+      // Increment three times.
+      for (var i = 0; i < 3; i++) {
+        w = w.copyWith(garrisonGu: w.garrisonGu + 1);
+      }
+      expect(w.garrisonGu, 3);
+
+      // Decrement once.
+      w = w.copyWith(garrisonGu: w.garrisonGu - 1);
+      expect(w.garrisonGu, 2);
+
+      // Other fields untouched after a sequence of garrison edits.
+      expect(w.name, 'Garrisoned');
+      expect(w.growthMarkerLevel, 0);
+      expect(w.stagedMineralCp, 0);
+    });
+
+    test('garrisonGu round-trips through encode-decode after stepper edits',
+        () {
+      WorldState w = const WorldState(name: 'EdgeCase');
+      // Bump up to 5, then back to 0.
+      for (var i = 0; i < 5; i++) {
+        w = w.copyWith(garrisonGu: w.garrisonGu + 1);
+      }
+      for (var i = 0; i < 5; i++) {
+        w = w.copyWith(garrisonGu: w.garrisonGu - 1);
+      }
+      expect(w.garrisonGu, 0);
+      final restored = WorldState.fromJson(w.toJson());
+      expect(restored.garrisonGu, 0);
+      expect(restored.name, 'EdgeCase');
     });
   });
 }

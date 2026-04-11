@@ -2,14 +2,43 @@ import 'package:flutter/material.dart';
 
 import 'pages/home_page.dart';
 
-class Se4XApp extends StatelessWidget {
+class Se4XApp extends StatefulWidget {
   const Se4XApp({super.key});
+
+  @override
+  State<Se4XApp> createState() => _Se4XAppState();
+}
+
+class _Se4XAppState extends State<Se4XApp> {
+  /// PP18: global text scale multiplier applied via MediaQuery at the
+  /// root of the widget tree. Owned here so the MaterialApp.builder
+  /// callback can listen to it; HomePage receives the notifier and
+  /// keeps it in sync with the persisted AppState.textScale.
+  final ValueNotifier<double> _textScale = ValueNotifier<double>(1.0);
+
+  @override
+  void dispose() {
+    _textScale.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SE4X Companion',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return ValueListenableBuilder<double>(
+          valueListenable: _textScale,
+          builder: (context, scale, _) {
+            return MediaQuery(
+              data: mq.copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            );
+          },
+        );
+      },
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF1E1E1E),
@@ -103,7 +132,7 @@ class Se4XApp extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         ),
       ),
-      home: const HomePage(),
+      home: HomePage(textScaleNotifier: _textScale),
     );
   }
 }

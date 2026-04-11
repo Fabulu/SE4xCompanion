@@ -187,7 +187,7 @@ void main() {
       final map = GameMapState(hexes: [
         MapHexState(coord: hex, worldId: 'w1', shipyardCount: 2),
       ]);
-      // 2 yards * 2 HP (lvl 3) = 4 HP budget
+      // 2 yards * 3 HP (lvl 3) = 6 HP budget
       const tech = TechState(levels: {TechId.shipYard: 3});
       const config = GameConfig(enableMultiTurnBuilds: true);
 
@@ -209,10 +209,10 @@ void main() {
       );
 
       final next = ps.applyBuildProgress(config, map);
-      // First purchase takes min(3 needed, 4 budget) = 3 → completes.
+      // First purchase takes min(3 needed, 6 budget) = 3 → completes.
       expect(next.shipPurchases[0].buildProgressHp, 3);
-      // Remaining 1 HP goes to DN.
-      expect(next.shipPurchases[1].buildProgressHp, 1);
+      // Remaining 3 HP goes to DN.
+      expect(next.shipPurchases[1].buildProgressHp, 3);
     });
 
     test(

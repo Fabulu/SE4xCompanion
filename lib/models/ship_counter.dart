@@ -2,6 +2,7 @@
 
 import '../data/ship_definitions.dart';
 import '../data/tech_costs.dart';
+import '../data/unique_ship_designer.dart';
 import 'technology.dart';
 
 enum ShipExperience { unset, green, skilled, veteran, elite, legendary }
@@ -18,6 +19,13 @@ class ShipCounter {
   final ShipExperience experience;
   final String notes;
 
+  /// PP02 §41.1.6: For UN counters, the design they were built from. Null
+  /// for every non-UN ship type and for any UN counter that was created
+  /// before the designer existed (legacy save). Used by the Ship Tech tab
+  /// to label the counter with the player-chosen design name instead of
+  /// the generic "Unique Ship".
+  final UniqueShipDesign? uniqueDesign;
+
   const ShipCounter({
     required this.type,
     required this.number,
@@ -29,6 +37,7 @@ class ShipCounter {
     this.otherTechs = const {},
     this.experience = ShipExperience.unset,
     this.notes = '',
+    this.uniqueDesign,
   });
 
   String get id => '${type.name}:$number';
@@ -44,6 +53,7 @@ class ShipCounter {
     TechState tech, {
     bool facilitiesMode = false,
     bool advancedMunitions = false,
+    UniqueShipDesign? uniqueDesign,
   }) {
     final def = kShipDefinitions[type];
     final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
@@ -73,6 +83,7 @@ class ShipCounter {
       move: moveLevel,
       otherTechs: const {},
       experience: ShipExperience.unset,
+      uniqueDesign: uniqueDesign,
     );
   }
 
@@ -161,6 +172,8 @@ class ShipCounter {
     Map<String, int>? otherTechs,
     ShipExperience? experience,
     String? notes,
+    UniqueShipDesign? uniqueDesign,
+    bool clearUniqueDesign = false,
   }) =>
       ShipCounter(
         type: type ?? this.type,
@@ -173,6 +186,8 @@ class ShipCounter {
         otherTechs: otherTechs ?? this.otherTechs,
         experience: experience ?? this.experience,
         notes: notes ?? this.notes,
+        uniqueDesign:
+            clearUniqueDesign ? null : (uniqueDesign ?? this.uniqueDesign),
       );
 
   Map<String, dynamic> toJson() => {
@@ -186,6 +201,7 @@ class ShipCounter {
         'otherTechs': otherTechs,
         'experience': experience.name,
         'notes': notes,
+        if (uniqueDesign != null) 'uniqueDesign': uniqueDesign!.toJson(),
       };
 
   factory ShipCounter.fromJson(Map<String, dynamic> json) => ShipCounter(
@@ -201,6 +217,10 @@ class ShipCounter {
             const {},
         experience: _experienceFromName(json['experience'] as String?),
         notes: json['notes'] as String? ?? '',
+        uniqueDesign: json['uniqueDesign'] is Map<String, dynamic>
+            ? UniqueShipDesign.fromJson(
+                json['uniqueDesign'] as Map<String, dynamic>)
+            : null,
       );
 
   static ShipType _shipTypeFromName(String name) {

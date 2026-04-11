@@ -62,6 +62,53 @@ void main() {
       expect(flipped.notes, 'original');
       expect(flipped.isFaceUp, false);
     });
+
+    test('new optional fields default to null', () {
+      const card = DrawnCard(cardNumber: 1, drawnOnTurn: 1);
+      expect(card.attachedWorldId, isNull);
+      expect(card.disposition, isNull);
+      expect(card.cpGained, isNull);
+    });
+
+    test('populated optional fields round-trip', () {
+      const card = DrawnCard(
+        cardNumber: 1001,
+        drawnOnTurn: 3,
+        attachedWorldId: 'world-42',
+        disposition: 'credits',
+        cpGained: 12,
+      );
+      final restored = DrawnCard.fromJson(card.toJson());
+      expect(restored.attachedWorldId, 'world-42');
+      expect(restored.disposition, 'credits');
+      expect(restored.cpGained, 12);
+    });
+
+    test('legacy JSON without new optional keys decodes to null', () {
+      final legacy = <String, dynamic>{
+        'cardNumber': 1,
+        'drawnOnTurn': 1,
+        'isFaceUp': true,
+        'notes': '',
+        'assignedModifiers': <dynamic>[],
+      };
+      final card = DrawnCard.fromJson(legacy);
+      expect(card.attachedWorldId, isNull);
+      expect(card.disposition, isNull);
+      expect(card.cpGained, isNull);
+    });
+
+    test('copyWith propagates new optional fields', () {
+      const card = DrawnCard(cardNumber: 1, drawnOnTurn: 1);
+      final stamped = card.copyWith(
+        disposition: 'event',
+        attachedWorldId: 'world-1',
+        cpGained: 5,
+      );
+      expect(stamped.disposition, 'event');
+      expect(stamped.attachedWorldId, 'world-1');
+      expect(stamped.cpGained, 5);
+    });
   });
 
   group('GameState.drawnHand', () {

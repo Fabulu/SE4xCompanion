@@ -14,7 +14,12 @@ class WorldState {
   final bool isBlocked;
   final FacilityType? facility;
   final int stagedMineralCp;
-  final int pipelineIncome;
+
+  /// Number of Ground Units (GU) garrisoned on this world (rules 21.x).
+  /// Additive tracking field — GUs are not tracked as ShipCounters because
+  /// their [ShipDefinition.maxCounters] is 0.  Edited via the manual override
+  /// dialog; defaults to 0 and round-trips through JSON.
+  final int garrisonGu;
 
   const WorldState({
     this.id = '',
@@ -25,7 +30,7 @@ class WorldState {
     this.isBlocked = false,
     this.facility,
     this.stagedMineralCp = 0,
-    this.pipelineIncome = 0,
+    this.garrisonGu = 0,
   });
 
   /// CP produced by this world (without facilities conversion).
@@ -72,7 +77,7 @@ class WorldState {
     FacilityType? facility,
     bool clearFacility = false,
     int? stagedMineralCp,
-    int? pipelineIncome,
+    int? garrisonGu,
   }) =>
       WorldState(
         id: id ?? this.id,
@@ -83,7 +88,7 @@ class WorldState {
         isBlocked: isBlocked ?? this.isBlocked,
         facility: clearFacility ? null : (facility ?? this.facility),
         stagedMineralCp: stagedMineralCp ?? this.stagedMineralCp,
-        pipelineIncome: pipelineIncome ?? this.pipelineIncome,
+        garrisonGu: garrisonGu ?? this.garrisonGu,
       );
 
   Map<String, dynamic> toJson() => {
@@ -97,7 +102,7 @@ class WorldState {
         'stagedMineralCp': stagedMineralCp,
         // Backward-compat alias for legacy saves
         'mineralIncome': stagedMineralCp,
-        'pipelineIncome': pipelineIncome,
+        'garrisonGu': garrisonGu,
       };
 
   factory WorldState.fromJson(Map<String, dynamic> json) => WorldState(
@@ -110,7 +115,7 @@ class WorldState {
         facility: _facilityFromName(json['facility'] as String?),
         stagedMineralCp:
             json['stagedMineralCp'] as int? ?? json['mineralIncome'] as int? ?? 0,
-        pipelineIncome: json['pipelineIncome'] as int? ?? 0,
+        garrisonGu: json['garrisonGu'] as int? ?? 0,
       );
 
   static String createId() =>
