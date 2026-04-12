@@ -75,7 +75,8 @@ class _CombatResolutionDialogState extends State<_CombatResolutionDialog> {
   }
 
   bool get _canApply => _destroyed.isNotEmpty ||
-      _retreats.values.any((v) => v != null);
+      _retreats.values.any((v) => v != null) ||
+      _noteCtrl.text.trim().isNotEmpty;
 
   CombatResolution _buildResolution() {
     final retreats = <String, HexCoord>{};
@@ -108,6 +109,7 @@ class _CombatResolutionDialogState extends State<_CombatResolutionDialog> {
               TextField(
                 controller: _noteCtrl,
                 maxLines: 2,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'Combat log note (optional)',
                   border: OutlineInputBorder(),
@@ -162,7 +164,7 @@ class _CombatResolutionDialogState extends State<_CombatResolutionDialog> {
         Tooltip(
           message: _canApply
               ? ''
-              : 'Mark at least one destroyed ship or set a retreat',
+              : 'Mark ships destroyed, set a retreat, or write a note',
           child: FilledButton(
             onPressed:
                 _canApply ? () => Navigator.of(context).pop(_buildResolution()) : null,

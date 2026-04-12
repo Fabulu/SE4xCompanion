@@ -47,6 +47,10 @@ class GameState {
   /// Manual board state for the native map tab.
   final GameMapState mapState;
 
+  /// Append-only combat log: free-form notes entered in the combat
+  /// resolution dialog. Persisted so a future viewer can display them.
+  final List<String> combatLog;
+
   const GameState({
     this.config = const GameConfig(),
     this.turnNumber = 1,
@@ -61,6 +65,7 @@ class GameState {
     this.victoryPoints = 0,
     this.replicatorState,
     this.replicatorPlayerState,
+    this.combatLog = const [],
     this.mapState = const GameMapState(
       layoutPreset: MapLayoutPreset.standard4p,
       hexes: [],
@@ -82,6 +87,7 @@ class GameState {
     ReplicatorState? replicatorState,
     ReplicatorPlayerState? replicatorPlayerState,
     GameMapState? mapState,
+    List<String>? combatLog,
     bool clearReplicatorState = false,
     bool clearReplicatorPlayerState = false,
   }) => GameState(
@@ -102,6 +108,7 @@ class GameState {
     replicatorPlayerState: clearReplicatorPlayerState
         ? null
         : (replicatorPlayerState ?? this.replicatorPlayerState),
+    combatLog: combatLog ?? this.combatLog,
     mapState: mapState ?? this.mapState,
   );
 
@@ -122,6 +129,7 @@ class GameState {
     if (replicatorState != null) 'replicatorState': replicatorState!.toJson(),
     if (replicatorPlayerState != null)
       'replicatorPlayerState': replicatorPlayerState!.toJson(),
+    if (combatLog.isNotEmpty) 'combatLog': combatLog,
     'mapState': mapState.hexes.isEmpty
         ? GameMapState.initial(layoutPreset: mapState.layoutPreset).toJson()
         : mapState.toJson(),
@@ -212,6 +220,10 @@ class GameState {
               json['replicatorPlayerState'] as Map<String, dynamic>,
             )
           : null,
+      combatLog: (json['combatLog'] as List?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       mapState: mapState,
     );
   }

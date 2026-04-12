@@ -134,7 +134,7 @@ class EmpireAdvantagePicker extends StatelessWidget {
           itemBuilder: (_, index) {
             if (includeNoneOption && index == 0) {
               return ListTile(
-                leading: const Icon(Icons.clear),
+                leading: const Icon(Icons.close),
                 title: const Text('None'),
                 selected: selectedCardNumber == null,
                 onTap: () => onChanged(null),

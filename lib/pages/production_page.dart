@@ -4693,7 +4693,7 @@ class _ProductionPageState extends State<ProductionPage>
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('OK'),
+            child: const Text('Apply'),
           ),
         ],
       ),

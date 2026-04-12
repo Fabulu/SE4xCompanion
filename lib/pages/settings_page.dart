@@ -1686,7 +1686,7 @@ class _SpecialAbilityRow extends StatelessWidget {
           if (currentAbility != null)
             IconButton(
               icon: Icon(
-                Icons.clear,
+                Icons.close,
                 size: 18,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),

@@ -216,8 +216,8 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
       _advCon = false;
       _shipExp = false;
       _unpredictableResearch = false;
-      // No scenario / no EA so players learn the base map & rules.
-      _scenario = null;
+      // Pre-select the recommended Standard 2P scenario.
+      _scenario = kScenarios.firstWhere((s) => s.id == 'standard_2p');
       _selectedEA = null;
       // Solo / co-op: off.
       _alienPlayerCount = 0;

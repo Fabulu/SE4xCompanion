@@ -1074,20 +1074,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _resolveCombat(CombatResolution resolution) {
-    if (resolution.isEmpty) {
+    if (resolution.isEmpty && (resolution.combatLogNote ?? '').isEmpty) {
       return;
     }
-    final nextState = applyCombatResolution(_gameState, resolution);
-    _updateGameState(
-      nextState,
-      'Resolve Combat (${resolution.destroyedShipCounterIds.length} destroyed, '
-          '${resolution.retreats.length} retreats)',
-    );
+    var nextState = applyCombatResolution(_gameState, resolution);
     final note = resolution.combatLogNote;
     if (note != null && note.isNotEmpty) {
-      debugPrint('Combat log: $note');
-      // TODO: persist to a per-game combat log in a follow-up.
+      nextState = nextState.copyWith(
+        combatLog: [...nextState.combatLog, note],
+      );
     }
+    final undoDesc = note != null && note.isNotEmpty
+        ? 'Resolve Combat (${resolution.destroyedShipCounterIds.length} destroyed, '
+            '${resolution.retreats.length} retreats) — $note'
+        : 'Resolve Combat (${resolution.destroyedShipCounterIds.length} destroyed, '
+            '${resolution.retreats.length} retreats)';
+    _updateGameState(nextState, undoDesc);
   }
 
   GameState _syncedMapState(GameState state) {
