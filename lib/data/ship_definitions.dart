@@ -184,16 +184,8 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
   ),
   // Unique Ship (UN) — §41.0
   //
-  // BUG U1 / minimum-cost floor: the full Unique Ship pricer follows the
-  // size table in §41.1.6 (Hull 1 = 6 CP, 2 = 9, 3 = 12, 4 = 15, 5 = 20,
-  // 6 = 24, 7 = 32) plus per-ability surcharges, with a §41.1.5 minimum of
-  // 5 CP. Implementing that properly requires the Unique Ship design state
-  // (abilities, size, mounts), which lives outside this static table.
-  //
-  // TODO(§41.1.6): replace this static 5 with a design-based pricer once
-  // the Unique Ship designer state is wired into the production pipeline.
-  // Until then, the 5 CP floor from §41.1.5 is used so queueing a UN never
-  // yields a free ship (the old value of `0` did).
+  // Fallback cost when no design attached. The §41.1.6 designer computes
+  // the real cost via uniqueShipDesignCost().
   ShipType.un: ShipDefinition(
     type: ShipType.un, abbreviation: 'UN', name: 'Unique Ship',
     hullSize: 3, buildCost: 5, maxCounters: 6, weaponClass: 'A',
@@ -331,9 +323,6 @@ const Map<ShipType, ShipDefinition> kShipDefinitions = {
   // art/rules applied. The `buildCost` and `maintenanceExempt` values here
   // are therefore vestigial and should not be read by the purchase or
   // affordability pipelines.
-  //
-  // TODO: once EA #187 materialization is audited we can retire this entry
-  // behind a feature flag. For now, treat it as inert documentation.
   ShipType.warSun: ShipDefinition(
     type: ShipType.warSun, abbreviation: 'WS', name: 'War Sun',
     hullSize: 5, buildCost: 30, maintenanceExempt: false, maxCounters: 1,

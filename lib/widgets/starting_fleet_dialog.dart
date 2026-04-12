@@ -397,8 +397,9 @@ List<ShipCounter> applyFleetPreset(
   List<ShipCounter> allCounters,
   Map<ShipType, int> preset,
   TechState startingTech,
-  bool facilitiesMode,
-) {
+  bool facilitiesMode, {
+  int hullSizeModifier = 0,
+}) {
   final result = List<ShipCounter>.from(allCounters);
 
   for (final entry in preset.entries) {
@@ -417,6 +418,7 @@ List<ShipCounter> applyFleetPreset(
           result[i].number,
           startingTech,
           facilitiesMode: facilitiesMode,
+          hullSizeModifier: hullSizeModifier,
         );
         built++;
       }

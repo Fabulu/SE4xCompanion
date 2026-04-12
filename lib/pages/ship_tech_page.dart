@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../data/counter_templates.dart';
@@ -69,6 +71,9 @@ class _ShipTechPageState extends State<ShipTechPage> {
   /// Session-scoped suppression flag for the drift-confirmation dialog
   /// ("Don't ask again this session" checkbox). Not persisted.
   bool _suppressDriftConfirm = false;
+
+  /// EA #34 Giant Race / EA #43 Insectoids hull-size modifier.
+  int get _hullSizeModifier => widget.config.empireAdvantage?.hullSizeModifier ?? 0;
 
   @override
   void dispose() {
@@ -254,6 +259,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
       widget.techState,
       facilitiesMode: widget.config.useFacilitiesCosts,
       advancedMunitions: widget.shipSpecialAbilities[type] == 11,
+      hullSizeModifier: _hullSizeModifier,
     );
     final updated = List<ShipCounter>.from(widget.shipCounters);
     updated[idx] = stamped;
@@ -306,13 +312,14 @@ class _ShipTechPageState extends State<ShipTechPage> {
       widget.techState,
       facilitiesMode: widget.config.useFacilitiesCosts,
       advancedMunitions: widget.shipSpecialAbilities[type] == 11,
+      hullSizeModifier: _hullSizeModifier,
     );
     if (upgraded == null) return;
 
     final updated = List<ShipCounter>.from(widget.shipCounters);
     updated[idx] = upgraded;
     widget.onCountersChanged(updated);
-    widget.onUpgradeCostIncurred?.call(counter.upgradeCost(facilitiesMode: widget.config.useFacilitiesCosts));
+    widget.onUpgradeCostIncurred?.call(counter.upgradeCost(facilitiesMode: widget.config.useFacilitiesCosts, hullSizeModifier: _hullSizeModifier));
   }
 
   /// Update a counter from a CounterUpdate payload.
@@ -336,6 +343,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
         widget.techState,
         facilitiesMode: widget.config.useFacilitiesCosts,
         advancedMunitions: widget.shipSpecialAbilities[type] == 11,
+        hullSizeModifier: _hullSizeModifier,
       );
       final drifting = ShipTechDriftCheck.firstDriftingStat(update, stamped);
       if (drifting != null) {
@@ -467,6 +475,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
           widget.techState,
           facilitiesMode: fmUpgrade,
           advancedMunitions: widget.shipSpecialAbilities[c.type] == 11,
+          hullSizeModifier: _hullSizeModifier,
         ));
 
     // Any built counters at all? Controls empty-state display.
@@ -632,12 +641,12 @@ class _ShipTechPageState extends State<ShipTechPage> {
       if (!c.isBuilt) continue;
       final advMun = widget.shipSpecialAbilities[c.type] == 11;
       if (!c.needsUpgrade(widget.techState,
-          facilitiesMode: fm, advancedMunitions: advMun)) {
+          facilitiesMode: fm, advancedMunitions: advMun, hullSizeModifier: _hullSizeModifier)) {
         continue;
       }
-      final cost = c.upgradeCost(facilitiesMode: fm);
+      final cost = c.upgradeCost(facilitiesMode: fm, hullSizeModifier: _hullSizeModifier);
       final up = c.upgradeToTech(widget.techState,
-          facilitiesMode: fm, advancedMunitions: advMun);
+          facilitiesMode: fm, advancedMunitions: advMun, hullSizeModifier: _hullSizeModifier);
       if (up == null) continue;
       updated[i] = up;
       upgradedCount++;
@@ -706,7 +715,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.info_outline, size: 18),
             tooltip: 'Ship info',
-            onPressed: () => showShipInfoDialog(ctx, shipType, facilitiesMode: widget.config.useFacilitiesCosts, onRuleTap: widget.onRuleTap),
+            onPressed: () => showShipInfoDialog(ctx, shipType, facilitiesMode: widget.config.useFacilitiesCosts, hullSizeModifier: _hullSizeModifier, onRuleTap: widget.onRuleTap),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(
@@ -750,6 +759,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
               widget.techState,
               facilitiesMode: widget.config.useFacilitiesCosts,
               advancedMunitions: widget.shipSpecialAbilities[counter.type] == 11,
+              hullSizeModifier: _hullSizeModifier,
             );
 
         // S.1: Detect stat drift between the counter's stamped levels and
@@ -765,6 +775,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
             facilitiesMode: widget.config.useFacilitiesCosts,
             advancedMunitions:
                 widget.shipSpecialAbilities[counter.type] == 11,
+            hullSizeModifier: _hullSizeModifier,
           );
           hasManualOverride = counter.attack != expected.attack ||
               counter.defense != expected.defense ||
@@ -799,6 +810,9 @@ class _ShipTechPageState extends State<ShipTechPage> {
           otherTechs: otherDisplays,
           experience: counter?.experience.index ?? 0,
           showExperience: widget.showExperience && template.hasExperience,
+          onExperienceRoll: (isBuilt && _isQuickLearners && widget.showExperience && template.hasExperience)
+              ? () => _showExperienceRollDialog(template.type, template.counterNumber)
+              : null,
           strongHaptics: widget.config.strongHaptics,
           onBuild: () => _buildCounter(
             template.type,
@@ -816,7 +830,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
                   );
                 }
               : null,
-          upgradeCost: canUpgrade ? counter.upgradeCost(facilitiesMode: widget.config.useFacilitiesCosts) : null,
+          upgradeCost: canUpgrade ? counter.upgradeCost(facilitiesMode: widget.config.useFacilitiesCosts, hullSizeModifier: _hullSizeModifier) : null,
           onUpgrade: canUpgrade
               ? () => _upgradeCounter(
                     template.type,
@@ -838,6 +852,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
             template.type,
             facilitiesMode: widget.config.useFacilitiesCosts,
             isAlternateEmpire: widget.config.enableAlternateEmpire,
+            hullSizeModifier: _hullSizeModifier,
             onRuleTap: widget.onRuleTap,
           ),
           queuedCount: rowQueuedCount,
@@ -847,6 +862,25 @@ class _ShipTechPageState extends State<ShipTechPage> {
     }
 
     return items;
+  }
+
+  /// Whether Quick Learners EA (#40) is the active empire advantage.
+  bool get _isQuickLearners => widget.config.selectedEmpireAdvantage == 40;
+
+  /// Show the Quick Learners experience-check dice-roll helper dialog.
+  ///
+  /// Entirely optional — the player can always set experience directly on the
+  /// counter row circles. This is a convenience shortcut that rolls 2d10 and
+  /// picks the best result, per the Quick Learners card text.
+  Future<void> _showExperienceRollDialog(ShipType type, int number) async {
+    if (!mounted) return;
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _QuickLearnersRollDialog(),
+    );
+    if (result != null && result >= 1 && result <= 5) {
+      _updateCounter(type, number, CounterUpdate(experience: result));
+    }
   }
 
   void _destroyCounter(BuildContext context, ShipType type, int number) {
@@ -960,6 +994,220 @@ class _ShipTechList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: items.length,
       itemBuilder: (_, index) => items[index],
+    );
+  }
+}
+
+/// Quick Learners EA (#40) dice-roll dialog for experience checks.
+///
+/// Offers two paths:
+///   - "Roll in app": generates 2d10, displays both, highlights the best,
+///     and lets the user confirm applying the result as an experience level.
+///   - "Enter manually": a simple text field for a physical dice result.
+///
+/// Returns an experience level (1-5) via Navigator.pop, or null on cancel.
+/// The experience-level mapping follows the rulebook Military Academy table:
+///   d10 result 1-2 = Green (1), 3-4 = Seasoned (2), 5-6 = Veteran (3),
+///   7-8 = Elite (4), 9-10 = Legendary (5).
+class _QuickLearnersRollDialog extends StatefulWidget {
+  @override
+  State<_QuickLearnersRollDialog> createState() =>
+      _QuickLearnersRollDialogState();
+}
+
+class _QuickLearnersRollDialogState extends State<_QuickLearnersRollDialog> {
+  static final _rng = Random();
+
+  // Roll state
+  int? _die1;
+  int? _die2;
+  bool _rolled = false;
+
+  // Manual entry state
+  bool _manualMode = false;
+  final _manualController = TextEditingController();
+
+  @override
+  void dispose() {
+    _manualController.dispose();
+    super.dispose();
+  }
+
+  /// Map a d10 result (1-10) to an experience level (1-5).
+  static int _d10ToExpLevel(int roll) {
+    if (roll <= 2) return 1; // Green
+    if (roll <= 4) return 2; // Seasoned
+    if (roll <= 6) return 3; // Veteran
+    if (roll <= 8) return 4; // Elite
+    return 5; // Legendary
+  }
+
+  static const _expNames = ['', 'Green', 'Seasoned', 'Veteran', 'Elite', 'Legendary'];
+
+  void _rollDice() {
+    setState(() {
+      _die1 = _rng.nextInt(10) + 1;
+      _die2 = _rng.nextInt(10) + 1;
+      _rolled = true;
+    });
+  }
+
+  int get _bestRoll => max(_die1 ?? 0, _die2 ?? 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Quick Learners \u2014 Experience Check'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Roll 2d10 and pick the best result, OR enter the '
+              'result manually.',
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (!_manualMode) ...[
+              if (!_rolled)
+                Center(
+                  child: FilledButton.icon(
+                    onPressed: _rollDice,
+                    icon: const Icon(Icons.casino, size: 18),
+                    label: const Text('Roll in app'),
+                  ),
+                ),
+              if (_rolled) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _dieChip(theme, 'Die 1', _die1!, _die1! >= _die2!),
+                    const SizedBox(width: 12),
+                    _dieChip(theme, 'Die 2', _die2!, _die2! > _die1!),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    'Best: $_bestRoll \u2192 ${_expNames[_d10ToExpLevel(_bestRoll)]}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _manualMode = true;
+                    _rolled = false;
+                  }),
+                  child: const Text('Enter manually instead'),
+                ),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _manualController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Best d10 result (1-10)',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _manualMode = false;
+                  }),
+                  child: const Text('Roll in app instead'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        if (_rolled && !_manualMode)
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, _d10ToExpLevel(_bestRoll)),
+            child: Text('Apply ${_expNames[_d10ToExpLevel(_bestRoll)]}'),
+          ),
+        if (_manualMode)
+          FilledButton(
+            onPressed: () {
+              final val = int.tryParse(_manualController.text);
+              if (val == null || val < 1 || val > 10) {
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  const SnackBar(
+                    content: Text('Enter a number from 1 to 10.'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, _d10ToExpLevel(val));
+            },
+            child: const Text('Apply'),
+          ),
+      ],
+    );
+  }
+
+  Widget _dieChip(ThemeData theme, String label, int value, bool isBest) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: TextStyle(
+          fontSize: 12,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        )),
+        const SizedBox(height: 4),
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isBest
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isBest
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+              width: isBest ? 2 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: isBest
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

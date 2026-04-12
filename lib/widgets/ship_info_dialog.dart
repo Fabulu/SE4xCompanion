@@ -13,6 +13,7 @@ Future<void> showShipInfoDialog(
   ShipType type, {
   bool facilitiesMode = false,
   bool isAlternateEmpire = false,
+  int hullSizeModifier = 0,
   void Function(String sectionId)? onRuleTap,
 }) {
   final def = kShipDefinitions[type]!;
@@ -42,7 +43,7 @@ Future<void> showShipInfoDialog(
               ],
 
               // Stats grid
-              _buildStatsGrid(theme, def, facilitiesMode, isAlternateEmpire),
+              _buildStatsGrid(theme, def, facilitiesMode, isAlternateEmpire, hullSizeModifier),
 
               () {
                 // Show AGT-correct prerequisite when in facilities mode
@@ -119,8 +120,9 @@ Widget _buildStatsGrid(
   ThemeData theme,
   ShipDefinition def,
   bool facilitiesMode,
-  bool isAlternateEmpire,
-) {
+  bool isAlternateEmpire, [
+  int hullSizeModifier = 0,
+]) {
   final labelStyle = TextStyle(
     fontSize: 13,
     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -132,15 +134,21 @@ Widget _buildStatsGrid(
     color: theme.colorScheme.onSurface,
   );
 
-  final hull = def.effectiveHullSize(facilitiesMode);
+  final baseHull = def.effectiveHullSize(facilitiesMode);
+  final hull = (baseHull + hullSizeModifier).clamp(0, 99);
   final cost =
       def.effectiveBuildCost(isAlternateEmpire, facilitiesMode: facilitiesMode);
   final weapon = def.effectiveWeaponClass(facilitiesMode);
 
+  // Hull display: when modifier != 0, show "N (base +/-M)"
+  final hullDisplay = hullSizeModifier != 0
+      ? '$hull ($baseHull${hullSizeModifier > 0 ? '+$hullSizeModifier' : '$hullSizeModifier'})'
+      : '$hull';
+
   final rows = <TableRow>[
     TableRow(children: [
       Text('Hull Size', style: labelStyle),
-      Text('$hull', style: valueStyle),
+      Text(hullDisplay, style: valueStyle),
       Text('Build Cost', style: labelStyle),
       Text('$cost', style: valueStyle),
     ]),

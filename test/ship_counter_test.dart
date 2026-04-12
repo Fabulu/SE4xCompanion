@@ -395,4 +395,113 @@ void main() {
       expect(restored.notes, 'flanking');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // EA #34 Giant Race / EA #43 Insectoids hull-size modifier propagation
+  // ---------------------------------------------------------------------------
+
+  group('stampFromTech - hullSizeModifier (Giant Race +1)', () {
+    // DD base hull 1 + modifier 1 = effective hull 2
+    // With hull 2, attack/defense cap is 2 (hull < 3 branch)
+    final tech = const TechState(levels: {
+      TechId.attack: 2,
+      TechId.defense: 2,
+      TechId.tactics: 1,
+      TechId.move: 1,
+    });
+
+    test('Giant Race DD (hull 1+1=2): attack 2 not capped', () {
+      final dd = ShipCounter.stampFromTech(ShipType.dd, 1, tech,
+          hullSizeModifier: 1);
+      expect(dd.attack, 2);
+    });
+
+    test('Giant Race DD (hull 1+1=2): defense 2 not capped', () {
+      final dd = ShipCounter.stampFromTech(ShipType.dd, 1, tech,
+          hullSizeModifier: 1);
+      expect(dd.defense, 2);
+    });
+
+    test('Giant Race CA (hull 2+1=3): full tech at hull 3', () {
+      final highTech = const TechState(levels: {
+        TechId.attack: 3,
+        TechId.defense: 3,
+        TechId.tactics: 2,
+        TechId.move: 2,
+      });
+      final ca = ShipCounter.stampFromTech(ShipType.ca, 1, highTech,
+          hullSizeModifier: 1);
+      // hull 3 => no cap at all (hull >= 3)
+      expect(ca.attack, 3);
+      expect(ca.defense, 3);
+    });
+  });
+
+  group('stampFromTech - hullSizeModifier (Insectoids -1)', () {
+    final tech = const TechState(levels: {
+      TechId.attack: 2,
+      TechId.defense: 2,
+      TechId.tactics: 1,
+      TechId.move: 1,
+    });
+
+    test('Insectoid CA (hull 2-1=1): attack capped at 1', () {
+      final ca = ShipCounter.stampFromTech(ShipType.ca, 1, tech,
+          hullSizeModifier: -1);
+      expect(ca.attack, 1);
+    });
+
+    test('Insectoid CA (hull 2-1=1): defense capped at 1', () {
+      final ca = ShipCounter.stampFromTech(ShipType.ca, 1, tech,
+          hullSizeModifier: -1);
+      expect(ca.defense, 1);
+    });
+
+    test('Insectoid DD (hull 1-1=0): attack capped at 0', () {
+      final dd = ShipCounter.stampFromTech(ShipType.dd, 1, tech,
+          hullSizeModifier: -1);
+      expect(dd.attack, 0);
+    });
+
+    test('Insectoid DD (hull 1-1=0): defense capped at 0', () {
+      final dd = ShipCounter.stampFromTech(ShipType.dd, 1, tech,
+          hullSizeModifier: -1);
+      expect(dd.defense, 0);
+    });
+  });
+
+  group('upgradeCost - hullSizeModifier', () {
+    test('Giant Race DD: upgrade cost is 2 (hull 1+1)', () {
+      final dd = ShipCounter(type: ShipType.dd, number: 1, isBuilt: true);
+      expect(dd.upgradeCost(hullSizeModifier: 1), 2);
+    });
+
+    test('Insectoid DD: upgrade cost is 1 (clamped from hull 0)', () {
+      final dd = ShipCounter(type: ShipType.dd, number: 1, isBuilt: true);
+      // hull 1 - 1 = 0, but upgradeCost clamps to minimum 1
+      expect(dd.upgradeCost(hullSizeModifier: -1), 1);
+    });
+
+    test('Default modifier (0): unchanged', () {
+      final dd = ShipCounter(type: ShipType.dd, number: 1, isBuilt: true);
+      expect(dd.upgradeCost(), 1);
+    });
+  });
+
+  group('needsUpgrade - hullSizeModifier', () {
+    test('Giant Race DD detects drift with modifier', () {
+      // DD stamped without modifier (attack capped at 1)
+      final tech = const TechState(levels: {
+        TechId.attack: 2,
+        TechId.defense: 2,
+        TechId.tactics: 1,
+        TechId.move: 1,
+      });
+      final dd = ShipCounter.stampFromTech(ShipType.dd, 1, tech);
+      // Without modifier: attack=1, defense=1
+      expect(dd.attack, 1);
+      // Now check with modifier +1: hull becomes 2, so cap is 2 => needs upgrade
+      expect(dd.needsUpgrade(tech, hullSizeModifier: 1), true);
+    });
+  });
 }

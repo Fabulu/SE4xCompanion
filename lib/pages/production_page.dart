@@ -2456,7 +2456,7 @@ class _ProductionPageState extends State<ProductionPage>
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             visualDensity: VisualDensity.compact,
-            onPressed: () => showShipInfoDialog(context, type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, onRuleTap: widget.onRuleTap),
+            onPressed: () => showShipInfoDialog(context, type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0, onRuleTap: widget.onRuleTap),
           ),
           const SizedBox(width: 4),
           SizedBox(
@@ -3447,7 +3447,7 @@ class _ProductionPageState extends State<ProductionPage>
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               visualDensity: VisualDensity.compact,
-              onPressed: () => showShipInfoDialog(context, purchase.type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, onRuleTap: widget.onRuleTap),
+              onPressed: () => showShipInfoDialog(context, purchase.type, facilitiesMode: config.useFacilitiesCosts, isAlternateEmpire: config.enableAlternateEmpire, hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0, onRuleTap: widget.onRuleTap),
             ),
             const SizedBox(width: 4),
             // Quantity controls
@@ -3720,6 +3720,7 @@ class _ProductionPageState extends State<ProductionPage>
       final used = production.hullPointsSpentInHex(
         hex.coord,
         facilitiesMode: config.useFacilitiesCosts,
+        hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0,
       );
       final remaining = cap - used;
       return remaining < 0 ? 0 : remaining;
@@ -3728,8 +3729,11 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   /// Bug A: Hull size required to add one more of [type] this turn.
-  int _hullCostFor(ShipType type) =>
-      kShipDefinitions[type]?.effectiveHullSize(config.useFacilitiesCosts) ?? 0;
+  int _hullCostFor(ShipType type) {
+    final base = kShipDefinitions[type]?.effectiveHullSize(config.useFacilitiesCosts) ?? 0;
+    final mod = config.empireAdvantage?.hullSizeModifier ?? 0;
+    return (base + mod).clamp(0, 99);
+  }
 
   List<_ShipyardHexInfo> _shipyardHexes() {
     final map = mapState;
@@ -3751,6 +3755,7 @@ class _ProductionPageState extends State<ProductionPage>
       final used = production.hullPointsSpentInHex(
         hex.coord,
         facilitiesMode: facilitiesMode,
+        hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0,
       );
       final isBlocked = cap <= 0 && hex.shipyardCount > 0;
       result.add(_ShipyardHexInfo(
@@ -4251,6 +4256,7 @@ class _ProductionPageState extends State<ProductionPage>
                               entry.key,
                               facilitiesMode: facilitiesMode,
                               isAlternateEmpire: isAlt,
+                              hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0,
                               onRuleTap: widget.onRuleTap,
                             ),
                           ),
@@ -4273,8 +4279,9 @@ class _ProductionPageState extends State<ProductionPage>
         final def = kShipDefinitions[result.type];
         // PP02 §41.1.6: For Unique Ships, the hull size comes from the
         // player-chosen design, not the static table.
-        final hull = result.uniqueDesign?.hullSize ??
+        final hullBase = result.uniqueDesign?.hullSize ??
             (def?.effectiveHullSize(config.useFacilitiesCosts) ?? 0);
+        final hull = (hullBase + (config.empireAdvantage?.hullSizeModifier ?? 0)).clamp(0, 99);
         final updated =
             List<ShipPurchase>.from(production.shipPurchases)
               ..add(ShipPurchase(

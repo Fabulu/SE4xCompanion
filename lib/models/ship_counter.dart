@@ -54,9 +54,10 @@ class ShipCounter {
     bool facilitiesMode = false,
     bool advancedMunitions = false,
     UniqueShipDesign? uniqueDesign,
+    int hullSizeModifier = 0,
   }) {
     final def = kShipDefinitions[type];
-    final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
+    final hull = ((def?.effectiveHullSize(facilitiesMode) ?? 1) + hullSizeModifier).clamp(0, 99);
 
     int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
     int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
@@ -92,11 +93,12 @@ class ShipCounter {
   bool needsUpgrade(TechState tech, {
     bool facilitiesMode = false,
     bool advancedMunitions = false,
+    int hullSizeModifier = 0,
   }) {
     if (!isBuilt) return false;
 
     final def = kShipDefinitions[type];
-    final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
+    final hull = ((def?.effectiveHullSize(facilitiesMode) ?? 1) + hullSizeModifier).clamp(0, 99);
 
     int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
     int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
@@ -122,11 +124,12 @@ class ShipCounter {
   ShipCounter? upgradeToTech(TechState tech, {
     bool facilitiesMode = false,
     bool advancedMunitions = false,
+    int hullSizeModifier = 0,
   }) {
     if (!isBuilt) return null;
 
     final def = kShipDefinitions[type];
-    final hull = def?.effectiveHullSize(facilitiesMode) ?? 1;
+    final hull = ((def?.effectiveHullSize(facilitiesMode) ?? 1) + hullSizeModifier).clamp(0, 99);
 
     int attLevel = tech.getLevel(TechId.attack, facilitiesMode: facilitiesMode);
     int defLevel = tech.getLevel(TechId.defense, facilitiesMode: facilitiesMode);
@@ -157,8 +160,8 @@ class ShipCounter {
   }
 
   /// Cost to upgrade this ship (1 CP per hull size point, rule 9.11.3).
-  int upgradeCost({bool facilitiesMode = false}) {
-    return kShipDefinitions[type]?.effectiveHullSize(facilitiesMode) ?? 1;
+  int upgradeCost({bool facilitiesMode = false, int hullSizeModifier = 0}) {
+    return ((kShipDefinitions[type]?.effectiveHullSize(facilitiesMode) ?? 1) + hullSizeModifier).clamp(1, 99);
   }
 
   ShipCounter copyWith({

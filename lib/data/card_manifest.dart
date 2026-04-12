@@ -44,25 +44,6 @@ List<CardEntry> _sortedCards(List<CardEntry> cards) {
   return sorted;
 }
 
-// Retained helper for future placeholder card additions. After PP04 all
-// current crew/mission/resource/scenarioModifier entries have real
-// descriptions, so this helper is temporarily unused.
-// ignore: unused_element
-List<CardEntry> _buildReferenceCards(
-  String type,
-  List<(int, String)> cards, {
-  String description = 'Reference only. See the physical card for the full effect.',
-}) {
-  return _sortedCards([
-    for (final card in cards)
-      CardEntry(
-        number: card.$1,
-        name: card.$2,
-        type: type,
-        description: description,
-      ),
-  ]);
-}
 
 const _typeOrder = <String, int>{
   'alienTech': 0,

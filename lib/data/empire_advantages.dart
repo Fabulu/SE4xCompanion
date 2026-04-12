@@ -84,7 +84,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     revealCondition: 'Reveal when first entering any combat, including Aliens.',
     supportStatus: EaSupportStatus.partial,
     implementationNote:
-        'Hull-size modifier currently only affects maintenance. Shipyard capacity, damage-to-destroy thresholds, tech hull limits, and boarding parties do NOT yet propagate the +1 hull size. The Fighters research block IS enforced.',
+        'Hull-size modifier propagates to maintenance, tech hull-size caps (attack/defense), upgrade costs, and shipyard capacity accounting. Shipyard construction requirements, damage-to-destroy thresholds, and boarding parties do NOT yet propagate the +1 hull size. The Fighters research block IS enforced.',
     hullSizeModifier: 1,
     blockedTechs: [TechId.fighters],
   ),
@@ -130,9 +130,9 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     description:
         '''These start with Military Academy level 1 and roll 2 dice taking the best result when checking to see if a ship increases in Experience. Other Empires may NEVER gain Military Academy technology from this race.''',
     revealCondition: 'Reveal when rolling to see if a ship gains Experience.',
-    supportStatus: EaSupportStatus.partial,
+    supportStatus: EaSupportStatus.implemented,
     implementationNote:
-        'The starting Military Academy level is applied. The altered experience-roll procedure is not automated.',
+        'Starting Military Academy level is applied. An optional dice-roll helper (2d10 pick best) appears on built counter rows when experience is visible.',
     startingTechOverrides: {TechId.militaryAcad: 1},
   ),
   EmpireAdvantage(
@@ -167,7 +167,7 @@ const List<EmpireAdvantage> kEmpireAdvantages = [
     revealCondition: 'Reveal when first entering any combat, including Aliens.',
     supportStatus: EaSupportStatus.partial,
     implementationNote:
-        'Hull-size modifier currently only affects maintenance. Shipyard capacity, damage-to-destroy thresholds, tech hull limits, and boarding parties do NOT yet propagate the -1 hull size. Hull-0 clauses (no maintenance for Hull 0, no Atk/Def tech, free upgrades) are NOT modelled. The blocked-tech list IS enforced.',
+        'Hull-size modifier propagates to maintenance, tech hull-size caps (attack/defense), upgrade costs, and shipyard capacity accounting. Hull-0 special clauses (half-hull SY capacity, Experience treated as hull 1) are NOT yet modelled. Shipyard construction requirements, damage-to-destroy thresholds, and boarding parties do NOT yet propagate the -1 hull size. The blocked-tech list IS enforced.',
     hullSizeModifier: -1,
     blockedTechs: [TechId.militaryAcad, TechId.fighters],
   ),

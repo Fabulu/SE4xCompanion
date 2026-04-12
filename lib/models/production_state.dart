@@ -544,7 +544,7 @@ class ProductionState {
 
   /// Sum of hull points currently assigned to a given hex across all
   /// purchases (and their quantities), factoring in partial multi-turn builds.
-  int hullPointsSpentInHex(HexCoord hex, {bool facilitiesMode = false}) {
+  int hullPointsSpentInHex(HexCoord hex, {bool facilitiesMode = false, int hullSizeModifier = 0}) {
     final hexId = hex.id;
     int total = 0;
     for (final p in shipPurchases) {
@@ -552,7 +552,7 @@ class ProductionState {
       final def = kShipDefinitions[p.type];
       if (def == null) continue;
       if (def.isShipyardExempt) continue;
-      final hull = def.effectiveHullSize(facilitiesMode);
+      final hull = (def.effectiveHullSize(facilitiesMode) + hullSizeModifier).clamp(0, 99);
       // totalHpNeeded when present overrides hull * quantity.
       final need = p.totalHpNeeded ?? (hull * p.quantity);
       // Remaining HP needed this turn = need - already contributed.
@@ -570,10 +570,11 @@ class ProductionState {
     GameMapState map,
     TechState tech, {
     bool facilitiesMode = false,
+    int hullSizeModifier = 0,
   }) {
     final cap = shipyardCapacityForHex(hex, map, tech,
         facilitiesMode: facilitiesMode);
-    final used = hullPointsSpentInHex(hex, facilitiesMode: facilitiesMode);
+    final used = hullPointsSpentInHex(hex, facilitiesMode: facilitiesMode, hullSizeModifier: hullSizeModifier);
     return used + hpNeeded <= cap;
   }
 
@@ -1207,6 +1208,7 @@ class ProductionState {
     List<ShipCounter> counters, {
     bool facilitiesMode = false,
     Map<ShipType, int> shipSpecialAbilities = const {},
+    int hullSizeModifier = 0,
   }) {
     final updatedCounters = List<ShipCounter>.from(counters);
     final remainingPurchases = <ShipPurchase>[];
@@ -1274,6 +1276,7 @@ class ProductionState {
           facilitiesMode: facilitiesMode,
           advancedMunitions: advMuni,
           uniqueDesign: p.uniqueDesign,
+          hullSizeModifier: hullSizeModifier,
         );
         updatedCounters[blankIdx] = stamped;
         newIds.add(stamped.id);

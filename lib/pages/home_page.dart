@@ -504,7 +504,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
       mapState: GameMapState.initial(),
       shipCounters: config.playerControlsReplicators
-          ? _createReplicatorStartingForces(startTech, config.useFacilitiesCosts)
+          ? _createReplicatorStartingForces(startTech, config.useFacilitiesCosts, hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0)
           : createAllCounters(),
       replicatorPlayerState: config.playerControlsReplicators
           ? ReplicatorPlayerState.initial(
@@ -542,6 +542,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               updated[i].number,
               startTech,
               facilitiesMode: config.useFacilitiesCosts,
+              hullSizeModifier: config.empireAdvantage?.hullSizeModifier ?? 0,
             );
             built++;
           }
@@ -625,6 +626,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       preset,
       _gameState.production.techState,
       _gameState.config.useFacilitiesCosts,
+      hullSizeModifier: _gameState.config.empireAdvantage?.hullSizeModifier ?? 0,
     );
     _updateGameState(_gameState.copyWith(shipCounters: updatedCounters));
   }
@@ -1581,6 +1583,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       counters,
       facilitiesMode: fm,
       shipSpecialAbilities: _gameState.shipSpecialAbilities,
+      hullSizeModifier: _gameState.config.empireAdvantage?.hullSizeModifier ?? 0,
     );
     final prodAfterBuild = materialized.state;
     final countersAfterBuild = materialized.counters;
@@ -1630,8 +1633,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   /// 1 Flagship + 5 Type 0 (Scout) ships, all pre-built.
   static List<ShipCounter> _createReplicatorStartingForces(
     TechState tech,
-    bool facilitiesMode,
-  ) {
+    bool facilitiesMode, {
+    int hullSizeModifier = 0,
+  }) {
     final counters = createAllCounters();
     final updated = List<ShipCounter>.from(counters);
     int scoutsBuilt = 0;
@@ -1645,6 +1649,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           c.number,
           tech,
           facilitiesMode: facilitiesMode,
+          hullSizeModifier: hullSizeModifier,
         );
         flagshipBuilt = true;
       } else if (c.type == ShipType.scout && scoutsBuilt < 5) {
@@ -1653,6 +1658,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           c.number,
           tech,
           facilitiesMode: facilitiesMode,
+          hullSizeModifier: hullSizeModifier,
         );
         scoutsBuilt++;
       }
@@ -2365,6 +2371,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           );
           final used = _gameState.production.hullPointsSpentInHex(
             hex.coord, facilitiesMode: fm,
+            hullSizeModifier: _gameState.config.empireAdvantage?.hullSizeModifier ?? 0,
           );
           syCapacity[hex.coord.id] = (used: used, total: total);
         }

@@ -190,4 +190,53 @@ void main() {
       expect(h!.shipyardCount, 0);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // EA #34 Giant Race / EA #43 Insectoids hull-size modifier on capacity
+  // ---------------------------------------------------------------------------
+
+  group('hullPointsSpentInHex with hullSizeModifier', () {
+    test('Giant Race: 1 DD = 2 HP (hull 1+1)', () {
+      final hex = const HexCoord(0, 0);
+      final ps = ProductionState(
+        shipPurchases: [
+          ShipPurchase(type: ShipType.dd, shipyardHexId: hex.id),
+        ],
+      );
+      // DD base hull = 1, modifier +1 => effective hull 2
+      expect(ps.hullPointsSpentInHex(hex, hullSizeModifier: 1), 2);
+    });
+
+    test('Insectoid: 1 DD = 0 HP (hull 1-1=0)', () {
+      final hex = const HexCoord(0, 0);
+      final ps = ProductionState(
+        shipPurchases: [
+          ShipPurchase(type: ShipType.dd, shipyardHexId: hex.id),
+        ],
+      );
+      // DD base hull = 1, modifier -1 => effective hull 0
+      expect(ps.hullPointsSpentInHex(hex, hullSizeModifier: -1), 0);
+    });
+
+    test('Giant Race: 2 CA = 6 HP (hull 2+1=3, x2)', () {
+      final hex = const HexCoord(0, 0);
+      final ps = ProductionState(
+        shipPurchases: [
+          ShipPurchase(type: ShipType.ca, quantity: 2, shipyardHexId: hex.id),
+        ],
+      );
+      // CA base hull = 2, modifier +1 => 3, x2 qty = 6
+      expect(ps.hullPointsSpentInHex(hex, hullSizeModifier: 1), 6);
+    });
+
+    test('Default modifier (0): unchanged', () {
+      final hex = const HexCoord(0, 0);
+      final ps = ProductionState(
+        shipPurchases: [
+          ShipPurchase(type: ShipType.dd, shipyardHexId: hex.id),
+        ],
+      );
+      expect(ps.hullPointsSpentInHex(hex), 1);
+    });
+  });
 }

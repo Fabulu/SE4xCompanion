@@ -64,6 +64,11 @@ class CounterRow extends StatelessWidget {
   final bool strongHaptics;
   final int queuedCount;
 
+  /// Optional callback to launch a dice-roll helper for experience checks
+  /// (e.g. Quick Learners EA). When non-null a small dice icon appears next
+  /// to the Experience label.
+  final VoidCallback? onExperienceRoll;
+
   /// When true, at least one stat (A/D/T/M) on this counter diverges
   /// from what the current tech state would produce — i.e. the player has
   /// manually overridden the stamped stats. Renders a small warning icon
@@ -94,6 +99,7 @@ class CounterRow extends StatelessWidget {
     this.upgradeCost,
     this.strongHaptics = true,
     this.queuedCount = 0,
+    this.onExperienceRoll,
     this.hasManualOverride = false,
   });
 
@@ -429,6 +435,22 @@ class CounterRow extends StatelessWidget {
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
+        if (onExperienceRoll != null)
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: IconButton(
+              onPressed: onExperienceRoll,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              iconSize: 16,
+              icon: Icon(
+                Icons.casino_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              tooltip: 'Roll for experience',
+            ),
+          ),
         const SizedBox(width: 4),
         for (int i = 1; i <= 5; i++)
           GestureDetector(
