@@ -1,6 +1,50 @@
 import '../data/empire_advantages.dart';
 import 'world.dart';
 
+/// Tech categories a Replicator can encounter in combat (RAW 40.5.4).
+/// Each unique encounter earns RP. Stored as string IDs for JSON compat.
+class ReplicatorEncounterType {
+  static const attack = 'attack';
+  static const defense = 'defense';
+  static const tactics = 'tactics';
+  static const move = 'move';
+  static const cloaking = 'cloaking';
+  static const scanners = 'scanners';
+  static const fighters = 'fighters';
+  static const pointDefense = 'point_defense';
+  static const mines = 'mines';
+  static const minesweepers = 'minesweepers';
+
+  /// All known encounter types, in display order.
+  static const all = [
+    attack,
+    defense,
+    tactics,
+    move,
+    cloaking,
+    scanners,
+    fighters,
+    pointDefense,
+    mines,
+    minesweepers,
+  ];
+
+  /// Human-readable label for display.
+  static String label(String id) => switch (id) {
+    attack => 'Attack',
+    defense => 'Defense',
+    tactics => 'Tactics',
+    move => 'Move',
+    cloaking => 'Cloaking',
+    scanners => 'Scanners',
+    fighters => 'Fighters',
+    pointDefense => 'Point Defense',
+    mines => 'Mines',
+    minesweepers => 'Minesweepers',
+    _ => id,
+  };
+}
+
 /// State model for a player-controlled Replicator empire.
 ///
 /// This deliberately stays separate from the normal [ProductionState] so the
@@ -20,10 +64,9 @@ class ReplicatorPlayerState {
   final bool boughtMoveThisPhase;
   final int? empireAdvantageCardNumber;
   final List<String> notes;
-  // Tier 3 stub: Things-Encountered grid (RAW 40.5.1).
-  // TODO: Flesh out with a full ThingsEncounteredState model (see architect
-  // plan §3.1). For now we store the raw marker ids the user has ticked; the
-  // derived RP math is still the user-typed [rpTotal] field as an override.
+  /// Tech categories the Replicator has encountered in combat (RAW 40.5.4).
+  /// Each unique entry earns RP. Values are [ReplicatorEncounterType] IDs.
+  /// Stored as a List for JSON compat but treated as a set (no duplicates).
   final List<String> thingsEncountered;
   final int spaceWrecksEncountered;
   final int firstCombatBonuses;

@@ -250,21 +250,38 @@ class ReplicatorPlayerPage extends StatelessWidget {
             state.copyWith(firstCombatBonuses: value.clamp(0, 99)),
           ),
         ),
-        _numberRow(
-          context,
-          label: 'Things Encountered',
-          value: state.thingsEncountered.length,
-          onChanged: (value) {
-            final clamped = value.clamp(0, 99);
-            final list = List<String>.from(state.thingsEncountered);
-            while (list.length < clamped) {
-              list.add('encounter-${list.length + 1}');
-            }
-            while (list.length > clamped) {
-              list.removeLast();
-            }
-            onChanged(state.copyWith(thingsEncountered: list));
-          },
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              const Expanded(child: Text('Things Encountered')),
+              Text(
+                '${state.thingsEncountered.length}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final type in ReplicatorEncounterType.all)
+              FilterChip(
+                label: Text(ReplicatorEncounterType.label(type)),
+                selected: state.thingsEncountered.contains(type),
+                visualDensity: VisualDensity.compact,
+                onSelected: (selected) {
+                  final list = List<String>.from(state.thingsEncountered);
+                  if (selected && !list.contains(type)) {
+                    list.add(type);
+                  } else if (!selected) {
+                    list.remove(type);
+                  }
+                  onChanged(state.copyWith(thingsEncountered: list));
+                },
+              ),
+          ],
         ),
         const SizedBox(height: 4),
         Wrap(

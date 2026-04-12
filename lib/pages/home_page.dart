@@ -2394,6 +2394,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           onColonizeCandidatesTapped: _openColonizeNowDialog,
           onChanged: _onMapChanged,
           onResolveCombat: _resolveCombat,
+          combatLog: _gameState.combatLog,
+          onClearCombatLog: () => _updateGameState(
+            _gameState.copyWith(combatLog: []),
+            'Clear combat log',
+          ),
         );
       }(),
       HomeTabId.shipTech => () {

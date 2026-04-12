@@ -30,6 +30,8 @@ class MapPage extends StatefulWidget {
   final VoidCallback? onColonizeCandidatesTapped;
   final MapStateChanged onChanged;
   final void Function(CombatResolution)? onResolveCombat;
+  final List<String> combatLog;
+  final VoidCallback? onClearCombatLog;
 
   const MapPage({
     super.key,
@@ -45,6 +47,8 @@ class MapPage extends StatefulWidget {
     this.onColonizeCandidatesTapped,
     required this.onChanged,
     this.onResolveCombat,
+    this.combatLog = const [],
+    this.onClearCombatLog,
   });
 
   @override
@@ -492,6 +496,9 @@ class _MapPageState extends State<MapPage> {
           _addEnemyFleet(selected.coord);
         }
         break;
+      case 'combat_log':
+        _showCombatLog(context);
+        break;
       case 'map_stats':
         showDialog<void>(
           context: context,
@@ -511,6 +518,107 @@ class _MapPageState extends State<MapPage> {
         );
         break;
     }
+  }
+
+  void _showCombatLog(BuildContext context) {
+    final log = widget.combatLog;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.5,
+        minChildSize: 0.25,
+        maxChildSize: 0.85,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Combat Log',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (log.isNotEmpty && widget.onClearCombatLog != null)
+                    TextButton(
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dCtx) => AlertDialog(
+                            title: const Text('Clear Combat Log?'),
+                            content: const Text(
+                              'This will remove all combat log entries.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dCtx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () =>
+                                    Navigator.of(dCtx).pop(true),
+                                child: const Text('Clear'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true && ctx.mounted) {
+                          widget.onClearCombatLog!();
+                          Navigator.of(ctx).pop();
+                        }
+                      },
+                      child: const Text('Clear'),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: log.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No combat events recorded.',
+                          style: TextStyle(
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount: log.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        // Newest first.
+                        final entry = log[log.length - 1 - index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                          ),
+                          child: Text(entry),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showLayoutPicker() {
@@ -2519,6 +2627,16 @@ class _OverflowMenuButton extends StatelessWidget {
                 const Icon(Icons.visibility_off, size: 18),
                 const SizedBox(width: 8),
                 Text(hasSelection ? 'Add Enemy' : 'Add Enemy (select a hex first)'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'combat_log',
+            child: Row(
+              children: [
+                Icon(Icons.history, size: 18),
+                SizedBox(width: 8),
+                Text('Combat Log'),
               ],
             ),
           ),
