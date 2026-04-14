@@ -436,8 +436,8 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
         return AlertDialog(
           title: Text('Turn $turn Economy Roll',
               style: const TextStyle(fontSize: 16)),
-          content: SizedBox(
-            width: 320,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
             child: ListenableBuilder(
               listenable: Listenable.merge([diceController, launchDiceController]),
               builder: (context, _) {
@@ -1044,7 +1044,7 @@ class _AlienPlayerViewState extends State<_AlienPlayerView>
       builder: (ctx) => AlertDialog(
         title: const Text('Add Alien Tech', style: TextStyle(fontSize: 16)),
         content: SizedBox(
-          width: 300,
+          width: MediaQuery.of(ctx).size.width.clamp(280, 300),
           height: 400,
           child: ListView.builder(
             itemCount: kAlienTechOptions.length,
@@ -1228,8 +1228,8 @@ class _FleetCompositionDialogState extends State<_FleetCompositionDialog> {
 
     return AlertDialog(
       title: const Text('Fleet Composition', style: TextStyle(fontSize: 16)),
-      content: SizedBox(
-        width: 340,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

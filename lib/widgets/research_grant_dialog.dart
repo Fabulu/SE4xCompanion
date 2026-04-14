@@ -148,8 +148,8 @@ class _ResearchGrantDialogState extends State<_ResearchGrantDialog>
 
     return AlertDialog(
       title: Text('Research: ${widget.techName} ${widget.targetLevel}'),
-      content: SizedBox(
-        width: 320,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

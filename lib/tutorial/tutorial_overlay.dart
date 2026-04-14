@@ -56,8 +56,10 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
             ? step.targetKeys!.first.currentContext
             : null);
     if (ctx == null) return;
+    final renderObject = ctx.findRenderObject();
+    if (renderObject == null) return;
     Scrollable.maybeOf(ctx)?.position.ensureVisible(
-          ctx.findRenderObject()!,
+          renderObject,
           alignment: 0.2,
           duration: const Duration(milliseconds: 300),
         );

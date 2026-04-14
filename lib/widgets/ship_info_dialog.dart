@@ -25,8 +25,8 @@ Future<void> showShipInfoDialog(
 
       return AlertDialog(
         title: Text('${def.name} (${def.abbreviation})'),
-        content: SizedBox(
-          width: 320,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

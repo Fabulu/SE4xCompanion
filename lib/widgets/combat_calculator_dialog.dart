@@ -99,8 +99,8 @@ class _CombatCalculatorDialogState extends State<CombatCalculatorDialog>
 
     return AlertDialog(
       title: const Text('Combat Calculator'),
-      content: SizedBox(
-        width: 320,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
