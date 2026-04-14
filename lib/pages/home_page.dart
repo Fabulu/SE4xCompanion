@@ -350,7 +350,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _saveDebounce?.cancel();
+    // Flush any pending debounced save so data isn't lost on close.
+    if (_saveDebounce?.isActive ?? false) {
+      _saveDebounce!.cancel();
+      _flushSave();
+    }
     _turnWiggleController.dispose();
     _removeTutorialOverlay();
     _tutorialController.removeListener(_onTutorialControllerChanged);
@@ -667,6 +671,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _appState = newAppState;
       await _persistence.save(newAppState);
     });
+  }
+
+  /// Immediate (non-debounced) save — used in dispose to flush pending data.
+  void _flushSave() {
+    final games = _appState.games.map((g) {
+      if (g.id == _activeGameId) {
+        return g.copyWith(
+          name: _gameName,
+          state: _gameState,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return g;
+    }).toList();
+    final newAppState = _appState.copyWith(
+      games: games,
+      activeGameId: _activeGameId,
+    );
+    _appState = newAppState;
+    _persistence.save(newAppState);
   }
 
   void _updateGameState(GameState newState, [String? description]) {
@@ -1258,8 +1282,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Colony Ships ready to colonize'),
-          content: SizedBox(
-            width: 420,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2023,6 +2047,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _onLoadGame(String gameId) {
+    if (_appState.games.isEmpty) return;
     final target = _appState.games.firstWhere(
       (g) => g.id == gameId,
       orElse: () => _appState.games.first,

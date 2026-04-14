@@ -1539,6 +1539,8 @@ class _ProductionPageState extends State<ProductionPage>
                                         label: Text(
                                           '${m.name}: ${m.effectDescription}',
                                           style: const TextStyle(fontSize: 11),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
                                         ),
                                       ),
                                   ],
@@ -1578,6 +1580,8 @@ class _ProductionPageState extends State<ProductionPage>
               label: Text(
                 '${mods[i].name}: ${mods[i].effectDescription}',
                 style: const TextStyle(fontSize: 11),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
               onDeleted: canRemove ? () => _removeModifierAt(i) : null,
               deleteIconColor:
@@ -2510,7 +2514,7 @@ class _ProductionPageState extends State<ProductionPage>
       builder: (context) => AlertDialog(
         title: Text('${kShipDefinitions[type]!.name} Counters'),
         content: SizedBox(
-          width: 420,
+          width: MediaQuery.of(context).size.width.clamp(280, 420),
           child: ListView.separated(
             shrinkWrap: true,
             itemCount: ships.length,
@@ -4742,7 +4746,11 @@ class _ProductionPageState extends State<ProductionPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Remove colony '${world.name}'?"),
+        title: Text(
+          "Remove colony '${world.name}'?",
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         content: const Text(
           'This will discard growth level, staged minerals, and facility. '
           'Cannot be undone via single undo.',
@@ -5305,9 +5313,9 @@ class _ProductionPageState extends State<ProductionPage>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('How cards work'),
-        content: const SizedBox(
-          width: 380,
-          child: SingleChildScrollView(
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: const SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
