@@ -281,12 +281,11 @@ class _ShipTechPageState extends State<ShipTechPage> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Manual override'),
+        title: const Text('Stamp without CP?'),
         content: Text(
-          "You're manually marking an $abbr counter as built without going "
-          'through Production. No CP will be deducted. This is a manual '
-          "override \u2014 only use it if you've already paid for this ship "
-          'outside the app.',
+          'This will mark an $abbr counter as built without deducting CP '
+          'from your ledger. Use this only if the ship was already paid '
+          'for on the tabletop.',
         ),
         actions: [
           TextButton(
@@ -408,14 +407,15 @@ class _ShipTechPageState extends State<ShipTechPage> {
         bool dontAskAgain = false;
         return StatefulBuilder(
           builder: (ctx, setLocalState) => AlertDialog(
-            title: const Text('Manual override?'),
+            title: const Text('Override tech value?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Setting $statName to $proposed will diverge from your '
-                  'current tech (which would stamp $stamped). Continue?',
+                  'Your current tech would set $statName to $stamped, but '
+                  "you're changing it to $proposed. This is fine for "
+                  'house rules or special abilities.',
                 ),
                 const SizedBox(height: 12),
                 CheckboxListTile(
@@ -857,6 +857,7 @@ class _ShipTechPageState extends State<ShipTechPage> {
           ),
           queuedCount: rowQueuedCount,
           hasManualOverride: hasManualOverride,
+          poolFull: !isBuilt && !_hasCounterStockFor(template.type),
         ));
       }
     }

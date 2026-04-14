@@ -167,9 +167,11 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             : 'Ready',
         style: const TextStyle(fontSize: 18),
       ),
-      content: SizedBox(
-        width: 340,
-        height: 480,
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 340,
+          maxHeight: MediaQuery.of(context).size.height * 0.65,
+        ),
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -223,9 +225,24 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
       _alienPlayerCount = 0;
       _isReplicatorGame = false;
       _playerControlsReplicators = false;
-      // Jump straight to the confirmation step for a 1-tap start.
-      _step = 2;
+      // Show the scenario step so the player sees it exists.
+      _step = 1;
     });
+  }
+
+  String _difficultyHint(String difficulty) {
+    switch (difficulty) {
+      case 'Easy':
+        return ' — +2 Colony Ships';
+      case 'Normal':
+        return ' — standard rules';
+      case 'Hard':
+        return ' — tougher econ rolls';
+      case 'Impossible':
+        return ' — maximum threat';
+      default:
+        return '';
+    }
   }
 
   Widget _buildStep0(ThemeData theme) {
@@ -281,6 +298,12 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
           _facilities && _agt,
           _agt ? (v) => setState(() => _facilities = v) : null,
         ),
+        if (!_agt)
+          const Padding(
+            padding: EdgeInsets.only(left: 48, bottom: 4),
+            child: Text('Requires All Good Things expansion',
+                style: TextStyle(fontSize: 11, color: Color(0xFF888888))),
+          ),
         _toggle(
           'Advanced Construction',
           _advCon,
@@ -291,6 +314,12 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
           _altEmpire && _ce,
           _ce ? (v) => setState(() => _altEmpire = v) : null,
         ),
+        if (!_ce)
+          const Padding(
+            padding: EdgeInsets.only(left: 48, bottom: 4),
+            child: Text('Requires Close Encounters expansion',
+                style: TextStyle(fontSize: 11, color: Color(0xFF888888))),
+          ),
         _toggle(
           'Ship Experience',
           _shipExp,
@@ -317,9 +346,11 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
             padding: const EdgeInsets.only(left: 16),
             child: Row(
               children: [
-                Text(
-                  'Alien players: $_alienPlayerCount',
-                  style: const TextStyle(fontSize: 13),
+                Flexible(
+                  child: Text(
+                    'Aliens: $_alienPlayerCount / 3',
+                    style: const TextStyle(fontSize: 13),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -384,7 +415,10 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
               ),
               items: [
                 for (final difficulty in kReplicatorDifficulties)
-                  DropdownMenuItem(value: difficulty, child: Text(difficulty)),
+                  DropdownMenuItem(
+                    value: difficulty,
+                    child: Text('$difficulty${_difficultyHint(difficulty)}'),
+                  ),
               ],
               onChanged: (value) {
                 if (value == null) return;

@@ -185,9 +185,11 @@ final List<TutorialStep> kTutorialSteps = <TutorialStep>[
     id: 'endTurn',
     title: 'End Turn',
     body:
-        'Once you are done spending CP, tap END TURN. Your ship purchases '
-        'become real ships, tech upgrades kick in, colonies grow, and the '
-        'turn counter ticks forward.',
+        'Once you are done spending CP, tap END TURN. A confirmation '
+        'dialog will show what is about to happen \u2014 purchases become real '
+        'ships, tech upgrades kick in, colonies grow, and the turn '
+        'counter ticks forward. You can turn off the confirmation in '
+        'Settings if you prefer a faster flow.',
     targetKey: TutorialTargets.prodEndTurnButton,
     requiredTab: HomeTabId.production,
     anchor: TutorialAnchor.above,

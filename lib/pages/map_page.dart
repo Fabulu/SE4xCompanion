@@ -956,7 +956,7 @@ class _MapPageState extends State<MapPage> {
                           if (fleet.hasMovedThisTurn) {
                             _showSnack('Fleet already moved this turn.');
                           } else if (fleet.coord != target) {
-                            _showSnack('Out of range (allowance $allowance).');
+                            _showSnack('Out of range (can move $allowance hex${allowance == 1 ? '' : 'es'}).');
                           }
                           return;
                         }

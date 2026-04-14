@@ -75,6 +75,10 @@ class CounterRow extends StatelessWidget {
   /// next to the row title so the drift is discoverable.
   final bool hasManualOverride;
 
+  /// When true, all counters of this ship type are already built.
+  /// Shows a persistent "max reached" label on unbuilt rows.
+  final bool poolFull;
+
   const CounterRow({
     super.key,
     required this.label,
@@ -101,6 +105,7 @@ class CounterRow extends StatelessWidget {
     this.queuedCount = 0,
     this.onExperienceRoll,
     this.hasManualOverride = false,
+    this.poolFull = false,
   });
 
   static const _expLabels = ['', 'G', 'S', 'V', 'E', 'L'];
@@ -203,7 +208,15 @@ class CounterRow extends StatelessWidget {
                 ),
               ),
             ),
-          if (onBuild != null)
+          if (poolFull && !isBuilt && queuedCount == 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                'max reached',
+                style: TextStyle(fontSize: 12, color: dimColor),
+              ),
+            )
+          else if (onBuild != null)
             SizedBox(
               height: 44,
               child: TextButton(

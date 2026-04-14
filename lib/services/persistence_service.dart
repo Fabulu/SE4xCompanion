@@ -59,14 +59,24 @@ class PersistenceService {
   }
 
   /// Save the app state to disk.
+  ///
+  /// Uses a write-to-temp-then-rename pattern to avoid corrupting
+  /// the save file if the process is killed mid-write.
   Future<void> save(AppState state) async {
-    final file = await _resolveFile();
-    final dir = file.parent;
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
+    try {
+      final file = await _resolveFile();
+      final dir = file.parent;
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final json = jsonEncode(state.toJson());
+      final tmp = File('${file.path}.tmp');
+      await tmp.writeAsString(json);
+      await tmp.rename(file.path);
+    } catch (_) {
+      // Best-effort save; caller already debounces. A transient failure
+      // (disk full, permission) will be retried on the next state change.
     }
-    final json = jsonEncode(state.toJson());
-    await file.writeAsString(json);
   }
 
   /// Delete the persisted state file.

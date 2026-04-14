@@ -599,6 +599,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
     });
     _save();
+    // Explain the auto-switch to Map when the tutorial won't do it.
+    if (needsOnboarding && mapTabIndex >= 0 && _appState.tutorial.seen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tap any hex to place your Homeworld.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      });
+    }
     // Auto-start the tutorial only when this is the user's brand-new
     // first game AND they have not seen the tutorial yet.
     if (priorGameCount == 0 && !_appState.tutorial.seen) {
@@ -1138,36 +1150,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _onEndTurn() {
-    // PP13: optional "Are you sure?" gate before any End Turn flow runs.
-    if (!_appState.confirmEndTurn) {
-      _runEndTurnFlow();
-      return;
-    }
-    () async {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('End the turn?'),
-          content: const Text(
-            'This will materialize all queued purchases, complete tech research, '
-            'and advance to the next turn. You can undo afterwards if needed.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('End Turn'),
-            ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      if (ok != true) return;
-      _runEndTurnFlow();
-    }();
+    // PP13: The production page already shows a detailed confirmation
+    // dialog with CP-cap warnings before calling this callback, so we
+    // skip a second confirmation here to avoid double-prompting.
+    _runEndTurnFlow();
   }
 
   void _runEndTurnFlow() {
@@ -1627,6 +1613,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       'End Turn ${_gameState.turnNumber}',
     );
     _lastActionWasEndTurn = true;
+
+    // Post-end-turn feedback snackbar.
+    if (mounted) {
+      final parts = <String>[];
+      if (shipsBuilt.isNotEmpty) parts.add('Built ${shipsBuilt.join(', ')}');
+      if (techsGained.isNotEmpty) {
+        parts.add('${techsGained.length} tech${techsGained.length == 1 ? '' : 's'}');
+      }
+      if (coloniesGrown > 0) {
+        parts.add('$coloniesGrown colon${coloniesGrown == 1 ? 'y' : 'ies'} grew');
+      }
+      if (cpLostToCap > 0) parts.add('$cpLostToCap CP lost to cap');
+      final msg = parts.isEmpty
+          ? 'Turn ${summary.turnNumber} complete.'
+          : 'Turn ${summary.turnNumber}: ${parts.join(' · ')}';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
+      );
+    }
   }
 
   /// Starting forces for a player-controlled Replicator empire (RAW 40.1.3):
@@ -2343,6 +2348,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 mapState: _gameState.mapState,
                 onProductionChanged: _onProductionChanged,
                 onEndTurn: _onEndTurn,
+                confirmEndTurn: _appState.confirmEndTurn,
                 onRuleTap: _navigateToRule,
                 onGameStateOverride: _onGameStateOverride,
                 onActiveModifiersChanged: _onActiveModifiersChanged,

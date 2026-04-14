@@ -207,6 +207,8 @@ class ProductionPage extends StatefulWidget {
   final GameMapState? mapState;
   final ValueChanged<ProductionState> onProductionChanged;
   final VoidCallback onEndTurn;
+  /// PP13: when false, skip the confirmation dialog and end immediately.
+  final bool confirmEndTurn;
   final void Function(String sectionId)? onRuleTap;
   final ValueChanged<GameState>? onGameStateOverride;
   final ValueChanged<List<GameModifier>>? onActiveModifiersChanged;
@@ -245,6 +247,7 @@ class ProductionPage extends StatefulWidget {
     this.mapState,
     required this.onProductionChanged,
     required this.onEndTurn,
+    this.confirmEndTurn = true,
     this.onRuleTap,
     this.onGameStateOverride,
     this.onActiveModifiersChanged,
@@ -2973,6 +2976,8 @@ class _ProductionPageState extends State<ProductionPage>
     final theme = Theme.of(context);
     final purchases = production.shipPurchases;
     final totalCost = production.shipPurchaseCost(config, modifiers, abilities);
+    final remaining = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
+    final overBudget = remaining < 0;
 
     final shipyardInfos = _shipyardHexes();
     // Warning trigger: queued non-SY, non-exempt ships but no active SY hex.
@@ -2993,7 +2998,7 @@ class _ProductionPageState extends State<ProductionPage>
           child: SectionHeader(
             title: 'SHIPYARDS',
             subtitle: shipyardInfos.isEmpty
-                ? 'none yet'
+                ? 'none \u2014 buy one below to start building'
                 : '${shipyardInfos.length} active',
             trailing: IconButton(
               icon: const Icon(Icons.info_outline, size: 18),
@@ -3017,7 +3022,12 @@ class _ProductionPageState extends State<ProductionPage>
             key: _anchorShipPurchases,
             child: SectionHeader(
               title: 'SHIP PURCHASES',
-              subtitle: purchases.isNotEmpty ? 'total: ${totalCost}CP' : null,
+              subtitle: purchases.isNotEmpty
+                  ? overBudget
+                      ? 'total: ${totalCost}CP \u2014 OVER BUDGET'
+                      : 'total: ${totalCost}CP'
+                  : null,
+              subtitleColor: overBudget ? theme.colorScheme.error : null,
             ),
           ),
         ),
@@ -3426,9 +3436,8 @@ class _ProductionPageState extends State<ProductionPage>
                     const SizedBox(height: 3),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(2),
-                      child: SizedBox(
-                        height: 4,
-                        width: 180,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180, maxHeight: 4),
                         child: LinearProgressIndicator(
                           value: progressFraction.clamp(0.0, 1.0),
                           backgroundColor: theme.colorScheme.surfaceContainerHighest,
@@ -3581,10 +3590,10 @@ class _ProductionPageState extends State<ProductionPage>
             const SizedBox(width: 4),
             // Unit cost hint
             Text(
-              '(@$unitCost)',
+              '@ ${unitCost}CP each',
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             // Delete
@@ -5383,6 +5392,11 @@ class _ProductionPageState extends State<ProductionPage>
   }
 
   void _confirmEndTurn(BuildContext context) {
+    if (!widget.confirmEndTurn) {
+      if (config.strongHaptics) HapticFeedback.mediumImpact();
+      widget.onEndTurn();
+      return;
+    }
     final remainingCp = production.remainingCp(config, shipCounters, modifiers, abilities, mapState);
     final cpLost = remainingCp > 30 ? remainingCp - 30 : 0;
     final remainingRp = config.enableFacilities ? production.remainingRp(config, modifiers) : null;

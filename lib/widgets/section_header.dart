@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final Color? subtitleColor;
   final Widget? trailing;
 
   const SectionHeader({
     super.key,
     required this.title,
     this.subtitle,
+    this.subtitleColor,
     this.trailing,
   });
 
@@ -48,7 +50,7 @@ class SectionHeader extends StatelessWidget {
                 subtitle!,
                 style: TextStyle(
                   fontSize: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: subtitleColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             ),

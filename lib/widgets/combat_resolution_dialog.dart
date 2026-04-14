@@ -100,7 +100,10 @@ class _CombatResolutionDialogState extends State<_CombatResolutionDialog> {
     return AlertDialog(
       title: Text('Resolve Combat — Hex ${widget.hex.id}'),
       content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
