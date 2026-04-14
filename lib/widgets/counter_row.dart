@@ -140,8 +140,8 @@ class CounterRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: 72,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, maxWidth: 120),
             child: Text(
               label,
               style: TextStyle(
@@ -149,8 +149,11 @@ class CounterRow extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: dimColor,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
+          const SizedBox(width: 4),
           if (onInfoTap != null)
             SizedBox(
               width: 28,
@@ -254,12 +257,16 @@ class CounterRow extends StatelessWidget {
           // Label + optional upgrade button
           Row(
             children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface,
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
               if (onInfoTap != null) ...[

@@ -359,7 +359,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
                       ? () => setState(() => _alienPlayerCount--)
                       : null,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
                 IconButton(
                   icon: const Icon(Icons.add, size: 18),
@@ -367,7 +367,7 @@ class _NewGameWizardDialogState extends State<_NewGameWizardDialog> {
                       ? () => setState(() => _alienPlayerCount++)
                       : null,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
               ],
             ),

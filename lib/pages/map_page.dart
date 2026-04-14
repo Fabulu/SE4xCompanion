@@ -383,7 +383,7 @@ class _MapPageState extends State<MapPage> {
       showDragHandle: true,
       builder: (context) {
         return FractionallySizedBox(
-          heightFactor: 0.62,
+          heightFactor: 0.75,
           child: StatefulBuilder(
             builder: (context, setSheetState) {
               // Prefer the explicitly requested coord; fall back to
@@ -1762,37 +1762,8 @@ class _HexInspector extends StatelessWidget {
                 ],
               ),
             ),
-            // PP15: Garrison Ground Units display. Read-only here — actual
-            // edits are wired into the Production page colony rows so the
-            // map inspector stays free of world-edit plumbing.
-            if (world != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Tooltip(
-                  message:
-                      'Adjust the Garrison count from the Production tab '
-                      'colony row, or via Manual Override.',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        size: 16,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.7),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Garrison: ${world!.garrisonGu} GU',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            // PP15: Garrison is editable on the Production tab colony rows.
+            // Removed from inspector to reduce noise (was read-only here).
           ],
         ),
         const SizedBox(height: 12),
@@ -1862,34 +1833,56 @@ class _HexInspector extends StatelessWidget {
               ),
             if (selectedFleet != null) ...[
               const SizedBox(height: 12),
-              _SyncedTextField(
-                text: selectedFleet.owner,
-                decoration: const InputDecoration(labelText: 'Owner'),
-                onChanged: (value) =>
-                    onFleetChanged(selectedFleet!.copyWith(owner: value)),
+              // Fleet name — always shown; owner only for enemy fleets.
+              Row(
+                children: [
+                  Expanded(
+                    child: _SyncedTextField(
+                      text: selectedFleet.label,
+                      decoration: const InputDecoration(labelText: 'Fleet Name'),
+                      onChanged: (value) =>
+                          onFleetChanged(selectedFleet!.copyWith(label: value)),
+                    ),
+                  ),
+                  if (selectedFleet.isEnemy) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _SyncedTextField(
+                        text: selectedFleet.owner,
+                        decoration: const InputDecoration(labelText: 'Owner'),
+                        onChanged: (value) =>
+                            onFleetChanged(selectedFleet!.copyWith(owner: value)),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 12),
-              _SyncedTextField(
-                text: selectedFleet.label,
-                decoration: const InputDecoration(labelText: 'Fleet Name'),
-                onChanged: (value) =>
-                    onFleetChanged(selectedFleet!.copyWith(label: value)),
-              ),
-              SwitchListTile(
-                value: selectedFleet.facedown,
-                title: const Text('Facedown'),
-                contentPadding: EdgeInsets.zero,
-                onChanged: (value) => onFleetChanged(
-                  selectedFleet!.copyWith(facedown: value),
-                ),
-              ),
-              SwitchListTile(
-                value: selectedFleet.inSupply,
-                title: const Text('In Supply'),
-                contentPadding: EdgeInsets.zero,
-                onChanged: (value) => onFleetChanged(
-                  selectedFleet!.copyWith(inSupply: value),
-                ),
+              // Facedown / In Supply on one compact row.
+              Row(
+                children: [
+                  Expanded(
+                    child: SwitchListTile(
+                      value: selectedFleet.facedown,
+                      title: const Text('Facedown', style: TextStyle(fontSize: 13)),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (value) => onFleetChanged(
+                        selectedFleet!.copyWith(facedown: value),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: SwitchListTile(
+                      value: selectedFleet.inSupply,
+                      title: const Text('In Supply', style: TextStyle(fontSize: 13)),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (value) => onFleetChanged(
+                        selectedFleet!.copyWith(inSupply: value),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               if (selectedFleet.isEnemy)
                 _SyncedTextField(
@@ -1949,7 +1942,28 @@ class _HexInspector extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () => onFleetDeleted(selectedFleet!.id),
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Delete fleet?'),
+                        content: const Text(
+                          'This will remove the fleet and unassign all its ships.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true) onFleetDeleted(selectedFleet!.id);
+                  },
                   child: const Text('Delete Fleet'),
                 ),
               ),

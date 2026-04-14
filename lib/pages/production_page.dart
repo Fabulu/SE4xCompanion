@@ -2165,7 +2165,7 @@ class _ProductionPageState extends State<ProductionPage>
                 IconButton(
                   icon: const Icon(Icons.remove, size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: exp.quantity <= 1 ? null : () {
                     _updateTpExpenditure(index, exp.copyWith(quantity: exp.quantity - 1));
                   },
@@ -2174,7 +2174,7 @@ class _ProductionPageState extends State<ProductionPage>
                 IconButton(
                   icon: const Icon(Icons.add, size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () {
                     _updateTpExpenditure(index, exp.copyWith(quantity: exp.quantity + 1));
                   },
@@ -2190,7 +2190,7 @@ class _ProductionPageState extends State<ProductionPage>
                 IconButton(
                   icon: const Icon(Icons.remove, size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: exp.hullPoints <= 0 ? null : () {
                     _updateTpExpenditure(index, exp.copyWith(hullPoints: exp.hullPoints - 1));
                   },
@@ -2199,7 +2199,7 @@ class _ProductionPageState extends State<ProductionPage>
                 IconButton(
                   icon: const Icon(Icons.add, size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () {
                     _updateTpExpenditure(index, exp.copyWith(hullPoints: exp.hullPoints + 1));
                   },

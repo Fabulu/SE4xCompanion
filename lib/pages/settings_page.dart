@@ -1247,12 +1247,12 @@ class _TurnSummaryTile extends StatelessWidget {
 
     if (summary.techsGained.isNotEmpty) {
       details.add(
-        Text('Techs: ${summary.techsGained.join(", ")}', style: dimStyle),
+        Text('Techs: ${summary.techsGained.join(", ")}', style: dimStyle, softWrap: true),
       );
     }
     if (summary.shipsBuilt.isNotEmpty) {
       details.add(
-        Text('Ships: ${summary.shipsBuilt.join(", ")}', style: dimStyle),
+        Text('Ships: ${summary.shipsBuilt.join(", ")}', style: dimStyle, softWrap: true),
       );
     }
     if (summary.coloniesGrown > 0) {
