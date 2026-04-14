@@ -63,30 +63,30 @@ class TutorialController extends ChangeNotifier {
 
   void next() {
     if (!_active) return;
-    if (_index >= steps.length - 1) {
-      finish();
-      return;
+    // Iterative forward skip — keeps walking until we land on a
+    // presentable step or run off the end.
+    while (_index < steps.length - 1) {
+      _index++;
+      _ensureStepRequirements();
+      if (_isVisible(steps[_index])) {
+        notifyListeners();
+        return;
+      }
     }
-    _index++;
-    _ensureStepRequirements();
-    if (!_isVisible(steps[_index])) {
-      // Recursive forward skip — keeps walking until we land on a
-      // presentable step or run off the end.
-      next();
-      return;
-    }
-    notifyListeners();
+    finish();
   }
 
   void back() {
     if (!_active) return;
-    if (_index <= 0) return;
-    _index--;
-    _ensureStepRequirements();
-    if (!_isVisible(steps[_index])) {
-      back();
-      return;
+    while (_index > 0) {
+      _index--;
+      _ensureStepRequirements();
+      if (_isVisible(steps[_index])) {
+        notifyListeners();
+        return;
+      }
     }
+    // Already at first visible step — stay put.
     notifyListeners();
   }
 

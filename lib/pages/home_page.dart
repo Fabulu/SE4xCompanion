@@ -1086,8 +1086,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   void _onReplicatorPlayerWorldsChanged(List<WorldState> worlds) {
     _updateGameState(
-      _gameState.copyWith(
-        production: _gameState.production.copyWith(worlds: worlds),
+      _syncedMapState(
+        _gameState.copyWith(
+          production: _gameState.production.copyWith(worlds: worlds),
+        ),
       ),
       'Replicator Colonies',
     );
@@ -1627,12 +1629,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _gameState.shipSpecialAbilities,
     );
     _updateGameState(
-      _gameState.copyWith(
-        turnNumber: _gameState.turnNumber + 1,
-        production: nextProduction,
-        shipCounters: countersAfterBuild,
-        mapState: mapAfterBuild,
-        turnSummaries: [..._gameState.turnSummaries, summary],
+      _syncedMapState(
+        _gameState.copyWith(
+          turnNumber: _gameState.turnNumber + 1,
+          production: nextProduction,
+          shipCounters: countersAfterBuild,
+          mapState: mapAfterBuild,
+          turnSummaries: [..._gameState.turnSummaries, summary],
+        ),
       ),
       'End Turn ${_gameState.turnNumber}',
     );
